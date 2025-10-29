@@ -6,20 +6,17 @@ import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.RuleSet
 import io.gitlab.arturbosch.detekt.api.RuleSetProvider
 
-/**
- * Custom Detekt rule set provider for CARP DSP coding conventions.
- */
-class CarpRuleSetProvider : RuleSetProvider {
+
+class CarpRuleSetProvider : RuleSetProvider
+{
     override val ruleSetId: String = "carp"
 
-    override fun instance(config: Config): RuleSet {
-        return RuleSet(
+    override fun instance( config: Config ): RuleSet =
+        RuleSet(
             ruleSetId,
             listOf(
-                CurlyBracesOnSeparateLine(config),
-                SpacingInParentheses(config)
+                SpacingInParentheses( config ),
+                CurlyBracesOnSeparateLine( config )
             )
         )
-    }
 }
-

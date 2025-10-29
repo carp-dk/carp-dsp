@@ -1,103 +1,96 @@
 package carp.dsp.detekt.rules
 
-import io.gitlab.arturbosch.detekt.api.*
-import org.jetbrains.kotlin.psi.*
+import carp.dsp.detekt.getNextElement
+import carp.dsp.detekt.getPrecedingElement
+import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Entity
+import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Rule
+import io.gitlab.arturbosch.detekt.api.Severity
+import org.jetbrains.kotlin.com.intellij.lang.ASTNode
+import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
+import org.jetbrains.kotlin.psi.KtFunctionLiteral
+import org.jetbrains.kotlin.psi.KtFunctionType
+import org.jetbrains.kotlin.psi.KtParameterList
+import org.jetbrains.kotlin.psi.KtPropertyAccessor
+import org.jetbrains.kotlin.psi.psiUtil.children
+import org.jetbrains.kotlin.psi.stubs.elements.KtParameterElementType
+
 
 /**
- * Reports missing spaces in parentheses.
- *
- * CARP coding convention: Spaces need to be added in all parentheses,
- * except for those of higher-order functions.
- *
- * Examples:
- * - Correct: `if ( true )`, `fun test( a: Int )`
- * - Correct (higher-order): `val f: (Int, Int) -> Int`
- * - Incorrect: `if (true)`, `fun test(a: Int)`
+ * A rule which verifies whether spaces are added in all parentheses, except those of higher-order functions.
  */
-class SpacingInParentheses(config: Config = Config.empty) : Rule(config) {
-
+class SpacingInParentheses( config: Config = Config.empty ) : Rule( config )
+{
     override val issue = Issue(
         javaClass.simpleName,
         Severity.Style,
-        "Spaces should be added in parentheses (except for higher-order functions)",
+        "Spaces are needed inside parentheses, except for higher-order functions.",
         Debt.FIVE_MINS
     )
 
-    override fun visitParameterList(list: KtParameterList) {
-        super.visitParameterList(list)
+    override fun visitPropertyAccessor( accessor: KtPropertyAccessor )
+    {
+        super.visitPropertyAccessor( accessor )
 
-        // Skip if this is a function type (higher-order function)
-        if (isFunctionType(list)) return
-
-        checkSpacing(list)
-    }
-
-    override fun visitValueArgumentList(list: KtValueArgumentList) {
-        super.visitValueArgumentList(list)
-        checkSpacing(list)
-    }
-
-    override fun visitCondition(condition: KtContainerNodeForControlStructureBody) {
-        super.visitCondition(condition)
-        // Check if/when/while conditions
-        val parent = condition.parent
-        if (parent is KtIfExpression || parent is KtWhileExpression || parent is KtWhenExpression) {
-            checkParenthesesSpacing(parent)
+        // Get accessors do not have a parameter list, so need to be validated here.
+        // They are always empty, so should not contain spaces.
+        if ( accessor.isGetter )
+        {
+            val noSpaces = accessor.text.startsWith( "get()" )
+            if ( !noSpaces )
+            {
+                val message = "Get accessors should not contain spaces in the parentheses."
+                report( CodeSmell( issue, Entity.from( accessor ), message ) )
+            }
         }
     }
 
-    private fun isFunctionType(list: KtParameterList): Boolean {
+    override fun visitParameterList( list: KtParameterList )
+    {
+        super.visitParameterList( list )
+
+        val node = list.node
         val parent = list.parent
-        return parent is KtFunctionType
-    }
+        val isHigherOrder = parent is KtFunctionType || parent is KtFunctionLiteral
+        val hasParameters = node.children().any { it.elementType is KtParameterElementType }
 
-    private fun checkSpacing(element: KtElement) {
-        val text = element.text
-        if (text.isEmpty()) return
-
-        // Check for opening parenthesis without following space
-        if (text.startsWith("(") && text.length > 1 && text[1] != ' ' && text[1] != ')') {
-            report(CodeSmell(
-                issue,
-                Entity.from(element),
-                "Missing space after opening parenthesis"
-            ))
-        }
-
-        // Check for closing parenthesis without preceding space
-        if (text.endsWith(")") && text.length > 1 && text[text.length - 2] != ' ' && text[text.length - 2] != '(') {
-            report(CodeSmell(
-                issue,
-                Entity.from(element),
-                "Missing space before closing parenthesis"
-            ))
-        }
-    }
-
-    private fun checkParenthesesSpacing(element: KtExpression) {
-        val text = element.text
-        val leftParen = text.indexOf('(')
-        val rightParen = text.lastIndexOf(')')
-
-        if (leftParen >= 0 && leftParen < text.length - 1) {
-            if (text[leftParen + 1] != ' ' && text[leftParen + 1] != ')') {
-                report(CodeSmell(
-                    issue,
-                    Entity.from(element),
-                    "Missing space after opening parenthesis"
-                ))
+        // Higher-order function parameters do not expect spaces in parentheses.
+        if ( isHigherOrder )
+        {
+            if ( parent is KtFunctionType && hasSpaces( node ) )
+            {
+                val message = "Higher-order function parentheses should not contain spaces."
+                report( CodeSmell( issue, Entity.from( list ), message ) )
             }
         }
-
-        if (rightParen > 0) {
-            if (text[rightParen - 1] != ' ' && text[rightParen - 1] != '(') {
-                report(CodeSmell(
-                    issue,
-                    Entity.from(element),
-                    "Missing space before closing parenthesis"
-                ))
+        // All other parentheses expect spaces, except when there are no parameters.
+        else
+        {
+            if ( hasParameters )
+            {
+                if ( !hasSpaces( node ) )
+                {
+                    val message = "Spaces are needed inside parentheses."
+                    report( CodeSmell( issue, Entity.from( list ), message ) )
+                }
+            }
+            // Solely LPAR and RPAR are expected.
+            else if ( node.children().count() != 2 )
+            {
+                val message = "Empty parentheses should contain no spaces."
+                report( CodeSmell( issue, Entity.from( list ), message ) )
             }
         }
+    }
+
+    private fun hasSpaces( node: ASTNode ): Boolean
+    {
+        val spaceAfter = getNextElement( node.firstChildNode.psi )
+        val spaceBefore = getPrecedingElement( node.lastChildNode.psi )
+
+        return spaceAfter is PsiWhiteSpace && spaceBefore is PsiWhiteSpace
     }
 }
-
