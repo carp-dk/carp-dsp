@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better coverage tracking
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Build project
+        run: ./gradlew build --no-daemon
+
+      - name: Run tests with coverage
+        run: ./gradlew test koverXmlReport --no-daemon
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./build/reports/kover/coverage.xml
+          flags: unittests
+          name: codecov-carp-dsp
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            build/reports/kover/
+          retention-days: 30
+
+      - name: Verify coverage thresholds
+        run: ./gradlew koverVerify --no-daemon
+        continue-on-error: true  # Don't fail build initially, just warn
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Run Detekt
+        run: ./gradlew detektAll --no-daemon
+
+      - name: Upload Detekt reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: detekt-reports
+          path: build/reports/detekt/
+          retention-days: 30
+

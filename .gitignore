@@ -39,3 +39,7 @@ build/
 
 # macOS
 .DS_Store
+
+# Coverage reports
+.kover/
+**/kover/

@@ -2,9 +2,10 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
 }
 
-group = "dk.cachet.carp.dsp"
+group = "carp.dsp"
 version = project.property("version") as String
 
 // Configure Detekt code analysis
@@ -42,3 +43,62 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     dependsOn(":detekt:assemble")
 }
 
+// Configure Kover code coverage
+kover {
+    reports {
+        // Configure report outputs
+        filters {
+            // Exclude test code from coverage
+            excludes {
+                classes(
+                    "*Test",
+                    "*Test\$*",
+                    "*Tests",
+                    "*Spec"
+                )
+                packages(
+                    "*.test",
+                    "*.test.*"
+                )
+            }
+        }
+    }
+}
+
+// Configure coverage verification with thresholds
+koverReport {
+    defaults {
+        // Generate HTML report (human-readable)
+        html {
+            onCheck = true
+            htmlDir = layout.buildDirectory.dir("reports/kover/html")
+        }
+
+        // Generate XML report (for CI/CD integration)
+        xml {
+            onCheck = true
+            xmlFile = layout.buildDirectory.file("reports/kover/coverage.xml")
+        }
+
+        // Console output for quick checks
+        log {
+            onCheck = true
+        }
+
+        // Enforce minimum coverage thresholds
+        verify {
+            onCheck = true
+
+            rule {
+                // Overall project coverage minimum
+                minBound(70)
+            }
+
+            rule("Class coverage") {
+                // Per-class minimum coverage
+                entity = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.CLASS
+                minBound(60)
+            }
+        }
+    }
+}
