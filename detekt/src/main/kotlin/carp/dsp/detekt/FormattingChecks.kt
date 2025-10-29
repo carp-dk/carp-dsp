@@ -24,7 +24,7 @@ fun startsOnNewLine( element: PsiElement ): Boolean
 /**
  * Verifies whether [element1] and [element2] are on separate lines and have the same indentation.
  *
- * @throws UnsupportedOperationException when tabs are encountered. Only spaces and newlines are considered.
+ * Tabs are converted to spaces (4 spaces per tab) for alignment comparison.
  */
 fun areAligned( element1: PsiElement, element2: PsiElement ): Boolean
 {
@@ -37,7 +37,7 @@ fun areAligned( element1: PsiElement, element2: PsiElement ): Boolean
 /**
  * Gets the position of the element on the current line.
  *
- * @throws UnsupportedOperationException when tabs are encountered. Only spaces and newlines are considered.
+ * Tabs are converted to spaces (4 spaces per tab) for indent calculation.
  */
 fun getIndentSize( element: PsiElement ): Int
 {
@@ -54,16 +54,10 @@ fun getIndentSize( element: PsiElement ): Int
             val whitespace = preceding.text
             val lastNewline = whitespace.lastIndexOf( '\n' )
 
-            // Currently, tabs are not supported.
-            // TODO: Can tabs be supported as well?
-            if ( whitespace.contains( '\t' ) )
-            {
-                throw UnsupportedOperationException( "getIndentSize does not support tabs." )
-            }
-
-            // When a newline is found, count all characters from the newline.
+            // When a newline is found, count all characters from the newline, converting tabs to spaces.
             foundNewline = true
-            indentSize += whitespace.length - 1 - lastNewline
+            val indentString = whitespace.substring( lastNewline + 1 )
+            indentSize += calculateIndentSize( indentString )
         }
         else
         {
@@ -73,6 +67,23 @@ fun getIndentSize( element: PsiElement ): Int
     }
 
     return indentSize
+}
+
+/**
+ * Calculates the indent size of a string, converting tabs to spaces (4 spaces per tab).
+ */
+private fun calculateIndentSize( indentString: String, tabSize: Int = 4 ): Int
+{
+    var size = 0
+    for ( char in indentString )
+    {
+        size += when ( char )
+        {
+            '\t' -> tabSize
+            else -> 1
+        }
+    }
+    return size
 }
 
 /**
