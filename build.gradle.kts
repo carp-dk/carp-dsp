@@ -7,4 +7,13 @@ plugins {
 group = "dk.cachet.carp.dsp"
 version = project.property("version") as String
 
-// Detekt will be configured after modules are created
+// Configure Detekt code analysis
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+}
+
+dependencies {
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:${libs.versions.detekt.get()}")
+    detektPlugins(project(":detekt"))
+}

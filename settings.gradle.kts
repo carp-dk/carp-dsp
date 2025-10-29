@@ -7,5 +7,5 @@ dependencyResolutionManagement {
     }
 }
 
-// include(":analytics-core")
-// include(":detekt")
+include(":detekt")
+// include(":analytics-core")  // Will be added when we import the code
