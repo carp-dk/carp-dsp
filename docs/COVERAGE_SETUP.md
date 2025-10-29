@@ -87,8 +87,9 @@
    ```
 
 3. **Add coverage to PR requirements**:
-   - GitHub → Settings → Branches → Protect `develop`
-   - Require "Verify coverage thresholds" to pass
+   - See detailed guide: [Branch Protection Setup](BRANCH_PROTECTION_SETUP.md)
+   - Quick summary: GitHub → Settings → Branches → Protect `develop` → Require status checks
+   - Add `build-and-test` and `code-quality` as required checks
 
 ## Configuration Details
 

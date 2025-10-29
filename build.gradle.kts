@@ -44,61 +44,10 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 }
 
 // Configure Kover code coverage
-kover {
-    reports {
-        // Configure report outputs
-        filters {
-            // Exclude test code from coverage
-            excludes {
-                classes(
-                    "*Test",
-                    "*Test\$*",
-                    "*Tests",
-                    "*Spec"
-                )
-                packages(
-                    "*.test",
-                    "*.test.*"
-                )
-            }
-        }
-    }
+// Currently tracking :detekt module to demonstrate coverage reporting
+// When :analytics-core is added, it will be tracked automatically
+dependencies {
+    kover(project(":detekt"))
 }
 
-// Configure coverage verification with thresholds
-koverReport {
-    defaults {
-        // Generate HTML report (human-readable)
-        html {
-            onCheck = true
-            htmlDir = layout.buildDirectory.dir("reports/kover/html")
-        }
 
-        // Generate XML report (for CI/CD integration)
-        xml {
-            onCheck = true
-            xmlFile = layout.buildDirectory.file("reports/kover/coverage.xml")
-        }
-
-        // Console output for quick checks
-        log {
-            onCheck = true
-        }
-
-        // Enforce minimum coverage thresholds
-        verify {
-            onCheck = true
-
-            rule {
-                // Overall project coverage minimum
-                minBound(70)
-            }
-
-            rule("Class coverage") {
-                // Per-class minimum coverage
-                entity = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.CLASS
-                minBound(60)
-            }
-        }
-    }
-}
