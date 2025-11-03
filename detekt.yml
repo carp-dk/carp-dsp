@@ -80,9 +80,4 @@ style:
   WildcardImport:
     active: false
 
-carp:
-  CurlyBracesOnSeparateLine:
-    active: true
-  SpacingInParentheses:
-    active: true
 

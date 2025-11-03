@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kover)
 }
 
+
 group = "carp.dsp"
 version = project.property("version") as String
 
@@ -20,15 +21,63 @@ dependencies {
     detektPlugins(project(":detekt"))
 }
 
-// Create a detekt task that runs on all source files
-tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektAll") {
-    description = "Runs Detekt code analysis on all modules"
-    parallel = true
-    setSource(files(projectDir))
-    include("**/*.kt", "**/*.kts")
-    exclude("**/build/**", "**/resources/**", "**/.*")
+// Create a comprehensive detekt task similar to the core project
+tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPasses") {
+    description = "Runs comprehensive Detekt code analysis on all source files"
+    source = fileTree("$rootDir") {
+        include("**/src/**")
+        exclude("**/node_modules/**", "**/resources/**", "**/build/**", "**/.*")
+    }
     config.setFrom("$rootDir/detekt.yml")
     buildUponDefaultConfig = true
+    ignoreFailures = false
+
+    // Add classpath from all submodules for better analysis
+    val classPaths = project.configurations.getByName("detekt")
+    val additionalClassPaths = mutableListOf<Configuration>()
+    subprojects.forEach { subproject ->
+        if (subproject.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")) {
+            try {
+                additionalClassPaths.add(subproject.configurations.getByName("jvmCompileClasspath"))
+            } catch (e: Exception) {
+                // Ignore if configuration doesn't exist
+            }
+        }
+    }
+    classpath.setFrom(classPaths + files(additionalClassPaths))
+
+    reports {
+        html.required.set(true)
+        xml.required.set(false)
+        txt.required.set(false)
+    }
+}
+
+// Auto-fix task for detekt issues
+tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPassesAutoFix") {
+    description = "Runs Detekt with auto-fix enabled to automatically fix formatting issues"
+    source = fileTree("$rootDir") {
+        include("**/src/**")
+        exclude("**/node_modules/**", "**/resources/**", "**/build/**", "**/.*")
+    }
+    config.setFrom("$rootDir/detekt.yml")
+    buildUponDefaultConfig = true
+    autoCorrect = true  // Enable auto-fix
+    ignoreFailures = false
+
+    // Add classpath from all submodules for better analysis
+    val classPaths = project.configurations.getByName("detekt")
+    val additionalClassPaths = mutableListOf<Configuration>()
+    subprojects.forEach { subproject ->
+        if (subproject.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")) {
+            try {
+                additionalClassPaths.add(subproject.configurations.getByName("jvmCompileClasspath"))
+            } catch (e: Exception) {
+                // Ignore if configuration doesn't exist
+            }
+        }
+    }
+    classpath.setFrom(classPaths + files(additionalClassPaths))
 
     reports {
         html.required.set(true)
@@ -43,11 +92,15 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     dependsOn(":detekt:assemble")
 }
 
+// Make detektPasses the default detekt task
+tasks.named("detekt") {
+    dependsOn("detektPasses")
+}
+
 // Configure Kover code coverage
-// Currently tracking :detekt module to demonstrate coverage reporting
-// When :analytics-core is added, it will be tracked automatically
 dependencies {
     kover(project(":detekt"))
+    kover(project("carp.dsp"))
 }
 
 

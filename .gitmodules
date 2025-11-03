@@ -1,0 +1,3 @@
+[submodule "carp-core"]
+	path = carp-core
+	url = https://github.com/cph-cachet/carp.core-kotlin.git
