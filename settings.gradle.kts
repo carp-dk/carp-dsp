@@ -43,5 +43,6 @@ if (useLocalCore) {
 }
 
 include(":detekt")
-include("carp.dsp")
+include(":carp.dsp.core")
+include(":carp.dsp.demo")
 

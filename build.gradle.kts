@@ -99,8 +99,31 @@ tasks.named("detekt") {
 
 // Configure Kover code coverage
 dependencies {
-    kover(project(":detekt"))
-    kover(project("carp.dsp"))
+    kover(project(":carp.dsp.core"))
+    //kover(project(":carp.dsp.demo"))
+}
+
+// Configure Kover for comprehensive coverage reporting
+kover {
+    reports {
+        total {
+            html {
+                onCheck = true
+            }
+            xml {
+                onCheck = true
+            }
+        }
+    }
+}
+
+// Ensure tests run before generating coverage
+tasks.named("koverHtmlReport") {
+    dependsOn(":carp.dsp.core:jvmTest", ":carp.dsp.demo:jvmTest")
+}
+
+tasks.named("koverXmlReport") {
+    dependsOn(":carp.dsp.core:jvmTest", ":carp.dsp.demo:jvmTest")
 }
 
 
