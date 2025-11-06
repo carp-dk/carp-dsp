@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build all modules
+      run: ./gradlew build
+
+    - name: Run core module tests
+      run: ./gradlew :carp.dsp.core:jvmTest
+
+    - name: Run demo module tests
+      run: ./gradlew :carp.dsp.demo:jvmTest
+
+    - name: Run detekt code analysis
+      run: ./gradlew detekt
+
+    - name: Generate code coverage report
+      run: ./gradlew koverXmlReport
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./build/reports/kover/report.xml
+        fail_ci_if_error: false
+        verbose: true
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./build/reports/kover/report.xml
+        fail_ci_if_error: false
+
+    - name: Compile demo CLI
+      run: ./gradlew :carp.dsp.demo:compileKotlinJvm
+
+    - name: Generate HTML coverage report
+      run: ./gradlew koverHtmlReport
+
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: build/reports/kover/html/

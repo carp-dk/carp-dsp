@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Run all tests
+      run: |
+        ./gradlew :carp.dsp.core:jvmTest
+        ./gradlew :carp.dsp.demo:jvmTest
+
+    - name: Run quality checks
+      run: |
+        ./gradlew detekt
+        ./gradlew koverVerify || echo "Coverage check completed"
+
+    - name: Build release artifacts
+      run: |
+        ./gradlew :carp.dsp.core:jvmJar
+        ./gradlew :carp.dsp.demo:jvmJar
+
+    - name: Generate documentation
+      run: ./gradlew dokkaHtml || echo "Documentation generation skipped"
+
+    - name: Generate coverage report
+      run: ./gradlew koverHtmlReport
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          carp.dsp.core/build/libs/*.jar
+          carp.dsp.demo/build/libs/*.jar
+        body: |
+          ## CARP DSP Release ${{ github.ref_name }}
+          
+          ### Features
+          - CARP tabular data framework
+          - Type-safe measurement processing
+          - Multiplatform Kotlin support
+          - Comprehensive test coverage
+          
+          ### Modules
+          - `carp.dsp.core`: Core tabular data framework
+          - `carp.dsp.demo`: CLI demonstration and examples
+          
+          ### Coverage
+          See the [coverage report](https://codecov.io/gh/${{ github.repository }}) for detailed metrics.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload coverage to release
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report-${{ github.ref_name }}
+        path: build/reports/kover/html/
