@@ -46,22 +46,16 @@ jobs:
     - name: Run detekt code analysis
       run: ./gradlew detekt
 
-    - name: Generate code coverage report
+    - name: Generate coverage report
       run: ./gradlew koverXmlReport
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./build/reports/kover/report.xml
-        fail_ci_if_error: false
-        verbose: true
-
-    - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./build/reports/kover/report.xml
+        file: ./build/reports/kover/report.xml
         fail_ci_if_error: false
+        verbose: true
 
     - name: Compile demo CLI
       run: ./gradlew :carp.dsp.demo:compileKotlinJvm
@@ -71,6 +65,32 @@ jobs:
 
     - name: Upload HTML coverage report
       uses: actions/upload-artifact@v3
+      if: always()
       with:
         name: coverage-report
         path: build/reports/kover/html/
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: test-results
+        path: |
+          **/build/reports/tests/
+          **/build/test-results/
+
+    - name: Comment PR with coverage
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        message: |
+          ## 📊 Coverage Report
+          
+          Coverage reports have been generated and uploaded to Codecov.
+          
+          - [View detailed coverage report](https://codecov.io/gh/${{ github.repository }}/pull/${{ github.event.number }})
+          - HTML report available as workflow artifact
+          
+          ### Quick Stats
+          The coverage report will be available once processing completes on Codecov.
+
