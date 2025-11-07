@@ -94,8 +94,13 @@ jobs:
 
     - name: Generate coverage badge
       run: |
-        ./gradlew koverXmlReport
-        echo "Coverage report generated"
+        echo "📊 Generating coverage badge..."
+        cd carp-dsp
+        ./gradlew koverXmlReport --info || {
+          echo "❌ Coverage badge generation failed"
+          exit 1
+        }
+        echo "✅ Coverage report generated successfully"
 
   quality-gates:
     runs-on: ubuntu-latest
