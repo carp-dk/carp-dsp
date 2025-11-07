@@ -13,7 +13,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: recursive
+        path: carp-dsp
+        fetch-depth: 0
+
+    - name: Checkout CARP core
+      uses: actions/checkout@v4
+      with:
+        repository: cph-cachet/carp.core-kotlin
+        ref: feature/core-analytics
+        path: carp
+        fetch-depth: 0
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -22,7 +31,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Cache Gradle packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -31,53 +40,71 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Build CARP core dependencies
+      run: |
+        cd carp
+        chmod +x gradlew
+        ./gradlew publishToMavenLocal -x test
 
-    - name: Build all modules
-      run: ./gradlew build
+    - name: Build and test carp-dsp
+      run: |
+        cd carp-dsp
+        chmod +x gradlew
+        ./gradlew build
 
     - name: Run core module tests
-      run: ./gradlew :carp.dsp.core:jvmTest
+      run: |
+        cd carp-dsp
+        ./gradlew :carp.dsp.core:jvmTest
 
     - name: Run demo module tests
-      run: ./gradlew :carp.dsp.demo:jvmTest
+      run: |
+        cd carp-dsp
+        ./gradlew :carp.dsp.demo:jvmTest
 
     - name: Run detekt code analysis
-      run: ./gradlew detekt
+      run: |
+        cd carp-dsp
+        ./gradlew detekt
 
     - name: Generate coverage report
-      run: ./gradlew koverXmlReport
+      run: |
+        cd carp-dsp
+        ./gradlew koverXmlReport
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./build/reports/kover/report.xml
+        files: ./carp-dsp/build/reports/kover/report.xml
         fail_ci_if_error: false
         verbose: true
 
     - name: Compile demo CLI
-      run: ./gradlew :carp.dsp.demo:compileKotlinJvm
+      run: |
+        cd carp-dsp
+        ./gradlew :carp.dsp.demo:compileKotlinJvm
 
     - name: Generate HTML coverage report
-      run: ./gradlew koverHtmlReport
+      run: |
+        cd carp-dsp
+        ./gradlew koverHtmlReport
 
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: coverage-report
-        path: build/reports/kover/html/
+        name: coverage-report-${{ github.run_number }}
+        path: carp-dsp/build/reports/kover/html/
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
-        name: test-results
+        name: test-results-${{ github.run_number }}
         path: |
-          **/build/reports/tests/
-          **/build/test-results/
+          carp-dsp/**/build/reports/tests/
+          carp-dsp/**/build/test-results/
 
     - name: Comment PR with coverage
       if: github.event_name == 'pull_request'
