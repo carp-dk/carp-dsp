@@ -111,4 +111,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report-${{ github.ref_name }}
-        path: carp-dsp/build/reports/kover/html/
+        path: 'path: carp-dsp/build/reports/kover/html'
