@@ -30,18 +30,38 @@ val possibleCorePaths = listOf(
 
 println("🔍 Checking for CARP core in possible locations:")
 possibleCorePaths.forEachIndexed { index, path ->
-    val exists = path.exists()
-    val absolutePath = path.absolutePath
-    println("  ${index + 1}. $absolutePath -> ${if (exists) "✅ EXISTS" else "❌ NOT FOUND"}")
-    if (exists && path.isDirectory) {
-        val settingsFile = File(path, "settings.gradle.kts")
-        val buildFile = File(path, "build.gradle.kts")
-        println("     - settings.gradle.kts: ${if (settingsFile.exists()) "✅" else "❌"}")
-        println("     - build.gradle.kts: ${if (buildFile.exists()) "✅" else "❌"}")
+    try {
+        val exists = path.exists()
+        val absolutePath = path.absolutePath
+        println("  ${index + 1}. $absolutePath -> ${if (exists) "✅ EXISTS" else "❌ NOT FOUND"}")
+        if (exists && path.isDirectory) {
+            val settingsFile = File(path, "settings.gradle.kts")
+            val buildFile = File(path, "build.gradle.kts")
+            println("     - settings.gradle.kts: ${if (settingsFile.exists()) "✅" else "❌"}")
+            println("     - build.gradle.kts: ${if (buildFile.exists()) "✅" else "❌"}")
+
+            // Check if this looks like a valid CARP core repository
+            if (settingsFile.exists() || buildFile.exists()) {
+                println("     - Valid CARP core structure detected")
+            }
+        }
+    } catch (e: Exception) {
+        println("  ${index + 1}. ${path.path} -> ❌ ERROR: ${e.message}")
     }
 }
 
-val corePath = possibleCorePaths.firstOrNull { it.exists() && it.isDirectory }
+// Find the first valid CARP core path
+val corePath = possibleCorePaths.firstOrNull { path ->
+    try {
+        path.exists() && path.isDirectory && (
+            File(path, "settings.gradle.kts").exists() ||
+            File(path, "build.gradle.kts").exists()
+        )
+    } catch (e: Exception) {
+        println("⚠️ Error checking path ${path.absolutePath}: ${e.message}")
+        false
+    }
+}
 val useLocalCore = corePath != null && (System.getenv("USE_LOCAL_CORE") != "false")
 
 if (useLocalCore && corePath != null) {
@@ -53,7 +73,7 @@ if (useLocalCore && corePath != null) {
         // Verify the core project structure
         val coreSettingsFile = File(corePath, "settings.gradle.kts")
         if (!coreSettingsFile.exists()) {
-            throw GradleException("""
+            val errorMsg = """
                 ❌ CARP CORE BUILD FAILURE: Missing settings.gradle.kts
                 
                 Expected: ${coreSettingsFile.absolutePath}
@@ -65,7 +85,10 @@ if (useLocalCore && corePath != null) {
                 3. The settings.gradle.kts file exists
                 
                 This is a failure in the dependent repository (carp.core-kotlin), not carp-dsp.
-            """.trimIndent())
+            """.trimIndent()
+
+            println(errorMsg)
+            throw GradleException(errorMsg)
         }
 
         println("✅ CARP core structure validation passed")
@@ -93,25 +116,28 @@ if (useLocalCore && corePath != null) {
 
         println("✅ CARP core composite build setup completed successfully")
 
-    } catch (Exception e) {
+    } catch (e: GradleException) {
+        // Re-throw GradleExceptions as-is
+        throw e
+    } catch (e: Exception) {
         val errorMessage = """
             ❌ CARP CORE BUILD FAILURE: Composite build setup failed
             
-            Error: ${e.message}
+            Error: ${e.message ?: "Unknown error"}
+            Error type: ${e::class.simpleName}
             CARP core path: ${corePath.absolutePath}
             
             This is a failure in the dependent repository (carp.core-kotlin), not carp-dsp.
             
             Troubleshooting steps:
             1. Verify CARP core is on branch: feature/core-analytics
-            2. Ensure CARP core builds independently: cd ${corePath.absolutePath} && ./gradlew build
+            2. Ensure CARP core builds independently: cd '${corePath.absolutePath}' && ./gradlew build
             3. Check CARP core project structure and Gradle files
-            
-            Stack trace: ${e.stackTrace.take(5).joinToString("\n") { "  at $it" }}
+            4. Verify the CARP core repository was cloned completely
         """.trimIndent()
 
         println(errorMessage)
-        throw GradleException(errorMessage)
+        throw GradleException(errorMessage, e)
     }
 
 } else {
