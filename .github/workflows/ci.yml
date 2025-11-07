@@ -22,7 +22,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Cache Gradle packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -53,7 +53,7 @@ jobs:
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./build/reports/kover/report.xml
+        files: ./build/reports/kover/report.xml
         fail_ci_if_error: false
         verbose: true
 
@@ -64,17 +64,17 @@ jobs:
       run: ./gradlew koverHtmlReport
 
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: coverage-report
+        name: coverage-report-${{ github.run_number }}
         path: build/reports/kover/html/
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
-        name: test-results
+        name: test-results-${{ github.run_number }}
         path: |
           **/build/reports/tests/
           **/build/test-results/
