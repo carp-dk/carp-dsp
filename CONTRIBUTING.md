@@ -1,272 +1,170 @@
-# Contributing to CARP-DSP
+# Contributing to CARP DSP
 
-Thank you for considering contributing to CARP-DSP! We welcome contributions from the community.
-
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Coding Standards](#coding-standards)
-- [Testing](#testing)
-- [Documentation](#documentation)
-- [Submitting Changes](#submitting-changes)
-
-## Code of Conduct
-
-This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+Thank you for your interest in contributing to CARP DSP! This document provides guidelines and information for contributors.
 
 ## Getting Started
 
 ### Prerequisites
+- JDK 17 or higher
+- Git with submodules support
+- Kotlin/Gradle knowledge
 
-- Java 17 or higher
-- Git
-
-### Clone and Build
-
-```bash
-git clone https://github.com/carp-dk/carp-dsp.git
-cd carp-dsp
-./gradlew build
-```
-
-### Run Tests
-
-```bash
-./gradlew test
-```
-
-### Check Code Quality
-
-```bash
-./gradlew detektAll
-```
+### Development Setup
+1. Fork the repository
+2. Clone with submodules:
+   ```bash
+   git clone --recurse-submodules https://github.com/yourusername/carp-dsp.git
+   cd carp-dsp
+   ```
+3. Build and test:
+   ```bash
+   ./gradlew build
+   ./gradlew test
+   ```
 
 ## Development Workflow
 
-We follow a GitFlow-inspired workflow:
+### Branch Strategy
+- `main` - Production-ready code
+- `develop` - Integration branch for features
+- `feature/*` - Feature development branches
+- `hotfix/*` - Emergency fixes
 
-1. **Fork** the repository (for external contributors)
-2. **Create a feature branch** from `develop`:
+### Making Changes
+1. Create a feature branch:
    ```bash
-   git checkout develop
-   git pull
    git checkout -b feature/your-feature-name
    ```
-3. **Make your changes** following our coding standards
-4. **Test your changes**:
+2. Make your changes
+3. Run quality checks:
    ```bash
-   ./gradlew test koverHtmlReport
-   ./gradlew detektAll
+   ./gradlew detektPasses
+   ./gradlew test
+   ./gradlew koverHtmlReport
    ```
-5. **Commit your changes** with clear messages:
+4. Commit with conventional commits:
    ```bash
-   git commit -m "Add feature: description of your changes"
+   git commit -m "feat: add new tabular data operation"
    ```
-6. **Push to your fork**:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-7. **Create a Pull Request** to `develop`
+5. Push and create a Pull Request
 
-## Coding Standards
+## Quality Standards
 
-This project follows the [standard Kotlin Coding Conventions](https://kotlinlang.org/docs/coding-conventions.html), with CARP-specific modifications:
+### Code Quality
+- **Detekt**: All code must pass Detekt analysis
+- **Testing**: Maintain 95%+ test coverage
+- **Documentation**: Document public APIs with KDoc
+- **Type Safety**: Prefer type-safe solutions
 
-### Spacing in Parentheses
+### Commit Messages
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `docs:` - Documentation changes
+- `test:` - Test additions/changes
+- `refactor:` - Code refactoring
+- `chore:` - Maintenance tasks
 
-Spaces are required in all parentheses, **except** for higher-order functions:
+### Pull Request Requirements
+- ✅ All CI checks pass
+- ✅ Code review approval
+- ✅ Up-to-date with target branch
+- ✅ Clear description of changes
 
-```kotlin
-// ✅ Correct
-if ( true )
-{
-    val answer = 42
-}
-
-fun test( a: Int, b: Int ): Int
-{
-    return a + b
-}
-
-// ✅ Correct (higher-order functions - no spaces)
-val higherOrder: (Int, Int) -> Int = { a, b -> a + b }
-
-// ❌ Incorrect
-if (true) {
-    val answer = 42
-}
-```
-
-### Curly Braces on Separate Lines
-
-Curly braces of **multi-line** blocks must be placed on separate lines, aligned with the start of the definition:
-
-```kotlin
-// ✅ Correct
-class Example
-{
-    fun test(): Int
-    {
-        return 42
-    }
-}
-
-// ✅ Correct (single-line blocks are allowed)
-class OneLine { val x = 42 }
-
-// ❌ Incorrect
-class Example {
-    fun test(): Int {
-        return 42
-    }
-}
-```
-
-**Exception:** Trailing lambda arguments:
-
-```kotlin
-// ✅ Correct (lambda on multiple lines)
-list.forEach {
-    println( it )
-}
-```
-
-### Running Detekt
-
-Our custom Detekt rules enforce these standards:
-
-```bash
-./gradlew detektAll
-```
-
-Fix any reported issues before submitting a PR.
-
-## Testing
-
-### Writing Tests
-
-- Use `kotlin.test` for common tests
-- Place tests in appropriate source sets:
-  - `commonTest` for cross-platform code
-  - `jvmTest` for JVM-specific code
-  - `jsTest` for JS-specific code
+## 🧪 Testing Guidelines
 
 ### Test Structure
-
-Test namespaces and classes should mirror the main source code:
-
 ```
 src/
-  commonMain/kotlin/carp/dsp/MyClass.kt
-  commonTest/kotlin/carp/dsp/MyClassTest.kt
+├── commonMain/kotlin/          # Implementation
+├── commonTest/kotlin/          # Common tests
+├── jvmMain/kotlin/            # JVM-specific code
+└── jvmTest/kotlin/            # JVM-specific tests
 ```
+
+### Test Categories
+- **Unit Tests**: Test individual components
+- **Integration Tests**: Test component interactions
+- **End-to-End Tests**: Test complete workflows
 
 ### Coverage Requirements
+- Minimum 95% line coverage
+- All public APIs must be tested
+- Critical paths require comprehensive testing
 
-- Minimum overall coverage: **70%**
-- Minimum per-class coverage: **60%**
+## 📁 Project Structure
 
-Check coverage:
+### Module Organization
+```
+carp.dsp.core/
+├── domain/
+│   ├── data/              # Data models and structures
+│   └── execution/         # Workflow execution logic
+└── application/           # Application services
 
+carp.dsp.demo/
+├── commonMain/            # Cross-platform demo code
+└── jvmMain/              # JVM-specific utilities
+```
+
+### Package Conventions
+- `domain` - Core business logic and models
+- `application` - Application services and use cases
+- `infrastructure` - External concerns (future)
+
+## 🔧 Development Tools
+
+### Recommended IDE Settings
+- **IntelliJ IDEA**: Latest version with Kotlin plugin
+- **Code Style**: Use project's `.editorconfig`
+- **Inspections**: Enable Kotlin inspections
+
+### Useful Gradle Tasks
 ```bash
-./gradlew test koverHtmlReport
-# Open: build/reports/kover/html/index.html
+# Development
+./gradlew build                    # Full build
+./gradlew :carp.dsp.core:jvmTest  # Core tests
+./gradlew :carp.dsp.demo:jvmTest  # Demo tests
+
+# Quality
+./gradlew detekt                   # Code analysis
+./gradlew koverHtmlReport         # Coverage report
+./gradlew check                   # All checks
+
+# Artifacts
+./gradlew :carp.dsp.core:jvmJar   # Build core JAR
+./gradlew publishToMavenLocal     # Local publishing
 ```
 
-## Documentation
+## Reporting Issues
 
-### Code Documentation
+### Bug Reports
+Include:
+- Clear description of the issue
+- Steps to reproduce
+- Expected vs actual behavior
+- Environment details (OS, JDK version)
+- Relevant code snippets or logs
 
-- Add KDoc comments for public APIs
-- Include examples for complex functions
-- Document parameters and return values
+### Feature Requests
+Include:
+- Clear description of the feature
+- Use case and motivation
+- Proposed API or implementation approach
+- Impact on existing functionality
 
-```kotlin
-/**
- * Calculates the sum of two integers.
- *
- * @param a The first integer
- * @param b The second integer
- * @return The sum of [a] and [b]
- */
-fun sum( a: Int, b: Int ): Int = a + b
-```
 
-### Updating Documentation
+## 📚 Resources
 
-When adding features:
-- Update README.md if user-facing
-- Add/update docs/ files for detailed guides
-- Update CHANGELOG.md (see below)
+- [CARP Documentation](https://carp.cachet.dk/)
+- [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html)
+- [Detekt Rules](https://detekt.github.io/detekt/)
+- [Kover Coverage](https://github.com/Kotlin/kotlinx-kover)
 
-## Submitting Changes
+## 💬 Community
 
-### Pull Request Process
+- **Issues**: GitHub Issues for bugs and features
+- **Discussions**: GitHub Discussions for questions
+- **Code Review**: All changes go through pull request review
 
-1. **Ensure all checks pass**:
-   - ✅ Build succeeds
-   - ✅ Tests pass
-   - ✅ Coverage meets thresholds
-   - ✅ Detekt passes
-
-2. **Update CHANGELOG.md**:
-   ```markdown
-   ## [Unreleased]
-   ### Added
-   - Description of your feature
-   ```
-
-3. **Create a clear PR description**:
-   - What does this PR do?
-   - Why is it needed?
-   - How was it tested?
-
-4. **Link related issues**: Use `Closes #123` in the PR description
-
-5. **Request review** from maintainers
-
-### PR Review Criteria
-
-Your PR will be reviewed for:
-- ✅ Code quality and style
-- ✅ Test coverage
-- ✅ Documentation
-- ✅ No breaking changes (without discussion)
-- ✅ Follows contribution guidelines
-
-### After Approval
-
-Once approved, a maintainer will merge your PR to `develop`. Your contribution will be included in the next release!
-
-## Release Workflow
-
-**For Maintainers:**
-
-- **develop**: Integration branch, receives all PRs
-- **main**: Stable releases only
-
-To create a release:
-1. Create release branch from develop: `release/x.y.z`
-2. Update version in `gradle.properties`
-3. Update CHANGELOG.md
-4. Merge to main via PR
-5. Tag the release: `git tag -a vx.y.z -m "Release x.y.z"`
-6. Merge back to develop
-
-## Getting Help
-
-- 💬 **Discussions**: Use GitHub Discussions for questions
-- 🐛 **Bugs**: Open an issue with the bug template
-- 💡 **Features**: Open an issue with the feature request template
-
-## Recognition
-
-Contributors are recognized in:
-- The project README (via All Contributors bot)
-- Release notes
-- CHANGELOG.md
-
-Thank you for contributing to CARP-DSP! 🎉
-
+Thank you for contributing to CARP DSP! 🎉

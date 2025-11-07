@@ -41,9 +41,9 @@ jobs:
       run: ./gradlew :carp.dsp.core:jvmJar :carp.dsp.demo:jvmJar
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: jar-artifacts
+        name: jar-artifacts-${{ github.run_number }}
         path: |
           carp.dsp.core/build/libs/*.jar
           carp.dsp.demo/build/libs/*.jar
@@ -86,10 +86,10 @@ jobs:
         ./gradlew koverVerify || echo "Coverage verification - check thresholds"
 
     - name: Upload detekt reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: detekt-reports
+        name: detekt-reports-${{ github.run_number }}
         path: |
           build/reports/detekt/
           detekt/build/reports/detekt/
