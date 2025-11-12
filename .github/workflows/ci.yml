@@ -11,9 +11,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout carp-dsp
+      uses: actions/checkout@v4
       with:
-        submodules: recursive
+        path: carp-dsp
+        fetch-depth: 0
+
+    - name: Checkout CARP core
+      uses: actions/checkout@v4
+      with:
+        repository: cph-cachet/carp.core-kotlin
+        ref: feature/core-analytics
+        path: carp.core-kotlin
+        fetch-depth: 0
+
+    - name: Verify directory structure
+      run: |
+        echo "🔍 Directory structure verification:"
+        pwd
+        ls -la
+        echo ""
+        echo "📁 carp-dsp directory:"
+        ls -la carp-dsp/ || echo "❌ carp-dsp directory not found"
+        echo ""
+        echo "📁 carp.core-kotlin directory:"
+        ls -la carp.core-kotlin/ || echo "❌ carp.core-kotlin directory not found"
+
+    - name: Verify CARP core branch and commit
+      run: |
+        cd carp.core-kotlin
+        echo "🔍 CARP core repository verification:"
+        echo "  - Current branch: $(git branch --show-current)"
+        echo "  - Current commit: $(git log -1 --oneline)"
+        echo "  - Remote URL: $(git remote get-url origin)"
+        echo "  - Working directory: $(pwd)"
+        
+        # Verify we're on the expected branch
+        CURRENT_BRANCH=$(git branch --show-current)
+        if [ "$CURRENT_BRANCH" != "feature/core-analytics" ]; then
+          echo "❌ ERROR: Expected branch 'feature/core-analytics', got '$CURRENT_BRANCH'"
+          exit 1
+        fi
+        echo "✅ Branch verification passed"
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -31,44 +70,120 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Build CARP core dependencies
+      run: |
+        echo "🔨 Building CARP core dependencies..."
+        cd carp.core-kotlin
+        chmod +x gradlew
+        
+        echo "📋 CARP core project structure:"
+        ls -la
+        
+        echo "🔨 Starting CARP core build..."
+        ./gradlew publishToMavenLocal -x test --info --stacktrace || {
+          echo "❌ CARP CORE BUILD FAILED"
+          echo "This is a failure in the dependent repository (carp.core-kotlin)"
+          echo "Branch: $(git branch --show-current)"
+          echo "Commit: $(git log -1 --oneline)"
+          exit 1
+        }
+        
+        echo "✅ CARP core build completed successfully"
 
-    - name: Build all modules
-      run: ./gradlew build
+    - name: Set environment for composite build
+      run: |
+        echo "🔧 Setting environment variables for composite build"
+        echo "USE_LOCAL_CORE=true" >> $GITHUB_ENV
+        echo "CI=true" >> $GITHUB_ENV
+
+    - name: Build and test carp-dsp
+      run: |
+        echo "🔨 Building carp-dsp with composite build..."
+        cd carp-dsp
+        chmod +x gradlew
+        
+        echo "📋 carp-dsp project structure:"
+        ls -la
+        
+        echo "🔍 Environment check:"
+        echo "  - USE_LOCAL_CORE: $USE_LOCAL_CORE"
+        echo "  - CI: $CI"
+        echo "  - PWD: $(pwd)"
+        echo "  - Parent directory: $(ls -la ../ | head -10)"
+        
+        echo "🔨 Starting carp-dsp build with settings detection..."
+        ./gradlew build --info --stacktrace || {
+          echo "❌ CARP-DSP BUILD FAILED"
+          echo "Check the logs above for dependency resolution issues"
+          exit 1
+        }
+        
+        echo "✅ carp-dsp build completed successfully"
 
     - name: Run core module tests
-      run: ./gradlew :carp.dsp.core:jvmTest
+      run: |
+        echo "🧪 Running core module tests..."
+        cd carp-dsp
+        ./gradlew :carp.dsp.core:jvmTest --info || {
+          echo "❌ Core module tests failed"
+          exit 1
+        }
+        echo "✅ Core module tests passed"
 
     - name: Run demo module tests
-      run: ./gradlew :carp.dsp.demo:jvmTest
+      run: |
+        echo "🧪 Running demo module tests..."
+        cd carp-dsp
+        ./gradlew :carp.dsp.demo:jvmTest --info || {
+          echo "❌ Demo module tests failed"
+          exit 1
+        }
+        echo "✅ Demo module tests passed"
 
     - name: Run detekt code analysis
-      run: ./gradlew detekt
+      run: |
+        echo "🔍 Running detekt code analysis..."
+        cd carp-dsp
+        ./gradlew detekt --info || {
+          echo "❌ Detekt analysis failed"
+          exit 1
+        }
+        echo "✅ Detekt analysis passed"
 
     - name: Generate coverage report
-      run: ./gradlew koverXmlReport
+      run: |
+        echo "📊 Generating coverage report..."
+        cd carp-dsp
+        ./gradlew koverXmlReport --info || {
+          echo "❌ Coverage report generation failed"
+          exit 1
+        }
+        echo "✅ Coverage report generated"
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./build/reports/kover/report.xml
+        files: ./carp-dsp/build/reports/kover/report.xml
         fail_ci_if_error: false
         verbose: true
 
     - name: Compile demo CLI
-      run: ./gradlew :carp.dsp.demo:compileKotlinJvm
+      run: |
+        cd carp-dsp
+        ./gradlew :carp.dsp.demo:compileKotlinJvm
 
     - name: Generate HTML coverage report
-      run: ./gradlew koverHtmlReport
+      run: |
+        cd carp-dsp
+        ./gradlew koverHtmlReport
 
     - name: Upload HTML coverage report
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage-report-${{ github.run_number }}
-        path: build/reports/kover/html/
+        path: carp-dsp/build/reports/kover/html/
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -76,8 +191,8 @@ jobs:
       with:
         name: test-results-${{ github.run_number }}
         path: |
-          **/build/reports/tests/
-          **/build/test-results/
+          carp-dsp/**/build/reports/tests/
+          carp-dsp/**/build/test-results/
 
     - name: Comment PR with coverage
       if: github.event_name == 'pull_request'

@@ -11,9 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout carp-dsp
+      uses: actions/checkout@v4
       with:
-        submodules: recursive
+        path: carp-dsp
+        fetch-depth: 0
+
+    - name: Checkout CARP core
+      uses: actions/checkout@v4
+      with:
+        repository: cph-cachet/carp.core-kotlin
+        ref: feature/core-analytics
+        path: carp.core-kotlin
+        fetch-depth: 0
+
+    - name: Verify CARP core setup
+      run: |
+        cd carp.core-kotlin
+        echo "🔍 CARP core verification:"
+        echo "  - Branch: $(git branch --show-current)"
+        echo "  - Commit: $(git log -1 --oneline)"
+        
+        CURRENT_BRANCH=$(git branch --show-current)
+        if [ "$CURRENT_BRANCH" != "feature/core-analytics" ]; then
+          echo "❌ ERROR: Expected branch 'feature/core-analytics', got '$CURRENT_BRANCH'"
+          exit 1
+        fi
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -22,7 +45,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Cache Gradle packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -31,35 +54,71 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Build CARP core dependencies
+      run: |
+        echo "🔨 Building CARP core for documentation..."
+        cd carp.core-kotlin
+        chmod +x gradlew
+        ./gradlew publishToMavenLocal -x test --info || {
+          echo "❌ CARP CORE BUILD FAILED (docs-and-artifacts)"
+          exit 1
+        }
+
+    - name: Set environment for composite build
+      run: echo "USE_LOCAL_CORE=true" >> $GITHUB_ENV
 
     - name: Build documentation
-      run: ./gradlew dokkaHtml || echo "Dokka not configured yet"
+      run: |
+        echo "📚 Building documentation..."
+        cd carp-dsp
+        chmod +x gradlew
+        ./gradlew dokkaHtml --info || echo "⚠️ Dokka not configured yet, skipping"
 
     - name: Build JAR artifacts
-      run: ./gradlew :carp.dsp.core:jvmJar :carp.dsp.demo:jvmJar
+      run: |
+        echo "📦 Building JAR artifacts..."
+        cd carp-dsp
+        ./gradlew :carp.dsp.core:jvmJar :carp.dsp.demo:jvmJar --info || {
+          echo "❌ JAR artifact build failed"
+          exit 1
+        }
+        echo "✅ JAR artifacts built successfully"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: jar-artifacts-${{ github.run_number }}
         path: |
-          carp.dsp.core/build/libs/*.jar
-          carp.dsp.demo/build/libs/*.jar
+          carp-dsp/carp.dsp.core/build/libs/*.jar
+          carp-dsp/carp.dsp.demo/build/libs/*.jar
 
     - name: Generate coverage badge
       run: |
-        ./gradlew koverXmlReport
-        echo "Coverage report generated"
+        echo "📊 Generating coverage badge..."
+        cd carp-dsp
+        ./gradlew koverXmlReport --info || {
+          echo "❌ Coverage badge generation failed"
+          exit 1
+        }
+        echo "✅ Coverage report generated successfully"
 
   quality-gates:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout carp-dsp
+      uses: actions/checkout@v4
       with:
-        submodules: recursive
+        path: carp-dsp
+        fetch-depth: 0
+
+    - name: Checkout CARP core
+      uses: actions/checkout@v4
+      with:
+        repository: cph-cachet/carp.core-kotlin
+        ref: feature/core-analytics
+        path: carp.core-kotlin
+        fetch-depth: 0
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -68,7 +127,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Cache Gradle packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -77,13 +136,30 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Build CARP core dependencies
+      run: |
+        echo "🔨 Building CARP core for quality gates..."
+        cd carp.core-kotlin
+        chmod +x gradlew
+        ./gradlew publishToMavenLocal -x test --info || {
+          echo "❌ CARP CORE BUILD FAILED (quality-gates)"
+          exit 1
+        }
+
+    - name: Set environment for composite build
+      run: echo "USE_LOCAL_CORE=true" >> $GITHUB_ENV
 
     - name: Run quality checks
       run: |
-        ./gradlew detekt --continue
-        ./gradlew koverVerify || echo "Coverage verification - check thresholds"
+        echo "🔍 Running quality checks..."
+        cd carp-dsp
+        chmod +x gradlew
+        
+        echo "🔍 Running detekt..."
+        ./gradlew detekt --continue --info || echo "⚠️ Detekt issues found"
+        
+        echo "📊 Running coverage verification..."
+        ./gradlew koverVerify --info || echo "⚠️ Coverage verification - check thresholds"
 
     - name: Upload detekt reports
       uses: actions/upload-artifact@v4
@@ -91,5 +167,5 @@ jobs:
       with:
         name: detekt-reports-${{ github.run_number }}
         path: |
-          build/reports/detekt/
-          detekt/build/reports/detekt/
+          carp-dsp/build/reports/detekt/
+          carp-dsp/detekt/build/reports/detekt/
