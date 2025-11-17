@@ -33,6 +33,7 @@ fun buildWorkflowStep(): Workflow {
 
     val demoStepMetadata = StepMetadata(
         name = "Demo Step",
+        id = UUID.randomUUID(),
         description = "A demonstration step that uses DemoProcess.",
 
     )
