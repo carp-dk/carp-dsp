@@ -189,9 +189,8 @@ class PythonProcess(
 
     /**
      * Serializes data for stdin transmission.
-     * Override this method to customize serialization format.
      */
-    protected open fun serializeData(data: Any): String {
+    protected fun serializeData(data: Any): String {
         // Default: Convert to string representation
         // In production, you'd use JSON/CSV serialization based on data type
         return when (data) {
