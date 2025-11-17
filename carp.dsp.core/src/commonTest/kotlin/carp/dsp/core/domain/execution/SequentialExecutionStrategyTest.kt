@@ -5,6 +5,10 @@ import carp.dsp.core.domain.data.CarpTabularData
 import carp.dsp.core.domain.data.StepCountMeasurementRow
 import dk.cachet.carp.analytics.application.data.DataRegistry
 import dk.cachet.carp.analytics.application.data.InMemoryData
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
+import dk.cachet.carp.analytics.domain.data.RegistryDestination
 import dk.cachet.carp.analytics.domain.execution.ExecutionContext
 import dk.cachet.carp.analytics.domain.process.AnalysisProcess
 import dk.cachet.carp.analytics.domain.process.ExternalProcess
@@ -52,7 +56,7 @@ class SequentialExecutionStrategyTest {
         )
 
         return CarpTabularData(
-            rows = listOf<carp.dsp.core.domain.data.CarpMeasurementRow>(stepCountRow),
+            rows = listOf(stepCountRow),
             originalBatch = MutableDataStreamBatch()
         )
     }
@@ -62,7 +66,7 @@ class SequentialExecutionStrategyTest {
             override val name: String = "TestAnalysisProcess"
             override val description: String = "Test analysis process"
 
-            override fun process(input: dk.cachet.carp.analytics.domain.data.ICarpTabularData): dk.cachet.carp.analytics.domain.data.ICarpTabularData? {
+            override fun process(input: dk.cachet.carp.analytics.domain.data.ICarpTabularData): dk.cachet.carp.analytics.domain.data.ICarpTabularData {
                 return input
             }
         }
@@ -112,18 +116,20 @@ class SequentialExecutionStrategyTest {
         // Create a step with the analysis process
         val analysisProcess = createMockAnalysisProcess()
         val step = Step(
-            StepMetadata("test_step", "Test Step"),
-            inputData = listOf(
-                dk.cachet.carp.analytics.domain.data.InputDataReference(
-                    "input_data",
-                    "Test Input",
-                    dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Test Step", description = "A test step"),
+            inputs = listOf(
+                InputDataSpec(
+                    identifier = "input_data",
+                    name = "Test Input",
+                    source = InMemorySource(registryKey = "input_data")
                 )
             ),
-            outputData = dk.cachet.carp.analytics.domain.data.OutputDataReference(
-                "output_data",
-                "Test Output",
-                dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            outputs = listOf(
+                OutputDataSpec(
+                    identifier = "output_data",
+                    name = "Test Output",
+                    destination = RegistryDestination(key = "output_data")
+                )
             ),
             process = analysisProcess
         )
@@ -135,7 +141,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step))
+        workflow.addComponent(step)
 
         // Execute the workflow
         strategy.execute(workflow, executorFactory)
@@ -154,7 +160,7 @@ class SequentialExecutionStrategyTest {
         // Create a step with external process
         val externalProcess = createMockExternalProcess()
         val step = Step(
-            StepMetadata("external_step", "External Step"),
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "External Step", description = "External step test"),
             process = externalProcess
         )
 
@@ -165,7 +171,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step))
+        workflow.addComponent(step)
 
         val mockExecutor = {
             object : dk.cachet.carp.analytics.domain.execution.Executor<ExternalProcess> {
@@ -196,7 +202,7 @@ class SequentialExecutionStrategyTest {
         }
 
         val step = Step(
-            StepMetadata("unsupported_step", "Unsupported Step"),
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Unsupported Step", description = "Test unsupported process"),
             process = unsupportedProcess
         )
 
@@ -207,7 +213,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step))
+        workflow.addComponent(step)
 
         // Should throw exception for unsupported process type
         assertFailsWith<IllegalArgumentException> {
@@ -224,7 +230,7 @@ class SequentialExecutionStrategyTest {
         // Create nested workflow structure
         val innerAnalysisProcess = createMockAnalysisProcess()
         val innerStep = Step(
-            StepMetadata("inner_step", "Inner Step"),
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Inner Step", description = "Inner step test"),
             process = innerAnalysisProcess
         )
 
@@ -235,7 +241,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        innerWorkflow.addComponents(listOf(innerStep))
+        innerWorkflow.addComponent(innerStep)
 
         val outerWorkflow = Workflow(
             WorkflowMetadata(
@@ -244,7 +250,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        outerWorkflow.addComponents(listOf(innerWorkflow))
+        outerWorkflow.addComponent(innerWorkflow)
 
         // Should execute nested workflow structure
         strategy.execute(outerWorkflow, executorFactory)
@@ -263,36 +269,40 @@ class SequentialExecutionStrategyTest {
         // Create multiple steps
         val analysisProcess1 = createMockAnalysisProcess()
         val step1 = Step(
-            StepMetadata("step1", "First Step"),
-            inputData = listOf(
-                dk.cachet.carp.analytics.domain.data.InputDataReference(
-                    "input_data",
-                    "Input Data",
-                    dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "First Step", description = "Step 1"),
+            inputs = listOf(
+                InputDataSpec(
+                    identifier = "input_data",
+                    name = "Input Data",
+                    source = InMemorySource(registryKey = "input_data")
                 )
             ),
-            outputData = dk.cachet.carp.analytics.domain.data.OutputDataReference(
-                "intermediate_data",
-                "Intermediate Data",
-                dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            outputs = listOf(
+                OutputDataSpec(
+                    identifier = "intermediate_data",
+                    name = "Intermediate Data",
+                    destination = RegistryDestination(key = "intermediate_data")
+                )
             ),
             process = analysisProcess1
         )
 
         val analysisProcess2 = createMockAnalysisProcess()
         val step2 = Step(
-            StepMetadata("step2", "Second Step"),
-            inputData = listOf(
-                dk.cachet.carp.analytics.domain.data.InputDataReference(
-                    "intermediate_data",
-                    "Intermediate Data",
-                    dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Second Step", description = "Step 2"),
+            inputs = listOf(
+                InputDataSpec(
+                    identifier = "intermediate_data",
+                    name = "Intermediate Data",
+                    source = InMemorySource(registryKey = "intermediate_data")
                 )
             ),
-            outputData = dk.cachet.carp.analytics.domain.data.OutputDataReference(
-                "final_data",
-                "Final Data",
-                dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            outputs = listOf(
+                OutputDataSpec(
+                    identifier = "final_data",
+                    name = "Final Data",
+                    destination = RegistryDestination(key = "final_data")
+                )
             ),
             process = analysisProcess2
         )
@@ -304,7 +314,8 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step1, step2))
+        workflow.addComponent(step1)
+        workflow.addComponent(step2)
 
         // Execute workflow with multiple steps
         strategy.execute(workflow, executorFactory)
@@ -323,8 +334,8 @@ class SequentialExecutionStrategyTest {
         // Create step without input data
         val analysisProcess = createMockAnalysisProcess()
         val step = Step(
-            StepMetadata("no_input_step", "Step Without Input"),
-            inputData = null, // No input data
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Step Without Input", description = "No input test"),
+            inputs = emptyList(), // No input data
             process = analysisProcess
         )
 
@@ -335,7 +346,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step))
+        workflow.addComponent(step)
 
         // Should execute without error, using empty dataset
         strategy.execute(workflow, executorFactory)
@@ -354,15 +365,15 @@ class SequentialExecutionStrategyTest {
         // Create step without output data
         val analysisProcess = createMockAnalysisProcess()
         val step = Step(
-            StepMetadata("no_output_step", "Step Without Output"),
-            inputData = listOf(
-                dk.cachet.carp.analytics.domain.data.InputDataReference(
-                    "input_data",
-                    "Input Data",
-                    dk.cachet.carp.analytics.domain.data.DataLocation(listOf("temp"))
+            metadata = StepMetadata(id = UUID.randomUUID(), name = "Step Without Output", description = "No output test"),
+            inputs = listOf(
+                InputDataSpec(
+                    identifier = "input_data",
+                    name = "Input Data",
+                    source = InMemorySource(registryKey = "input_data")
                 )
             ),
-            outputData = null, // No output data
+            outputs = emptyList(), // No output data
             process = analysisProcess
         )
 
@@ -373,7 +384,7 @@ class SequentialExecutionStrategyTest {
                 UUID.randomUUID()
             )
         )
-        workflow.addComponents(listOf(step))
+        workflow.addComponent(step)
 
         // Should execute without error, output not stored
         strategy.execute(workflow, executorFactory)
