@@ -23,6 +23,10 @@ kotlin {
 
                 // For coroutines support
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+
+                // Ktor HTTP client for data retrieval
+                implementation("io.ktor:ktor-client-core:2.3.7")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
             }
         }
 
@@ -34,7 +38,8 @@ kotlin {
 
         jvmMain {
             dependencies {
-                // JVM-specific dependencies if needed
+                // Ktor CIO engine for JVM
+                implementation("io.ktor:ktor-client-cio:2.3.7")
             }
         }
 
