@@ -115,7 +115,7 @@ if (useLocalCore && corePath != null) {
         }
 
         println("✅ CARP core composite build setup completed successfully")
-
+                // TODO: Make the not found to not found continuing
     } catch (e: GradleException) {
         // Re-throw GradleExceptions as-is
         throw e

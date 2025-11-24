@@ -13,12 +13,47 @@ A Kotlin Multiplatform framework for CARP (Copenhagen Research Platform) data sc
 - **Multiplatform Support**: Kotlin Multiplatform targeting JVM (with future JS/Native support)
 - **CARP Integration**: Seamless integration with existing CARP data structures and workflows
 - **Execution Framework**: Pluggable execution strategies for data processing workflows
+- **Python Integration**: First-class support for Python scripts and conda environments
+- **Data Retrieval**: Built-in HTTP-based data retrieval with retry logic
+- **Auto Environment Setup**: Automatic conda environment creation and management
+
+## 📚 Documentation
+
+**[📖 Quick Start Guide](QUICKSTART.md)** - Get started in minutes!
+
+**[📘 Complete Documentation](docs/DSP_DOCUMENTATION.md)** - Comprehensive guide covering:
+- Architecture and design decisions
+- Module structure and components  
+- Demos and examples
+- API reference
+- Troubleshooting
+
+**Quick Links**:
+- [Getting Started](docs/DSP_DOCUMENTATION.md#getting-started)
+- [Demos and Examples](docs/DSP_DOCUMENTATION.md#demos-and-examples)
+- [Architecture Overview](docs/DSP_DOCUMENTATION.md#architecture)
+- [Documentation Index](docs/README.md)
 
 ## 🔧 Development
 
 ### Prerequisites
 - JDK 17 or higher
 - Kotlin 2.1.20+
+- (Optional) Conda - for running Python-based demos
+
+### Quick Start
+
+```bash
+# Clone and build
+git clone https://github.com/ngreve/carp-dsp.git
+cd carp-dsp
+./gradlew build
+
+# Run a demo
+./gradlew :carp.dsp.demo:jvmRun -PmainClass=carp.dsp.demo.DexcomRetrievalDemoMainKt
+```
+
+See [Demos and Examples](docs/DSP_DOCUMENTATION.md#demos-and-examples) for more examples.
 
 ### Building
 ```bash
@@ -92,8 +127,10 @@ carp-dsp/
 
 - ✅ **Core Framework**: Complete with comprehensive testing
 - ✅ **CI/CD Pipeline**: Fully automated with quality gates
-- ✅ **Demo Implementation**: Working CLI examples
-- 🚧 **Documentation**: In progress (Dokka integration)
+- ✅ **Demo Implementation**: Working CLI examples with DEXCOM CGM analysis
+- ✅ **Python Integration**: Conda environment management and script execution
+- ✅ **Documentation**: Comprehensive documentation available
+- 🚧 **Dokka Integration**: API docs generation in progress
 - 🚧 **Additional Platforms**: JS/Native support planned
 
 ## 🤝 Contributing
