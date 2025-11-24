@@ -1,13 +1,9 @@
 package carp.dsp.core.domain.data
 
-import carp.dsp.core.domain.data.AccelerationMeasurementRow
-import carp.dsp.core.domain.data.CarpMeasurementMetadata
-import carp.dsp.core.domain.data.GenericMeasurementRow
-import carp.dsp.core.domain.data.HeartRateMeasurementRow
-import carp.dsp.core.domain.data.StepCountMeasurementRow
 import dk.cachet.carp.common.application.UUID
 import dk.cachet.carp.common.application.data.Acceleration
 import dk.cachet.carp.common.application.data.DataType
+import dk.cachet.carp.common.application.data.Geolocation
 import dk.cachet.carp.common.application.data.HeartRate
 import dk.cachet.carp.common.application.data.StepCount
 import dk.cachet.carp.data.application.DataStreamId
@@ -162,4 +158,24 @@ class CarpMeasurementRowTest {
         assertEquals(row.sensorStartTime, row.sensorTimestamp)
         assertEquals(12345L, row.sensorTimestamp)
     }
+
+    @Test
+    fun testGeolocationMeasurementRow() {
+    val latitude = 37.7749
+    val longitude = -122.4194
+    val geolocationData = Geolocation(latitude, longitude)
+    val dataType = DataType("dk.cachet.carp", "geolocation")
+    val metadata = createTestMetadata()
+
+    val row = GeolocationMeasurementRow(
+        sensorStartTime = 1000L,
+        sensorEndTime = null,
+        dataType = dataType,
+        metadata = metadata,
+        geolocation = geolocationData
+    )
+
+    assertEquals(latitude, row.latitude)
+    assertEquals(longitude, row.longitude)
+}
 }

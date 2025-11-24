@@ -31,6 +31,7 @@ interface DataRetrievalProcess : WorkflowProcess {
 
 /**
  * Configuration for data retrieval operations.
+ *
  */
 data class RetrievalConfig(
     /**
