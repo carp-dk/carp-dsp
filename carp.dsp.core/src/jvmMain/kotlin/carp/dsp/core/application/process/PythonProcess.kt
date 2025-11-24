@@ -2,11 +2,11 @@ package carp.dsp.core.application.process
 
 import dk.cachet.carp.analytics.application.data.DataRegistry
 import dk.cachet.carp.analytics.application.data.InMemoryData
-import dk.cachet.carp.analytics.domain.data.InputDataSpec
-import dk.cachet.carp.analytics.domain.data.InMemorySource
-import dk.cachet.carp.analytics.domain.data.FileSystemSource
-import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.FileDestination
+import dk.cachet.carp.analytics.domain.data.FileSystemSource
+import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.RegistryDestination
 import dk.cachet.carp.analytics.domain.execution.ExecutionContext
 import dk.cachet.carp.analytics.domain.process.ExternalProcess
@@ -30,6 +30,7 @@ import kotlin.io.path.exists
  * @param pythonExecutable The Python executable to use (default: "python").
  * @param useCondaRun Whether to use "conda run" (true) or direct python execution (false).
  */
+@Suppress("LongParameterList") // Builder pattern is provided as alternative
 class PythonProcess(
     override val name: String,
     override val description: String = "",
@@ -140,51 +141,78 @@ class PythonProcess(
 
         // Resolve inputs
         inputs.forEach { inputSpec ->
-            when (val source = inputSpec.source) {
-                is InMemorySource -> {
-                    // Resolve in-memory data and add to stdin buffer
-                    val dataHandle = dataRegistry.resolve(source.registryKey)
-                    if (dataHandle is InMemoryData) {
-                        // Serialize data to JSON or CSV format
-                        val serialized = serializeData(dataHandle.dataset)
-                        if (stdinBuffer.isNotEmpty()) {
-                            stdinBuffer.append("\n")
-                        }
-                        stdinBuffer.append(serialized)
-                    } else {
-                        error("In-memory data not found for key: ${source.registryKey}")
-                    }
-                }
-                is FileSystemSource -> {
-                    // Add file path as argument
-                    dynamicArguments.add("--input")
-                    dynamicArguments.add(source.path)
-                }
-                else -> {
-                    throw IllegalArgumentException("Unsupported input source type: ${source::class.simpleName}")
-                }
-            }
+            resolveInputBinding(inputSpec, dataRegistry)
         }
 
         // Resolve outputs
         outputs.forEach { outputSpec ->
-            when (val destination = outputSpec.destination) {
-                is FileDestination -> {
-                    // Add output file path as argument
-                    dynamicArguments.add("--output")
-                    dynamicArguments.add(destination.path)
-                }
-                is RegistryDestination -> {
-                    // For registry destinations, script should write to stdout
-                    // which will be captured and stored in registry
-                    dynamicArguments.add("--output")
-                    dynamicArguments.add("-")  // "-" indicates stdout
-                }
-                else -> {
-                    throw IllegalArgumentException("Unsupported output destination type: ${destination::class.simpleName}")
-                }
-            }
+            resolveOutputBinding(outputSpec)
         }
+    }
+
+    /**
+     * Resolves a single input data binding.
+     */
+    private fun resolveInputBinding(inputSpec: InputDataSpec, dataRegistry: DataRegistry) {
+        when (val source = inputSpec.source) {
+            is InMemorySource -> resolveInMemoryInput(source, dataRegistry)
+            is FileSystemSource -> resolveFileSystemInput(source)
+            else -> error("Unsupported input source type: ${source::class.simpleName}")
+        }
+    }
+
+    /**
+     * Resolves in-memory input data.
+     */
+    private fun resolveInMemoryInput(source: InMemorySource, dataRegistry: DataRegistry) {
+        val dataHandle = dataRegistry.resolve(source.registryKey)
+        if (dataHandle !is InMemoryData) {
+            error("In-memory data not found for key: ${source.registryKey}")
+        }
+
+        // Serialize data to JSON or CSV format
+        val serialized = serializeData(dataHandle.dataset)
+        if (stdinBuffer.isNotEmpty()) {
+            stdinBuffer.append("\n")
+        }
+        stdinBuffer.append(serialized)
+    }
+
+    /**
+     * Resolves file system input data.
+     */
+    private fun resolveFileSystemInput(source: FileSystemSource) {
+        dynamicArguments.add("--input")
+        dynamicArguments.add(source.path)
+    }
+
+    /**
+     * Resolves a single output data binding.
+     */
+    private fun resolveOutputBinding(outputSpec: OutputDataSpec) {
+        when (val destination = outputSpec.destination) {
+            is FileDestination -> resolveFileDestination(destination)
+            is RegistryDestination -> resolveRegistryDestination()
+            else -> error("Unsupported output destination type: ${destination::class.simpleName}")
+        }
+    }
+
+    /**
+     * Resolves file destination for output.
+     */
+    private fun resolveFileDestination(destination: FileDestination) {
+        dynamicArguments.add("--output")
+        dynamicArguments.add(destination.path)
+    }
+
+    /**
+     * Resolves registry destination for output (uses stdout).
+     */
+    private fun resolveRegistryDestination() {
+        // For registry destinations, script should write to stdout
+        // which will be captured and stored in registry
+        dynamicArguments.add("--output")
+        dynamicArguments.add("-") // "-" indicates stdout
     }
 
     /**
@@ -218,8 +246,8 @@ class PythonProcess(
         fun useCondaRun(use: Boolean) = apply { this.useCondaRun = use }
 
         fun build(): PythonProcess {
-            require(scriptPath != null) { "Script path must be specified" }
-            require(executionContext != null) { "Execution context must be specified" }
+            requireNotNull(scriptPath) { "Script path must be specified" }
+            requireNotNull(executionContext) { "Execution context must be specified" }
 
             return PythonProcess(
                 name = name,
@@ -233,4 +261,3 @@ class PythonProcess(
         }
     }
 }
-

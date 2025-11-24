@@ -1,7 +1,7 @@
 package carp.dsp.demo
 
-import carp.dsp.core.domain.execution.ExecutionFactory
 import carp.dsp.core.application.process.PhysioNetRetrievalProcess
+import carp.dsp.core.domain.execution.ExecutionFactory
 import carp.dsp.core.domain.process.RetrievalConfig
 import dk.cachet.carp.analytics.application.data.DataRegistry
 import dk.cachet.carp.analytics.domain.data.FileDestination
@@ -14,6 +14,8 @@ import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.analytics.domain.workflow.Workflow
 import dk.cachet.carp.analytics.domain.workflow.WorkflowMetadata
 import dk.cachet.carp.common.application.UUID
+
+private const val LINE_WIDTH = 80
 
 /**
  * Demo script that retrieves DEXCOM.csv files from PhysioNet's Big IDEAs dataset.
@@ -32,7 +34,6 @@ object DexcomRetrievalDemo {
      * The dataset contains DEXCOM.csv files for multiple subjects in subdirectories.
      */
     fun createDexcomRetrievalWorkflow(): Workflow {
-
         // Use user's home directory for downloads on Windows
         val downloadBaseDir = System.getProperty("user.home") + "/physionet-downloads/big-ideas"
 
@@ -103,9 +104,33 @@ object DexcomRetrievalDemo {
      * Platform-specific implementation required.
      */
     fun execute(strategy: ExecutionStrategy) {
-        println("=".repeat(80))
+        printHeader()
+
+        val workflow = createDexcomRetrievalWorkflow()
+        val dataRegistry = DataRegistry()
+        val executionFactory = ExecutionFactory()
+
+        println("Starting workflow execution...")
+        println("-".repeat(LINE_WIDTH))
+
+        try {
+            strategy.execute(workflow, executionFactory)
+            printSuccessResults(dataRegistry)
+        } catch (e: IllegalStateException) {
+            printError(e)
+        }
+
+        println()
+        println("=".repeat(LINE_WIDTH))
+    }
+
+    /**
+     * Prints the demo header information.
+     */
+    private fun printHeader() {
+        println("=".repeat(LINE_WIDTH))
         println("Big IDEAs DEXCOM Data Retrieval Demo")
-        println("=".repeat(80))
+        println("=".repeat(LINE_WIDTH))
         println()
         println("Dataset: Big IDEAs Glycemic Control and Wearables")
         println("Version: 1.1.2")
@@ -116,51 +141,46 @@ object DexcomRetrievalDemo {
         println("This demo will retrieve Dexcom CSV files from the dataset.")
         println("Files will be saved to: $downloadDir/NNN/Dexcom_NNN.csv")
         println()
+    }
 
-        // Create workflow
-        val workflow = createDexcomRetrievalWorkflow()
-
-        // Set up execution
-        val dataRegistry = DataRegistry()
-        val executionFactory = ExecutionFactory()
-
-        // Execute workflow
-        println("Starting workflow execution...")
-        println("-".repeat(80))
-
-        try {
-            strategy.execute(workflow, executionFactory)
-
-            println("-".repeat(80))
-            println("✅ Workflow execution completed successfully!")
-            println()
-
-            // Display summary
-            val outputs = dataRegistry.toExecutionOutputs()
-            if (outputs.isNotEmpty()) {
-                println("Retrieved ${outputs.size} DEXCOM files:")
-                outputs.forEach { output ->
-                    val location = output.actualLocation
-                    if (location is dk.cachet.carp.analytics.domain.data.FileSystemSource) {
-                        val status = if (output.success) "✅" else "❌"
-                        println("  $status ${output.outputId}: ${location.path}")
-                        if (!output.success) {
-                            println("     Error: ${output.errorMessage}")
-                        }
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            println("-".repeat(80))
-            println("❌ Workflow execution failed!")
-            println("Error: ${e.message}")
-            e.printStackTrace()
-        }
-
+    /**
+     * Prints successful execution results.
+     */
+    private fun printSuccessResults(dataRegistry: DataRegistry) {
+        println("-".repeat(LINE_WIDTH))
+        println("✅ Workflow execution completed successfully!")
         println()
-        println("=".repeat(80))
+
+        val outputs = dataRegistry.toExecutionOutputs()
+        if (outputs.isEmpty()) return
+
+        println("Retrieved ${outputs.size} DEXCOM files:")
+        outputs.forEach { output ->
+            printOutputResult(output)
+        }
+    }
+
+    /**
+     * Prints a single output result.
+     */
+    private fun printOutputResult(output: dk.cachet.carp.analytics.domain.data.ExecutionOutput) {
+        val location = output.actualLocation
+        if (location !is dk.cachet.carp.analytics.domain.data.FileSystemSource) return
+
+        val status = if (output.success) "✅" else "❌"
+        println("  $status ${output.outputId}: ${location.path}")
+        if (!output.success) {
+            println("     Error: ${output.errorMessage}")
+        }
+    }
+
+    /**
+     * Prints error information.
+     */
+    private fun printError(e: IllegalStateException) {
+        println("-".repeat(LINE_WIDTH))
+        println("❌ Workflow execution failed!")
+        println("Error: ${e.message}")
+        println("Error details: ${e.javaClass.simpleName}")
     }
 }
-
-

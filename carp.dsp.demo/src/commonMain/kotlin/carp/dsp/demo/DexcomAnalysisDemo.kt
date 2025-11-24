@@ -1,8 +1,8 @@
 package carp.dsp.demo
 
+import carp.dsp.core.application.environment.CondaEnvironment
 import carp.dsp.core.application.process.PhysioNetRetrievalProcess
 import carp.dsp.core.application.process.PythonProcess
-import carp.dsp.core.application.environment.CondaEnvironment
 import carp.dsp.core.domain.process.RetrievalConfig
 import dk.cachet.carp.analytics.domain.data.*
 import dk.cachet.carp.analytics.domain.environment.Environment
@@ -41,7 +41,6 @@ object DexcomAnalysisDemo {
         subjectIds: List<String> = listOf("001", "002", "005"),
         condaEnv: String = "cgm-analysis"
     ): Workflow {
-
         val downloadBaseDir = System.getProperty("user.home") + "/physionet-downloads/big-ideas"
         val resultsBaseDir = System.getProperty("user.home") + "/cgm-analysis-results"
         val scriptPath = getScriptPath()
@@ -152,10 +151,13 @@ object DexcomAnalysisDemo {
                 name = "CGM Analysis - Subject $subjectId",
                 description = "Analyzes CGM data using cgmquantify package",
                 executionContext = ExecutionContext(
-                    environment = CondaEnvironment(name = condaEnv, dependencies = listOf(
+                    environment = CondaEnvironment(
+                        name = condaEnv,
+                        dependencies = listOf(
                         "pandas",
                         "pip:git+https://github.com/brinnaebent/cgmquantify.git"
-                    )),
+                    )
+                    ),
                     envVariables = emptyMap()
                 ),
                 scriptPath = scriptPath,

@@ -1,10 +1,10 @@
 package carp.dsp.core.infrastructure.process
 
 import carp.dsp.core.domain.process.DataRetrievalProcess
-import dk.cachet.carp.analytics.domain.data.ExecutionOutput
 import dk.cachet.carp.analytics.domain.data.DataStatistics
-import dk.cachet.carp.analytics.domain.data.FileSystemSource
+import dk.cachet.carp.analytics.domain.data.ExecutionOutput
 import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.data.FileSystemSource
 import kotlinx.datetime.Clock
 
 /**
@@ -34,7 +34,6 @@ abstract class DataRetrievalExecutor<TProcess : DataRetrievalProcess> {
     protected fun checkCache(process: TProcess, fileName: String, cacheDir: String): String? {
         if (!process.retrievalConfig.useCache) return null
 
-        val cacheFile = "$cacheDir/$fileName"
         // Check if file exists and is valid
         // Implementation depends on platform (JVM vs JS)
         return null // TODO: Implement platform-specific cache check

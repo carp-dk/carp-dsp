@@ -7,6 +7,7 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.errors.IOException
 import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.io.encoding.Base64
@@ -26,48 +27,81 @@ class PhysioNetRetrievalExecutor(
     private val httpClient: HttpClient
 ) : DataRetrievalExecutor<PhysioNetRetrievalProcess>() {
 
+    companion object {
+        private const val BYTES_TO_KB_DIVISOR = 1024
+        private const val INITIAL_BACKOFF_MS = 1000L
+        private const val MAX_BACKOFF_MS = 10_000L
+    }
+
     override suspend fun execute(
         process: PhysioNetRetrievalProcess,
         outputPath: String
     ): List<ExecutionOutput> {
+        printRetrievalHeader(process)
 
-        val outputs = mutableListOf<ExecutionOutput>()
+        val outputs = process.files.mapIndexed { index, fileName ->
+            processFileDownload(process, fileName, outputPath, index + 1, process.files.size)
+        }.toMutableList()
 
+        printRetrievalSummary(outputs)
+        return outputs
+    }
+
+    /**
+     * Prints the retrieval header information.
+     */
+    private fun printRetrievalHeader(process: PhysioNetRetrievalProcess) {
         println("Starting PhysioNet data retrieval...")
         println("  Dataset: ${process.datasetId}")
         println("  Version: ${process.version}")
         println("  Files to download: ${process.files.size}")
         println()
+    }
 
-        // Download each file
-        for ((index, fileName) in process.files.withIndex()) {
-            println("Downloading file ${index + 1}/${process.files.size}: $fileName")
+    /**
+     * Processes a single file download with error handling.
+     */
+    private suspend fun processFileDownload(
+        process: PhysioNetRetrievalProcess,
+        fileName: String,
+        outputPath: String,
+        fileNumber: Int,
+        totalFiles: Int
+    ): ExecutionOutput {
+        println("Downloading file $fileNumber/$totalFiles: $fileName")
 
-            try {
-                val output = downloadFile(process, fileName, outputPath)
-                outputs.add(output)
-
-                if (output.success) {
-                    println("  ✅ Success - ${output.statistics.byteSize?.let { "${it / 1024} KB" } ?: "unknown size"}")
-                } else {
-                    println("  ❌ Failed - ${output.errorMessage}")
-                }
-            } catch (e: Exception) {
-                println("  ❌ Error - ${e.message}")
-                outputs.add(createFailureOutput(
-                    fileName,
-                    "Unexpected error: ${e.message}"
-                ))
-            }
+        return try {
+            val output = downloadFile(process, fileName, outputPath)
+            printFileResult(output)
+            output
+        } catch (e: IOException) {
+            println("  ❌ Error - ${e.message}")
+            createFailureOutput(fileName, "IO error: ${e.message}")
         }
+    }
 
-        // Summary
+    /**
+     * Prints the result of a single file download.
+     */
+    private fun printFileResult(output: ExecutionOutput) {
+        if (output.success) {
+            val sizeText = output.statistics.byteSize?.let {
+                "${it / BYTES_TO_KB_DIVISOR} KB"
+            } ?: "unknown size"
+            println("  ✅ Success - $sizeText")
+        } else {
+            println("  ❌ Failed - ${output.errorMessage}")
+        }
+    }
+
+    /**
+     * Prints the retrieval summary.
+     */
+    private fun printRetrievalSummary(outputs: List<ExecutionOutput>) {
         val successful = outputs.count { it.success }
         val failed = outputs.count { !it.success }
         println()
         println("Download complete: $successful successful, $failed failed")
-
-        return outputs
     }
 
     /**
@@ -78,7 +112,6 @@ class PhysioNetRetrievalExecutor(
         fileName: String,
         outputPath: String
     ): ExecutionOutput {
-
         val url = process.getFileUrl(fileName)
         val outputFile = "$outputPath/$fileName"
 
@@ -114,7 +147,7 @@ class PhysioNetRetrievalExecutor(
                     val fileContent = response.readBytes()
 
                     // Write file to disk
-                    val file = java.io.File(outputFile)
+                    val file = File(outputFile)
                     file.parentFile?.mkdirs() // Create directories if needed
                     file.writeBytes(fileContent)
 
@@ -128,16 +161,15 @@ class PhysioNetRetrievalExecutor(
                         fileSize = fileSize
                     )
                 } else {
-                    throw Exception("HTTP ${response.status.value}: ${response.status.description}")
+                    error("HTTP ${response.status.value}: ${response.status.description}")
                 }
-
-            } catch (e: Exception) {
+            } catch (e: IOException) {
                 lastException = e
                 attempt++
 
                 if (attempt <= maxRetries) {
                     // Exponential backoff: 1s, 2s, 4s, 8s...
-                    val backoffMs = (1000L * (1 shl (attempt - 1))).coerceAtMost(10000L)
+                    val backoffMs = (INITIAL_BACKOFF_MS * (1 shl (attempt - 1))).coerceAtMost(MAX_BACKOFF_MS)
                     println("  ⚠️  Retry $attempt/$maxRetries after ${backoffMs}ms...")
                     delay(backoffMs)
                 }
@@ -180,4 +212,3 @@ class PhysioNetRetrievalExecutor(
         }
     }
 }
-

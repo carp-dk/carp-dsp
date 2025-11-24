@@ -39,7 +39,7 @@ class ProcessExecutor
             val exitCode = process.waitFor()
 
             if (exitCode != 0) {
-                throw IllegalStateException(
+                error(
                     "Command failed with exit code $exitCode\n" +
                     "Command: $command\n" +
                     "Output: $output"
@@ -48,9 +48,7 @@ class ProcessExecutor
 
             return output
         } catch (e: IOException) {
-            throw IllegalStateException("Failed to execute command: ${e.message}", e)
-        } catch (e: InterruptedException) {
-            throw IllegalStateException("Command execution was interrupted: ${e.message}", e)
+            error("Failed to execute command: ${e.message}")
         }
     }
 
@@ -78,8 +76,8 @@ class ProcessExecutor
             val exitCode = process.waitFor()
 
             ExecutionResult(exitCode, output, null)
-        } catch (e: Exception) {
-            ExecutionResult(-1, "", e.message ?: "Unknown error")
+        } catch (e: IOException) {
+            ExecutionResult(-1, "", "IO error: ${e.message}")
         }
     }
 

@@ -1,7 +1,7 @@
 package carp.dsp.core.infrastructure.process
 
-import carp.dsp.core.domain.process.DataRetrievalProcess
 import carp.dsp.core.application.process.PhysioNetRetrievalProcess
+import carp.dsp.core.domain.process.DataRetrievalProcess
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -12,6 +12,12 @@ import io.ktor.client.plugins.*
  */
 class DataRetrievalExecutorFactory {
 
+    companion object {
+        private const val REQUEST_TIMEOUT_MS = 120_000L // 2 minutes default
+        private const val CONNECT_TIMEOUT_MS = 30_000L // 30 seconds to connect
+        private const val SOCKET_TIMEOUT_MS = 120_000L // 2 minutes socket timeout
+    }
+
     private val httpClient: HttpClient by lazy {
         HttpClient(CIO) {
             // Configure client settings
@@ -19,9 +25,9 @@ class DataRetrievalExecutorFactory {
 
             // Install timeout plugin
             install(HttpTimeout) {
-                requestTimeoutMillis = 120_000 // 2 minutes default
-                connectTimeoutMillis = 30_000  // 30 seconds to connect
-                socketTimeoutMillis = 120_000  // 2 minutes socket timeout
+                requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                socketTimeoutMillis = SOCKET_TIMEOUT_MS
             }
         }
     }

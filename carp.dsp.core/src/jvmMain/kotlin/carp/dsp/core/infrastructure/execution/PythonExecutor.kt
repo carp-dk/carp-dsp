@@ -26,34 +26,47 @@ class PythonExecutor : Executor<PythonProcess> {
     override fun setup(process: PythonProcess, context: ExecutionContext) {
         println("Setting up Python process: ${process.name}")
 
-        if (process.useCondaRun) {
-            context.environment?.let { env ->
-                println("Ensuring conda environment: ${env.name}")
-
-                // Use the new ensureCondaEnvironment that automatically creates if missing
-                val ensured = environmentSetupExecutor.ensureCondaEnvironment(
-                    environment = env,
-                    createIfMissing = true
-                )
-
-                if (!ensured) {
-                    // This should rarely happen since createIfMissing = true
-                    println("Available environments:")
-                    environmentSetupExecutor.listCondaEnvironments().forEach { envName ->
-                        println("  - $envName")
-                    }
-                    error("Cannot execute: Failed to ensure conda environment '${env.name}'")
-                }
-
-                println("✓ Conda environment '${env.name}' is ready")
-            } ?: run {
-                error("Execution context must specify an environment when using conda run")
-            }
-        } else {
+        if (!process.useCondaRun) {
             println("Direct Python execution mode (not using conda)")
+            println("Setup complete for: ${process.name}")
+            return
         }
 
+        // Handle conda environment setup
+        setupCondaEnvironment(context)
         println("Setup complete for: ${process.name}")
+    }
+
+    /**
+     * Sets up the conda environment for the process.
+     */
+    private fun setupCondaEnvironment(context: ExecutionContext) {
+        val env = context.environment
+            ?: error("Execution context must specify an environment when using conda run")
+
+        println("Ensuring conda environment: ${env.name}")
+
+        val ensured = environmentSetupExecutor.ensureCondaEnvironment(
+            environment = env,
+            createIfMissing = true
+        )
+
+        if (!ensured) {
+            listAvailableEnvironmentsAndFail(env.name)
+        }
+
+        println("✓ Conda environment '${env.name}' is ready")
+    }
+
+    /**
+     * Lists available environments and throws an error.
+     */
+    private fun listAvailableEnvironmentsAndFail(envName: String): Nothing {
+        println("Available environments:")
+        environmentSetupExecutor.listCondaEnvironments().forEach { name ->
+            println("  - $name")
+        }
+        error("Cannot execute: Failed to ensure conda environment '$envName'")
     }
 
     /**
@@ -99,7 +112,7 @@ class PythonExecutor : Executor<PythonProcess> {
             }
 
             if (exitCode != 0) {
-                throw IllegalStateException(
+                error(
                     "Python process failed with exit code $exitCode\n" +
                     "Command: $command\n" +
                     "STDERR: $stderr"
@@ -107,17 +120,14 @@ class PythonExecutor : Executor<PythonProcess> {
             }
 
             println("✓ Python process completed successfully")
-
         } catch (e: IOException) {
-            throw IllegalStateException("Failed to execute Python process: ${e.message}", e)
-        } catch (e: InterruptedException) {
-            throw IllegalStateException("Python process was interrupted: ${e.message}", e)
+            error("Failed to execute Python process: ${e.message}")
         }
     }
 
     /**
      * Cleanup after process execution.
-     * Currently no cleanup needed, but could be extended for temp file cleanup.
+     * Currently, no cleanup needed, but could be extended for temp file cleanup.
      */
     override fun cleanup(process: PythonProcess, context: ExecutionContext) {
         println("Cleanup completed for Python process: ${process.name}")

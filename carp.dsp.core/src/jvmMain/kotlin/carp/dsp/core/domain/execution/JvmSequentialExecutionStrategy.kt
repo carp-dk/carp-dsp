@@ -70,7 +70,9 @@ class JvmSequentialExecutionStrategy(
         val registryKey = when (val source = inputSpec.source) {
             is dk.cachet.carp.analytics.domain.data.InMemorySource -> source.registryKey
             else -> {
-                println("Warning: Input source for '${inputSpec.identifier}' is not InMemorySource, using empty dataset.")
+                println(
+                    "Warning: Input source for '${inputSpec.identifier}' is not InMemorySource, using empty dataset."
+                )
                 return CarpTabularData(emptyList(), MutableDataStreamBatch())
             }
         }
@@ -106,7 +108,10 @@ class JvmSequentialExecutionStrategy(
         val registryKey = when (val destination = outputSpec.destination) {
             is dk.cachet.carp.analytics.domain.data.RegistryDestination -> destination.key
             else -> {
-                println("Warning: Output destination for '${outputSpec.identifier}' is not RegistryDestination, output not stored.")
+                println(
+                    "Warning: Output destination for '${outputSpec.identifier}' " +
+                        "is not RegistryDestination, output not stored."
+                )
                 return
             }
         }
@@ -163,57 +168,68 @@ class JvmSequentialExecutionStrategy(
             println("Executing DataRetrievalProcess: ${process.name}")
             println("  - Description: ${process.description}")
 
-            // Get the executor for this process type
             val executor = retrievalExecutorFactory.getExecutor(process)
+            val outputPath = resolveOutputPath(step)
 
-            // Determine base output path from first output spec
-            val outputPath = step.outputs.firstOrNull()?.let { outputSpec ->
-                when (val dest = outputSpec.destination) {
-                    is dk.cachet.carp.analytics.domain.data.FileDestination -> {
-                        // Get the base directory by going up two levels from the file
-                        val fullPath = dest.path
-                        val lastSlash = fullPath.lastIndexOf('/')
-                        if (lastSlash > 0) {
-                            val parentPath = fullPath.substring(0, lastSlash)
-                            val secondLastSlash = parentPath.lastIndexOf('/')
-                            if (secondLastSlash > 0) {
-                                parentPath.substring(0, secondLastSlash)
-                            } else {
-                                parentPath
-                            }
-                        } else {
-                            "."
-                        }
-                    }
-                    else -> "/tmp/dsp-downloads"
-                }
-            } ?: "/tmp/dsp-downloads"
-
-            // Execute the retrieval
             println()
             val executionOutputs = runBlocking {
                 executor.execute(process, outputPath)
             }
             println()
 
-            // Report results
-            val successful = executionOutputs.count { it.success }
-            val failed = executionOutputs.count { !it.success }
-            println("  ✅ Successfully retrieved $successful file(s)")
-            if (failed > 0) {
-                println("  ❌ Failed to retrieve $failed file(s)")
-            }
-
+            reportRetrievalResults(executionOutputs)
         } catch (e: IllegalArgumentException) {
             println("Invalid arguments for DataRetrievalProcess: ${process.name}")
             throw e
         } catch (e: IllegalStateException) {
             println("Invalid state during DataRetrievalProcess execution: ${process.name}")
             throw e
-        } catch (e: Exception) {
-            println("Error during DataRetrievalProcess execution: ${e.message}")
-            throw e
+        }
+    }
+
+    /**
+     * Resolves the output path from step outputs.
+     */
+    private fun resolveOutputPath(step: Step): String {
+        val outputSpec = step.outputs.firstOrNull() ?: return "/tmp/dsp-downloads"
+
+        return when (val dest = outputSpec.destination) {
+            is dk.cachet.carp.analytics.domain.data.FileDestination -> {
+                extractBasePath(dest.path)
+            }
+            else -> "/tmp/dsp-downloads"
+        }
+    }
+
+    /**
+     * Extracts base directory path by going up two levels from the file path.
+     */
+    private fun extractBasePath(fullPath: String): String {
+        val lastSlash = fullPath.lastIndexOf('/')
+        if (lastSlash <= 0) {
+            return "."
+        }
+
+        val parentPath = fullPath.substring(0, lastSlash)
+        val secondLastSlash = parentPath.lastIndexOf('/')
+
+        return if (secondLastSlash > 0) {
+            parentPath.substring(0, secondLastSlash)
+        } else {
+            parentPath
+        }
+    }
+
+    /**
+     * Reports the results of data retrieval execution.
+     */
+    private fun reportRetrievalResults(executionOutputs: List<dk.cachet.carp.analytics.domain.data.ExecutionOutput>) {
+        val successful = executionOutputs.count { it.success }
+        val failed = executionOutputs.count { !it.success }
+
+        println("  ✅ Successfully retrieved $successful file(s)")
+        if (failed > 0) {
+            println("  ❌ Failed to retrieve $failed file(s)")
         }
     }
 }
-

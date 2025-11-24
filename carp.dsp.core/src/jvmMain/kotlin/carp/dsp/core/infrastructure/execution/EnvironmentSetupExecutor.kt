@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.domain.execution.ExecutionContext
+import java.io.IOException
 
 /**
  * Handles the setup and validation of execution environments (conda, venv, etc.).
@@ -69,7 +70,7 @@ class EnvironmentSetupExecutor {
                 val pythonVersionField = envClass.getDeclaredField("pythonVersion")
                 pythonVersionField.isAccessible = true
                 pythonVersion = pythonVersionField.get(environment) as? String
-            } catch (_: Exception) {
+            } catch (_: ReflectiveOperationException) {
                 // Field doesn't exist
             }
 
@@ -78,11 +79,11 @@ class EnvironmentSetupExecutor {
                 val channelsField = envClass.getDeclaredField("channels")
                 channelsField.isAccessible = true
                 @Suppress("UNCHECKED_CAST")
-                channels = channelsField.get(environment) as? List<String> ?: emptyList()
-            } catch (_: Exception) {
+                channels = (channelsField.get(environment) as? List<String>).orEmpty()
+            } catch (_: ReflectiveOperationException) {
                 // Field doesn't exist
             }
-        } catch (_: Exception) {
+        } catch (_: ReflectiveOperationException) {
             // Could not access fields, use defaults
         }
 
@@ -108,7 +109,7 @@ class EnvironmentSetupExecutor {
                 return result.output.lines().any { line ->
                     val trimmedLine = line.trim()
                     // Check if line starts with env name (active or not)
-                    trimmedLine.startsWith(envName + " ") ||
+                    trimmedLine.startsWith("$envName ") ||
                     trimmedLine.startsWith("* $envName ") || // Active environment marked with *
                     // Check if env name appears in path
                     trimmedLine.contains("/$envName") ||
@@ -120,7 +121,7 @@ class EnvironmentSetupExecutor {
             }
 
             false
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             println("Warning: Failed to check conda environments: ${e.message}")
             false
         }
@@ -199,9 +200,9 @@ class EnvironmentSetupExecutor {
             }
 
             true
-        } catch (e: Exception) {
+        } catch (e: IllegalStateException) {
             println("✗ Failed to create conda environment '$envName': ${e.message}")
-            e.printStackTrace()
+            println("Error details: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -238,9 +239,9 @@ class EnvironmentSetupExecutor {
 
             println("✓ Successfully installed pip packages: ${packages.joinToString(", ")}")
             true
-        } catch (e: Exception) {
+        } catch (e: IllegalStateException) {
             println("✗ Failed to install pip packages: ${e.message}")
-            e.printStackTrace()
+            println("Error details: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -305,7 +306,7 @@ class EnvironmentSetupExecutor {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: IllegalStateException) {
             println("Warning: Failed to list conda environments: ${e.message}")
             emptyList()
         }

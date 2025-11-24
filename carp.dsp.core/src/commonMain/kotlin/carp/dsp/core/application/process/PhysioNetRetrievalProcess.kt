@@ -80,6 +80,13 @@ data class PhysioNetRetrievalProcess(
 
 ) : DataRetrievalProcess {
 
+    companion object {
+        private const val BYTES_PER_KB = 1024L
+        private const val BYTES_PER_MB = BYTES_PER_KB * 1024L
+        private const val MIMIC_III_DEMO_SIZE_MB = 26L
+        private const val PTB_XL_SIZE_MB = 850L
+    }
+
     override val requiresAuthentication: Boolean
         get() = authentication != null
 
@@ -112,8 +119,8 @@ data class PhysioNetRetrievalProcess(
     fun estimateDownloadSize(): Long? {
         // This could be enhanced with actual metadata lookup
         return when (datasetId) {
-            "mimic-iii-demo" -> 26L * 1024 * 1024 // ~26 MB
-            "ptb-xl" -> 850L * 1024 * 1024 // ~850 MB
+            "mimic-iii-demo" -> MIMIC_III_DEMO_SIZE_MB * BYTES_PER_MB // ~26 MB
+            "ptb-xl" -> PTB_XL_SIZE_MB * BYTES_PER_MB // ~850 MB
             else -> null
         }
     }

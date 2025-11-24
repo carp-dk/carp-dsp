@@ -22,8 +22,7 @@ import dk.cachet.carp.data.application.MutableDataStreamBatch
  */
 class SequentialExecutionStrategy(
     private val dataRegistry: DataRegistry,
-    private val dataConverter: DataStreamBatchConverter = DataStreamBatchConverter(),
-    private val retrievalExecutorFactory: Any? = null  // Platform-specific factory (JVM only)
+    private val dataConverter: DataStreamBatchConverter = DataStreamBatchConverter()
 ) : ExecutionStrategy
 {
     /**
@@ -86,7 +85,9 @@ class SequentialExecutionStrategy(
         val registryKey = when (val source = inputSpec.source) {
             is dk.cachet.carp.analytics.domain.data.InMemorySource -> source.registryKey
             else -> {
-                println("Warning: Input source for '${inputSpec.identifier}' is not InMemorySource, using empty dataset.")
+                println(
+                    "Warning: Input source for '${inputSpec.identifier}' is not InMemorySource, using empty dataset."
+                )
                 return CarpTabularData(emptyList(), MutableDataStreamBatch())
             }
         }
@@ -135,7 +136,10 @@ class SequentialExecutionStrategy(
         val registryKey = when (val destination = outputSpec.destination) {
             is dk.cachet.carp.analytics.domain.data.RegistryDestination -> destination.key
             else -> {
-                println("Warning: Output destination for '${outputSpec.identifier}' is not RegistryDestination, output not stored.")
+                println(
+                    "Warning: Output destination for '${outputSpec.identifier}' " +
+                        "is not RegistryDestination, output not stored."
+                )
                 return
             }
         }
@@ -231,7 +235,6 @@ class SequentialExecutionStrategy(
 
             println("  ⚠️  Note: HTTP download not executed (executor requires JVM platform)")
             println("  To enable downloads, use JVM-specific executor factory")
-
         }
         catch (e: IllegalArgumentException)
         {

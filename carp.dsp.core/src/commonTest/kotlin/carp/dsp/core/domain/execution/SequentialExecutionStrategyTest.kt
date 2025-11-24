@@ -5,8 +5,8 @@ import carp.dsp.core.domain.data.CarpTabularData
 import carp.dsp.core.domain.data.StepCountMeasurementRow
 import dk.cachet.carp.analytics.application.data.DataRegistry
 import dk.cachet.carp.analytics.application.data.InMemoryData
-import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.RegistryDestination
 import dk.cachet.carp.analytics.domain.execution.ExecutionContext
