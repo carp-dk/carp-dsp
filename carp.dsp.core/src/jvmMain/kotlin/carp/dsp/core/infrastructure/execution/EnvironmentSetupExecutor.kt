@@ -1,6 +1,10 @@
 package carp.dsp.core.infrastructure.execution
 
-import dk.cachet.carp.analytics.domain.execution.ExecutionContext
+import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import carp.dsp.core.infrastructure.runtime.command.CondaCommands
+import dk.cachet.carp.analytics.application.runtime.Command
+import dk.cachet.carp.analytics.application.runtime.CommandRunner
+import dk.cachet.carp.analytics.application.runtime.CommandResult
 import java.io.IOException
 
 /**
@@ -13,7 +17,8 @@ import java.io.IOException
  */
 class EnvironmentSetupExecutor {
 
-    private val processExecutor = ProcessExecutor()
+    private val commandRunner: CommandRunner = JvmCommandRunner()
+    private val condaCommands = CondaCommands()
 
     /**
      * Validates that a conda environment exists.
@@ -99,14 +104,14 @@ class EnvironmentSetupExecutor {
      */
     fun condaEnvironmentExists(envName: String): Boolean {
         return try {
-            val result = processExecutor.executeCommandSafe("conda env list")
+            val result = runConda(condaCommands.envList())
 
             if (result.exitCode == 0) {
                 // Parse text output
                 // Format is either:
                 // env_name    /path/to/env
                 // or contains the env name in the path
-                return result.output.lines().any { line ->
+                return result.stdout.lines().any { line ->
                     val trimmedLine = line.trim()
                     // Check if line starts with env name (active or not)
                     trimmedLine.startsWith("$envName ") ||
@@ -156,39 +161,19 @@ class EnvironmentSetupExecutor {
                 }
             }
 
-            // Build command similar to old CondaCommandGenerator
-            val baseCommand = "conda create -n $envName"
-
-            // Add python version if specified
-            val pythonCommand = pythonVersion?.let { "python=$it" } ?: "python"
-
-            // Add channels
-            val channelCommand = channels.joinToString(" ") { "-c $it" }
-
-            // Add conda dependencies
-            val condaDependencyCommand = condaPackages.joinToString(" ")
-
-            // Always include pip if we have pip packages
-            val pipCommand = if (pipPackages.isNotEmpty()) "pip" else ""
-
-            // Combine all parts, filter out blanks
-            val command = listOf(
-                baseCommand,
-                channelCommand,
-                pythonCommand,
-                pipCommand,
-                condaDependencyCommand,
-                "--yes"
-            ).filter { it.isNotBlank() }.joinToString(" ")
-
-            println("Creating conda environment...")
-            println("Executing: $command")
-
-            val result = processExecutor.executeCommandSafe(command)
+            val result = runConda(
+                condaCommands.createEnv(
+                    name = envName,
+                    pythonVersion = pythonVersion,
+                    channels = channels,
+                    packages = condaPackages + if (pipPackages.isNotEmpty()) listOf("pip") else emptyList()
+                )
+            )
             if (result.exitCode != 0) {
                 println("✗ Failed to create conda environment '$envName'")
                 println("Exit code: ${result.exitCode}")
-                println("Output: ${result.output}")
+                println("Stdout: ${result.stdout}")
+                println("Stderr: ${result.stderr}")
                 return false
             }
 
@@ -200,9 +185,8 @@ class EnvironmentSetupExecutor {
             }
 
             true
-        } catch (e: IllegalStateException) {
+        } catch (e: IOException) {
             println("✗ Failed to create conda environment '$envName': ${e.message}")
-            println("Error details: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -212,70 +196,41 @@ class EnvironmentSetupExecutor {
      */
     private fun installPipPackages(envName: String, packages: List<String>): Boolean {
         return try {
-            val packageList = packages.joinToString(" ")
-            val command = "conda run -n $envName pip install $packageList"
-
-            println("Installing pip packages in '$envName'...")
-            println("Executing: $command")
-
-            val result = processExecutor.executeCommandSafe(command)
+            val result = runConda(
+                condaCommands.runInEnv(
+                    envName = envName,
+                    exe = "pip",
+                    args = listOf("install") + packages
+                )
+            )
             if (result.exitCode != 0) {
                 println("✗ Failed to install pip packages")
                 println("Exit code: ${result.exitCode}")
-                println("Output: ${result.output}")
+                println("Stdout: ${result.stdout}")
+                println("Stderr: ${result.stderr}")
 
                 // Try alternative: activate and pip install
                 println("Trying alternative method: python -m pip install...")
-                val altCommand = "conda run -n $envName python -m pip install $packageList"
-                println("Executing: $altCommand")
-
-                val altResult = processExecutor.executeCommandSafe(altCommand)
+                val altResult = runConda(
+                    condaCommands.runInEnv(
+                        envName = envName,
+                        exe = "python",
+                        args = listOf("-m", "pip", "install") + packages
+                    )
+                )
                 if (altResult.exitCode != 0) {
                     println("✗ Alternative method also failed")
-                    println("Output: ${altResult.output}")
+                    println("Stdout: ${altResult.stdout}")
+                    println("Stderr: ${altResult.stderr}")
                     return false
                 }
             }
 
             println("✓ Successfully installed pip packages: ${packages.joinToString(", ")}")
             true
-        } catch (e: IllegalStateException) {
+        } catch (e: IOException) {
             println("✗ Failed to install pip packages: ${e.message}")
-            println("Error details: ${e.javaClass.simpleName}")
             false
-        }
-    }
-
-    /**
-     * Activates a conda environment and executes a command within it.
-     *
-     * @param envName Name of the conda environment
-     * @param command Command to execute in the environment
-     * @param envVariables Additional environment variables
-     * @return The output from the command
-     */
-    fun executeInCondaEnvironment(
-        envName: String,
-        command: String,
-        envVariables: Map<String, String> = emptyMap()
-    ): String {
-        val fullCommand = "conda run -n $envName $command"
-        return processExecutor.executeCommand(fullCommand, envVariables)
-    }
-
-    /**
-     * Validates environment setup for a given execution context.
-     * This is the main entry point that should be called during setup phase.
-     */
-    fun validateEnvironment(context: ExecutionContext): Boolean {
-        val environment = context.environment ?: return true // No environment specified
-
-        return when {
-            environment.name.isNotBlank() -> {
-                // Assume conda environment for now
-                ensureCondaEnvironment(environment.name, createIfMissing = false)
-            }
-            else -> true
         }
     }
 
@@ -285,11 +240,11 @@ class EnvironmentSetupExecutor {
      */
     fun listCondaEnvironments(): List<String> {
         return try {
-            val result = processExecutor.executeCommandSafe("conda env list")
+            val result = runConda(condaCommands.envList())
 
             if (result.exitCode == 0) {
                 // Parse lines to extract environment names
-                result.output.lines()
+                result.stdout.lines()
                     .filter { it.trim().isNotEmpty() && !it.startsWith("#") }
                     .mapNotNull { line ->
                         val trimmed = line.trim()
@@ -306,10 +261,11 @@ class EnvironmentSetupExecutor {
             } else {
                 emptyList()
             }
-        } catch (e: IllegalStateException) {
+        } catch (e: IOException) {
             println("Warning: Failed to list conda environments: ${e.message}")
             emptyList()
         }
     }
-}
 
+    private fun runConda(command: Command): CommandResult = commandRunner.run(command)
+}

@@ -10,14 +10,14 @@ import kotlin.reflect.KClass
  */
 class ExecutionFactory : IExecutionFactory
 {
-    private val registry: MutableMap<KClass<out ExternalProcess>, () -> Executor<*>> = mutableMapOf()
+    private val registry: MutableMap<KClass<out ExternalProcess>, () -> Executor> = mutableMapOf()
 
     /**
      * Registers an Executor for a specific Process type.
      * @param processType The class of the process.
      * @param executorCreator A lambda that creates an Executor instance.
      */
-    override fun <P : ExternalProcess> register( processType: KClass<out P>, executorCreator: () -> Executor<P> )
+    override fun <P : ExternalProcess> register( processType: KClass<out P>, executorCreator: () -> Executor )
     {
         registry[processType] = executorCreator
     }
@@ -29,10 +29,10 @@ class ExecutionFactory : IExecutionFactory
      * @throws IllegalArgumentException If no Executor is registered for the given Process type.
      */
     @Suppress("UNCHECKED_CAST")
-    override fun <P : ExternalProcess> getExecutor( process: P ): Executor<P>
+    override fun <P : ExternalProcess> getExecutor( process: P ): Executor
     {
         val creator = registry[process::class]
             ?: throw IllegalArgumentException("Unsupported process type: ${process::class.simpleName}")
-        return creator() as Executor<P>
+        return creator()
     }
 }
