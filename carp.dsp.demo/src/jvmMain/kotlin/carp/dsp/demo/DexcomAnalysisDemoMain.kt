@@ -100,7 +100,7 @@ private fun setupExecutionStrategy(): JvmSequentialExecutionStrategy {
 
     // Register PythonExecutor for PythonProcess
     executionFactory.register(carp.dsp.core.application.process.PythonProcess::class) {
-        carp.dsp.core.infrastructure.execution.PythonExecutor()
+        carp.dsp.core.infrastructure.execution.PythonStepExecutor()
     }
 
     return strategy
