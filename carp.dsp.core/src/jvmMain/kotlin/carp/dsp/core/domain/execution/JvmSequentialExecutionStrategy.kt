@@ -128,9 +128,9 @@ class JvmSequentialExecutionStrategy(
                 process.resolveBindings(step.inputs, step.outputs, dataRegistry)
             }
 
-            executor.setup(process, process.executionContext)
+            executor.setup(step)
             println("Executing ExternalProcess: ${process.name}")
-            executor.execute(process, process.executionContext)
+            executor.execute(step)
         } catch (e: IllegalArgumentException) {
             println("Invalid arguments for ExternalProcess: ${process.name}")
             throw e
@@ -138,8 +138,7 @@ class JvmSequentialExecutionStrategy(
             println("Invalid state during ExternalProcess execution: ${process.name}")
             throw e
         } finally {
-            println("Cleaning up ExternalProcess: ${process.name}")
-            executor.cleanup(process, process.executionContext)
+            println("Finished ExternalProcess: ${process.name}")
         }
     }
 
@@ -210,11 +209,11 @@ class JvmSequentialExecutionStrategy(
             return "."
         }
 
-        val parentPath = fullPath.substring(0, lastSlash)
+        val parentPath = fullPath.take(lastSlash)
         val secondLastSlash = parentPath.lastIndexOf('/')
 
         return if (secondLastSlash > 0) {
-            parentPath.substring(0, secondLastSlash)
+            parentPath.take(secondLastSlash)
         } else {
             parentPath
         }

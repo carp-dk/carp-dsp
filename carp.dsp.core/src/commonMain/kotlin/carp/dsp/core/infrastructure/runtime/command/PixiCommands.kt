@@ -3,6 +3,13 @@ package carp.dsp.core.infrastructure.runtime.command
 import carp.dsp.core.application.environment.PixiEnvironment
 import dk.cachet.carp.analytics.application.runtime.Command
 
+data class PixiRunOptions(
+    val cwd: String? = null,
+    val envVars: Map<String, String> = emptyMap(),
+    val stdin: ByteArray? = null,
+    val timeoutMs: Long? = null
+)
+
 /**
  * Pure builder for pixi-related commands. Produces structured [Command] instances
  * without any shell wrappers.
@@ -43,16 +50,13 @@ class PixiCommands {
         environment: PixiEnvironment,
         exe: String,
         args: List<String> = emptyList(),
-        cwd: String? = null,
-        envVars: Map<String, String> = emptyMap(),
-        stdin: ByteArray? = null,
-        timeoutMs: Long? = null
+        options: PixiRunOptions = PixiRunOptions()
     ): Command = Command(
         exe = "pixi",
         args = listOf("run", "-e", environment.name, exe) + args,
-        cwd = cwd,
-        env = envVars,
-        stdin = stdin,
-        timeoutMs = timeoutMs
+        cwd = options.cwd,
+        env = options.envVars,
+        stdin = options.stdin,
+        timeoutMs = options.timeoutMs
     )
 }

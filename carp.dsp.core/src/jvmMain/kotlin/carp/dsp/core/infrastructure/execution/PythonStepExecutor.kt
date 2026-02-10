@@ -1,12 +1,14 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.application.process.PythonProcess
-import carp.dsp.core.infrastructure.runtime.command.CondaCommands
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import carp.dsp.core.infrastructure.runtime.command.CondaCommands
+import carp.dsp.core.infrastructure.runtime.command.CondaRunOptions
 import dk.cachet.carp.analytics.application.runtime.Command
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.analytics.domain.execution.Executor
 import dk.cachet.carp.analytics.domain.workflow.Step
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 
 /**
@@ -58,7 +60,7 @@ class PythonStepExecutor : Executor {
 
         val result = try {
             commandRunner.run(command)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             throw IllegalStateException("Failed to execute Python process: ${e.message}", e)
         }
 
@@ -95,10 +97,10 @@ class PythonStepExecutor : Executor {
                 envName = envName,
                 exe = process.pythonExecutable,
                 args = listOf(process.scriptPath) + args,
-                cwd = null,
-                envVars = step.executionContext.envVariables,
-                stdin = stdinBytes,
-                timeoutMs = null
+                options = CondaRunOptions(
+                    envVars = step.executionContext.envVariables,
+                    stdin = stdinBytes
+                )
             )
         } else {
             Command(

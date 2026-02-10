@@ -68,10 +68,12 @@ class CondaCommandsTest {
             envName = "test-env",
             exe = "python",
             args = listOf("-m", "pip", "list"),
-            cwd = "/tmp/work",
-            envVars = envVars,
-            stdin = stdinBytes,
-            timeoutMs = 1500
+            options = CondaRunOptions(
+                cwd = "/tmp/work",
+                envVars = envVars,
+                stdin = stdinBytes,
+                timeoutMs = 1500
+            )
         )
 
         assertEquals("conda", command.exe)
@@ -82,4 +84,3 @@ class CondaCommandsTest {
         assertEquals(1500, command.timeoutMs)
     }
 }
-

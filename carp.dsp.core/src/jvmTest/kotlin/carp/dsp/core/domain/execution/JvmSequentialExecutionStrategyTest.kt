@@ -15,8 +15,6 @@ import dk.cachet.carp.analytics.domain.data.InMemorySource
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.RegistryDestination
-import dk.cachet.carp.analytics.domain.execution.ExecutionContext
-import dk.cachet.carp.analytics.domain.execution.Executor
 import dk.cachet.carp.analytics.domain.execution.IExecutionFactory
 import dk.cachet.carp.analytics.domain.process.AnalysisProcess
 import dk.cachet.carp.analytics.domain.process.ExternalProcess
@@ -104,44 +102,24 @@ class JvmSequentialExecutionStrategyTest {
         }
     }
 
-    private fun createMockExternalProcess(): ExternalProcess {
-        return object : ExternalProcess {
-            override val name: String = "TestExternalProcess"
-            override val description: String = "Test external process"
-            override val executionContext: ExecutionContext = ExecutionContext(null)
-            override fun getArguments(): Any = emptyMap<String, Any>()
-        }
+    private fun createMockExternalProcess(): ExternalProcess = object : ExternalProcess {
+        override val name: String = "TestExternalProcess"
+        override val description: String = "Test external process"
+        override fun getArguments(): Any = emptyMap<String, Any>()
     }
 
-    private fun createMockExecutorFactory(shouldSucceed: Boolean = true): IExecutionFactory {
-        return object : IExecutionFactory {
-            private val executors = mutableMapOf<String, Executor<*>>()
+    private fun createMockExecutorFactory(shouldSucceed: Boolean = true): IExecutionFactory = object : IExecutionFactory {
+        override fun <P : ExternalProcess> register(
+            processType: kotlin.reflect.KClass<out P>,
+            executorCreator: () -> dk.cachet.carp.analytics.domain.execution.Executor
+        ) { /* no-op for tests */ }
 
-            override fun <P : ExternalProcess> register(
-                processType: kotlin.reflect.KClass<out P>,
-                executorCreator: () -> Executor<P>
-            ) {
-                executors[processType.simpleName.orEmpty()] = executorCreator()
-            }
-
-            @Suppress("UNCHECKED_CAST")
-            override fun <P : ExternalProcess> getExecutor(process: P): Executor<P> {
-                return object : Executor<P> {
-                    override fun setup(process: P, context: ExecutionContext) {
-                        // Mock setup
-                    }
-
-                    override fun execute(process: P, context: ExecutionContext) {
-                        if (!shouldSucceed) {
-                            error("Mock execution failure")
-                        }
-                        // Mock execution
-                    }
-
-                    override fun cleanup(process: P, context: ExecutionContext) {
-                        // Mock cleanup
-                    }
-                } as Executor<P>
+        override fun <P : ExternalProcess> getExecutor(process: P): dk.cachet.carp.analytics.domain.execution.Executor {
+            return object : dk.cachet.carp.analytics.domain.execution.Executor {
+                override fun setup(step: Step) { /* no-op */ }
+                override fun execute(step: Step) {
+                    if (!shouldSucceed) error("Mock execution failure")
+                }
             }
         }
     }
@@ -320,7 +298,7 @@ class JvmSequentialExecutionStrategyTest {
         val output = outputCapture.toString()
         assertTrue(output.contains("Executing ExternalProcess"))
         assertTrue(output.contains("TestExternalProcess"))
-        assertTrue(output.contains("Cleaning up ExternalProcess"))
+        assertTrue(output.contains("Finished ExternalProcess"))
     }
 
     @Test
@@ -666,5 +644,4 @@ class JvmSequentialExecutionStrategyTest {
         assertTrue(output.contains("Invalid arguments for AnalysisProcess"))
     }
 }
-
 

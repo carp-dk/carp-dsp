@@ -2,6 +2,13 @@ package carp.dsp.core.infrastructure.runtime.command
 
 import dk.cachet.carp.analytics.application.runtime.Command
 
+data class CondaRunOptions(
+    val cwd: String? = null,
+    val envVars: Map<String, String> = emptyMap(),
+    val stdin: ByteArray? = null,
+    val timeoutMs: Long? = null
+)
+
 /**
  * Pure builder for conda-related commands. Produces structured [Command] instances
  * without invoking any shell wrappers.
@@ -83,16 +90,13 @@ class CondaCommands {
         envName: String,
         exe: String,
         args: List<String> = emptyList(),
-        cwd: String? = null,
-        envVars: Map<String, String> = emptyMap(),
-        stdin: ByteArray? = null,
-        timeoutMs: Long? = null
+        options: CondaRunOptions = CondaRunOptions()
     ): Command = Command(
         exe = "conda",
         args = listOf("run", "-n", envName, exe) + args,
-        cwd = cwd,
-        env = envVars,
-        stdin = stdin,
-        timeoutMs = timeoutMs
+        cwd = options.cwd,
+        env = options.envVars,
+        stdin = options.stdin,
+        timeoutMs = options.timeoutMs
     )
 }
