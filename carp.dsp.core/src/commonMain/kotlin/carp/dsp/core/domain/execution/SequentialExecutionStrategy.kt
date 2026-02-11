@@ -41,7 +41,7 @@ class SequentialExecutionStrategy(
             println("Running step ${index + 1}/${steps.size}: ${step.metadata.name}")
 
             when (val process = step.process) {
-                is ExternalProcess -> handleExternalProcess(process, executionFactory)
+                is ExternalProcess -> handleExternalProcess(step, process, executionFactory)
                 is AnalysisProcess -> handleAnalysisProcess(step, process)
                 is DataRetrievalProcess -> handleDataRetrievalProcess(step, process)
                 else -> throw IllegalArgumentException("Unsupported process type: ${process::class.simpleName}")
@@ -152,14 +152,14 @@ class SequentialExecutionStrategy(
      * Handles the execution of an [ExternalProcess] using the provided [ExecutionFactory].
      * Sets up the executor, executes the process, and cleans up afterward.
      */
-    private fun handleExternalProcess(process: ExternalProcess, executorFactory: IExecutionFactory)
+    private fun handleExternalProcess(step: Step, process: ExternalProcess, executorFactory: IExecutionFactory)
     {
         val executor = executorFactory.getExecutor(process)
         try
         {
-            executor.setup(process, process.executionContext)
+            executor.setup(step)
             println("Executing ExternalProcess: ${process.name}")
-            executor.execute(process, process.executionContext)
+            executor.execute(step)
         }
         catch (e: IllegalArgumentException)
         {
@@ -173,8 +173,7 @@ class SequentialExecutionStrategy(
         }
         finally
         {
-            println("Cleaning up ExternalProcess: ${process.name}")
-            executor.cleanup(process, process.executionContext)
+            println("Finished ExternalProcess: ${process.name}")
         }
     }
 
@@ -248,4 +247,3 @@ class SequentialExecutionStrategy(
         }
     }
 }
-

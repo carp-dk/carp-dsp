@@ -9,7 +9,6 @@ import dk.cachet.carp.analytics.domain.data.InMemorySource
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.RegistryDestination
-import dk.cachet.carp.analytics.domain.execution.ExecutionContext
 import dk.cachet.carp.analytics.domain.process.AnalysisProcess
 import dk.cachet.carp.analytics.domain.process.ExternalProcess
 import dk.cachet.carp.analytics.domain.workflow.Step
@@ -76,7 +75,6 @@ class SequentialExecutionStrategyTest {
         return object : ExternalProcess {
             override val name: String = "TestExternalProcess"
             override val description: String = "Test external process"
-            override val executionContext: ExecutionContext = ExecutionContext(null)
             override fun getArguments(): Any = emptyMap<String, Any>()
         }
     }
@@ -174,10 +172,10 @@ class SequentialExecutionStrategyTest {
         workflow.addComponent(step)
 
         val mockExecutor = {
-            object : dk.cachet.carp.analytics.domain.execution.Executor<ExternalProcess> {
-                override fun execute(process: ExternalProcess, context: ExecutionContext)
-                {
-                    // Mock execution logic for external process
+            object : dk.cachet.carp.analytics.domain.execution.Executor {
+                override fun setup(step: Step) { /* no-op */ }
+                override fun execute(step: Step) {
+                    val process = step.process as ExternalProcess
                     println("Mock executing external process: ${process.name}")
                 }
             }

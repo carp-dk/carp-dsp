@@ -34,7 +34,7 @@ import kotlin.io.path.exists
 class PythonProcess(
     override val name: String,
     override val description: String = "",
-    override val executionContext: ExecutionContext,
+    val executionContext: ExecutionContext,
     val scriptPath: String,
     val arguments: List<String> = emptyList(),
     val pythonExecutable: String = "python",
@@ -218,7 +218,7 @@ class PythonProcess(
     /**
      * Serializes data for stdin transmission.
      */
-    protected fun serializeData(data: Any): String {
+    private fun serializeData(data: Any): String {
         // Default: Convert to string representation
         // In production, you'd use JSON/CSV serialization based on data type
         return when (data) {
