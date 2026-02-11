@@ -33,15 +33,18 @@ class PixiCommandsTest {
     fun run_builds_expected_command() {
         val envVars = mapOf("FOO" to "BAR")
         val stdinBytes = "input".toByteArray()
+        val options = PixiRunOptions(
+            cwd = "/tmp/work",
+            envVars = envVars,
+            stdin = stdinBytes,
+            timeoutMs = 1500
+        )
 
         val command: Command = builder.run(
             environment = env,
             exe = "python",
             args = listOf("-m", "pip", "list"),
-            cwd = "/tmp/work",
-            envVars = envVars,
-            stdin = stdinBytes,
-            timeoutMs = 1500
+            options = options
         )
 
         assertEquals("pixi", command.exe)
@@ -52,4 +55,3 @@ class PixiCommandsTest {
         assertEquals(1500, command.timeoutMs)
     }
 }
-

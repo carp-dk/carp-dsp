@@ -3,8 +3,8 @@ package carp.dsp.core.infrastructure.execution
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import carp.dsp.core.infrastructure.runtime.command.CondaCommands
 import dk.cachet.carp.analytics.application.runtime.Command
-import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.analytics.application.runtime.CommandResult
+import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import java.io.IOException
 
 /**

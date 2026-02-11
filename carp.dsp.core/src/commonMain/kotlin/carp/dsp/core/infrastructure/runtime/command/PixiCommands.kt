@@ -8,7 +8,29 @@ data class PixiRunOptions(
     val envVars: Map<String, String> = emptyMap(),
     val stdin: ByteArray? = null,
     val timeoutMs: Long? = null
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PixiRunOptions
+
+        if (timeoutMs != other.timeoutMs) return false
+        if (cwd != other.cwd) return false
+        if (envVars != other.envVars) return false
+        if (!stdin.contentEquals(other.stdin)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = timeoutMs?.hashCode() ?: 0
+        result = 31 * result + (cwd?.hashCode() ?: 0)
+        result = 31 * result + envVars.hashCode()
+        result = 31 * result + (stdin?.contentHashCode() ?: 0)
+        return result
+    }
+}
 
 /**
  * Pure builder for pixi-related commands. Produces structured [Command] instances
