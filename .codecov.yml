@@ -29,4 +29,11 @@ ignore:
   - "**/*Test.kt"
   - "**/*Tests.kt"
   - "**/*Spec.kt"
+  - "**/generated/**"
+  - "**/*\$serializer*"
+  - "**/*Serializer*"
+  - "**/*\$Companion*"
+  - "**/*\$DefaultImpls*"
+  - "**/*\$WhenMappings*"
+  - "**/*\$inlined*"
 
