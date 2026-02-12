@@ -437,5 +437,4 @@ class ExecutionReportTest {
         assertEquals(listOf("C"), latestFailed.map { it.stepId })
         assertFalse(report.isSuccessLatest())
     }
-
 }
