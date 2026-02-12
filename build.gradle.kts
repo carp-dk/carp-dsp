@@ -39,7 +39,7 @@ tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPasses") {
         if (subproject.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")) {
             try {
                 additionalClassPaths.add(subproject.configurations.getByName("jvmCompileClasspath"))
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Ignore if configuration doesn't exist
             }
         }
@@ -72,7 +72,7 @@ tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPassesAutoFix") {
         if (subproject.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")) {
             try {
                 additionalClassPaths.add(subproject.configurations.getByName("jvmCompileClasspath"))
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Ignore if configuration doesn't exist
             }
         }
@@ -112,6 +112,23 @@ kover {
             }
             xml {
                 onCheck = true
+            }
+
+            filters {
+                excludes {
+                    classes(
+                        "*\$serializer*",
+                        "*Serializer*",
+                        "*\$Companion*",
+                        "*\$DefaultImpls*",
+                        "*\$WhenMappings*",
+                        "*\$inlined*",
+                        "*\\\$\\\$serializer"
+                    )
+                    packages(
+                        "kotlinx.serialization.*",
+                    )
+                }
             }
         }
     }
