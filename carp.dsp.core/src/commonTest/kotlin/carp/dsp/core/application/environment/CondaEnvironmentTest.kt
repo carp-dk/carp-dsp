@@ -1,5 +1,6 @@
 package carp.dsp.core.application.environment
 
+import dk.cachet.carp.common.application.UUID
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,8 +14,9 @@ class CondaEnvironmentTest {
     @Test
     fun can_create_conda_environment_with_minimal_config() {
         // Arrange & Act
-        val env = CondaEnvironment(
-            name = "test-env"
+        val env = CondaEnvironmentDefinition(
+            name = "test-env",
+            id = UUID.randomUUID()
         )
 
         // Assert
@@ -27,7 +29,8 @@ class CondaEnvironmentTest {
     @Test
     fun can_create_conda_environment_with_dependencies() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "test-env",
             dependencies = listOf("pandas", "numpy", "pip:scikit-learn")
         )
@@ -43,7 +46,8 @@ class CondaEnvironmentTest {
     @Test
     fun can_create_conda_environment_with_custom_python_version() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "test-env",
             pythonVersion = "3.12"
         )
@@ -56,7 +60,8 @@ class CondaEnvironmentTest {
     @Test
     fun can_create_conda_environment_with_multiple_channels() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "test-env",
             channels = listOf("conda-forge", "bioconda", "defaults")
         )
@@ -72,7 +77,8 @@ class CondaEnvironmentTest {
     @Test
     fun can_create_conda_environment_with_all_options() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "full-env",
             dependencies = listOf("pandas", "numpy", "pip:tensorflow"),
             pythonVersion = "3.10",
@@ -91,6 +97,7 @@ class CondaEnvironmentTest {
         // Arrange
         val jsonString = """
             {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "analysis-env",
                 "dependencies": ["scipy", "matplotlib", "pip:seaborn"],
                 "pythonVersion": "3.12",
@@ -99,7 +106,7 @@ class CondaEnvironmentTest {
         """.trimIndent()
 
         // Act
-        val env = json.decodeFromString<CondaEnvironment>(jsonString)
+        val env = json.decodeFromString<CondaEnvironmentDefinition>(jsonString)
 
         // Assert
         assertEquals("analysis-env", env.name)
@@ -114,19 +121,23 @@ class CondaEnvironmentTest {
     @Test
     fun data_class_equality_works_correctly() {
         // Arrange
-        val env1 = CondaEnvironment(
+        val id = UUID.randomUUID()
+        val env1 = CondaEnvironmentDefinition(
+            id = id,
             name = "test-env",
             dependencies = listOf("pandas"),
             pythonVersion = "3.11",
             channels = listOf("conda-forge")
         )
-        val env2 = CondaEnvironment(
+        val env2 = CondaEnvironmentDefinition(
+            id = id,
             name = "test-env",
             dependencies = listOf("pandas"),
             pythonVersion = "3.11",
             channels = listOf("conda-forge")
         )
-        val env3 = CondaEnvironment(
+        val env3 = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "different-env",
             dependencies = listOf("pandas"),
             pythonVersion = "3.11",
@@ -142,7 +153,8 @@ class CondaEnvironmentTest {
     @Test
     fun supports_empty_dependencies_list() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "no-deps-env",
             dependencies = emptyList()
         )
@@ -156,7 +168,8 @@ class CondaEnvironmentTest {
     @Test
     fun supports_pip_prefix_in_dependencies() {
         // Arrange & Act
-        val env = CondaEnvironment(
+        val env = CondaEnvironmentDefinition(
+            id = UUID.randomUUID(),
             name = "mixed-env",
             dependencies = listOf(
                 "pandas",

@@ -1,6 +1,6 @@
 package carp.dsp.core.infrastructure.runtime.command
 
-import carp.dsp.core.application.environment.PixiEnvironment
+import carp.dsp.core.application.environment.PixiEnvironmentDefinition
 import dk.cachet.carp.analytics.application.runtime.Command
 
 data class PixiRunOptions(
@@ -44,7 +44,7 @@ class PixiCommands {
      * Optionally enable features.
      */
     fun install(
-        environment: PixiEnvironment,
+        environment: PixiEnvironmentDefinition,
         features: List<String> = emptyList(),
         cwd: String? = null,
         timeoutMs: Long? = null
@@ -69,7 +69,7 @@ class PixiCommands {
      * Run an executable within the pixi environment using `pixi run`.
      */
     fun run(
-        environment: PixiEnvironment,
+        environment: PixiEnvironmentDefinition,
         exe: String,
         args: List<String> = emptyList(),
         options: PixiRunOptions = PixiRunOptions()

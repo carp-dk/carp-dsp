@@ -1,7 +1,8 @@
 package carp.dsp.core.infrastructure.runtime.command
 
-import carp.dsp.core.application.environment.PixiEnvironment
+import carp.dsp.core.application.environment.PixiEnvironmentDefinition
 import dk.cachet.carp.analytics.application.runtime.Command
+import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -10,7 +11,7 @@ import kotlin.test.assertTrue
 class PixiCommandsTest {
 
     private val builder = PixiCommands()
-    private val env = PixiEnvironment(name = "dev")
+    private val env = PixiEnvironmentDefinition(name = "dev", id = UUID.randomUUID())
 
     @Test
     fun install_builds_expected_command() {

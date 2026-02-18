@@ -50,4 +50,22 @@ kotlin {
     }
 }
 
+// Create a run task that executes the JVM main class
+tasks.register<JavaExec>("run") {
+    group = "application"
+    description = "Run the CARP-DSP demo"
 
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+                kotlin.jvm().compilations.getByName("main").output.allOutputs
+    mainClass.set("carp.dsp.demo.DemoMainKt")
+
+    // Allow passing arguments to the demo
+    if (project.hasProperty("args")) {
+        args = (project.property("args") as String).split("\\s+")
+    }
+
+    // Required to receive input from console
+    standardInput = System.`in`
+    standardOutput = System.out
+
+}
