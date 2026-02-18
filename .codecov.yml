@@ -25,6 +25,7 @@ comment:
 
 ignore:
   - "detekt/**"
+  - "carp.dsp.demo/**"
   - "**/test/**"
   - "**/*Test.kt"
   - "**/*Tests.kt"
@@ -36,4 +37,3 @@ ignore:
   - "**/*\$DefaultImpls*"
   - "**/*\$WhenMappings*"
   - "**/*\$inlined*"
-

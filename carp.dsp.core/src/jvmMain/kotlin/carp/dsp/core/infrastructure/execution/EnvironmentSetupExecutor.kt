@@ -53,53 +53,6 @@ class EnvironmentSetupExecutor {
     }
 
     /**
-     * Ensures conda environment exists using an Environment object.
-     * Extracts dependencies from the Environment and automatically creates if missing.
-     */
-    fun ensureCondaEnvironment(
-        environment: dk.cachet.carp.analytics.domain.environment.Environment,
-        createIfMissing: Boolean = true
-    ): Boolean {
-        val envName = environment.name
-        val dependencies = environment.dependencies
-
-        // Try to extract pythonVersion and channels by accessing fields
-        var pythonVersion: String? = null
-        var channels: List<String> = emptyList()
-
-        try {
-            val envClass = environment::class.java
-
-            // Try to get pythonVersion field
-            try {
-                val pythonVersionField = envClass.getDeclaredField("pythonVersion")
-                pythonVersionField.isAccessible = true
-                pythonVersion = pythonVersionField.get(environment) as? String
-            } catch (_: ReflectiveOperationException) {
-                // Field doesn't exist
-            }
-
-            // Try to get channels field
-            try {
-                val channelsField = envClass.getDeclaredField("channels")
-                channelsField.isAccessible = true
-                @Suppress("UNCHECKED_CAST")
-                channels = (channelsField.get(environment) as? List<String>).orEmpty()
-            } catch (_: ReflectiveOperationException) {
-                // Field doesn't exist
-            }
-        } catch (_: ReflectiveOperationException) {
-            // Could not access fields, use defaults
-        }
-
-        if (pythonVersion != null || channels.isNotEmpty()) {
-            println("Extracted from Environment: pythonVersion=$pythonVersion, channels=$channels")
-        }
-
-        return ensureCondaEnvironment(envName, createIfMissing, dependencies, pythonVersion, channels)
-    }
-
-    /**
      * Checks if a conda environment exists by parsing the output of 'conda env list'.
      */
     fun condaEnvironmentExists(envName: String): Boolean {
@@ -231,39 +184,6 @@ class EnvironmentSetupExecutor {
         } catch (e: IOException) {
             println("✗ Failed to install pip packages: ${e.message}")
             false
-        }
-    }
-
-    /**
-     * Gets information about available conda environments.
-     * Returns a list of environment names.
-     */
-    fun listCondaEnvironments(): List<String> {
-        return try {
-            val result = runConda(condaCommands.envList())
-
-            if (result.exitCode == 0) {
-                // Parse lines to extract environment names
-                result.stdout.lines()
-                    .filter { it.trim().isNotEmpty() && !it.startsWith("#") }
-                    .mapNotNull { line ->
-                        val trimmed = line.trim()
-                        // Format: "envname   /path/to/env" or "* envname   /path/to/env"
-                        val parts = trimmed.split(Regex("\\s+"))
-                        when {
-                            parts.isEmpty() -> null
-                            parts[0] == "*" && parts.size > 1 -> parts[1] // Active env
-                            parts[0] != "base" && parts[0] != "#" -> parts[0]
-                            else -> null
-                        }
-                    }
-                    .distinct()
-            } else {
-                emptyList()
-            }
-        } catch (e: IOException) {
-            println("Warning: Failed to list conda environments: ${e.message}")
-            emptyList()
         }
     }
 
