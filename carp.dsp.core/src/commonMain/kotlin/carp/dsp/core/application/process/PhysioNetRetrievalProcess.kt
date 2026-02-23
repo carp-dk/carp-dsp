@@ -30,7 +30,7 @@ import dk.cachet.carp.analytics.domain.data.FileFormat
  */
 data class PhysioNetRetrievalProcess(
     /**
-     * PhysioNet dataset identifier (e.g., "mimic-iii-demo", "ptb-xl").
+     * PhysioNet dataset id (e.g., "mimic-iii-demo", "ptb-xl").
      */
     val datasetId: String,
 

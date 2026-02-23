@@ -1,7 +1,9 @@
 package carp.dsp.core.infrastructure.execution
 
-import dk.cachet.carp.analytics.application.runtime.Command
+import dk.cachet.carp.analytics.application.execution.RunPolicy
+import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.runtime.CommandResult
+import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -33,7 +35,7 @@ class EnvironmentSetupExecutorTest {
         val exists = executor.condaEnvironmentExists("dev")
 
         assertTrue(exists)
-        assertEquals(listOf("conda", "env", "list"), runner.commands.single().let { listOf(it.exe) + it.args })
+        assertEquals(listOf("conda", "env", "list"), runner.commands.single().let { listOf(it.executable) + it.args })
     }
 
     @Test
@@ -57,7 +59,7 @@ class EnvironmentSetupExecutorTest {
         assertTrue(created)
         assertEquals(2, runner.commands.size)
         val createCmd = runner.commands[1]
-        assertEquals("conda", createCmd.exe)
+        assertEquals("conda", createCmd.executable)
         assertTrue(createCmd.args.containsAll(listOf("create", "-n", "dev", "python=3.11", "--yes")))
     }
 
@@ -85,13 +87,14 @@ class EnvironmentSetupExecutorTest {
     private fun result(exitCode: Int, stdout: String = "", stderr: String = ""): CommandResult =
         CommandResult(exitCode = exitCode, stdout = stdout, stderr = stderr, durationMs = 0, timedOut = false)
 
-    private class QueueRunner(private val responses: ArrayDeque<CommandResult>) : dk.cachet.carp.analytics.application.runtime.CommandRunner {
-        val commands = mutableListOf<Command>()
-        override fun run(command: Command): CommandResult {
+    private class QueueRunner(private val responses: ArrayDeque<CommandResult>) : CommandRunner {
+        val commands = mutableListOf<CommandSpec>()
+        override fun run(command: CommandSpec, policy: RunPolicy): CommandResult {
             commands += command
             return responses.removeFirstOrNull() ?: error("No response configured")
         }
     }
+
 
     private fun queueRunner(vararg results: CommandResult) = QueueRunner(ArrayDeque(results.toList()))
 

@@ -69,3 +69,16 @@ tasks.register<JavaExec>("run") {
     standardOutput = System.out
 
 }
+
+// Create a test task for P0 demo
+tasks.register<JavaExec>("testP0Demo") {
+    group = "verification"
+    description = "Test the P0 Planning Demo"
+
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+                kotlin.jvm().compilations.getByName("main").output.allOutputs
+    mainClass.set("carp.dsp.demo.TestP0DemoKt")
+
+    standardOutput = System.out
+}
+
