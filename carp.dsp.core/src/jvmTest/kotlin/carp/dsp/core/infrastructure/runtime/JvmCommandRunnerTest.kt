@@ -1,8 +1,11 @@
 package carp.dsp.core.infrastructure.runtime
 
-import dk.cachet.carp.analytics.application.runtime.Command
+import carp.dsp.core.application.execution.CommandPolicy
+import carp.dsp.core.application.execution.RelativePath
+import dk.cachet.carp.analytics.application.plan.CommandSpec
 import org.junit.Assume.assumeTrue
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -15,6 +18,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -45,11 +49,14 @@ class JvmCommandRunnerTest {
         return Paths.get(javaHome, "bin", javaBin).toString()
     }
 
-    private fun cwdWithSpaces(): String {
+    private fun cwdWithSpaces(): Path {
         val cwd = tempDir.resolve("cwd with spaces")
         cwd.createDirectories()
-        return cwd.toString()
+        return cwd
     }
+
+    private fun defaultPolicy(timeoutMs: Long? = 10_000, workingDirectory: Path? = null) =
+        CommandPolicy(timeoutMs = timeoutMs, workingDirectory = workingDirectory?.let { RelativePath(it.fileName.toString()) })
 
     private fun ensureHelperCompiled(): Path {
         compiledDir?.let { return it }
@@ -118,31 +125,23 @@ class JvmCommandRunnerTest {
         }
     """
 
-    private fun helperCommand(vararg args: String, cwd: String? = null, env: Map<String, String> = emptyMap(), timeoutMs: Long? = 10_000): Command {
+    private fun helperCommand(vararg args: String): CommandSpec {
         val outputDir = ensureHelperCompiled()
         val baseArgs = listOf("-cp", outputDir.toString(), "RunnerTestMain") + args.toList()
-        return Command(
-            exe = javaExecutable(),
-            args = baseArgs,
-            cwd = cwd,
-            env = env,
-            stdin = null,
-            timeoutMs = timeoutMs
+        return CommandSpec(
+            executable = javaExecutable(),
+            args = baseArgs
         )
     }
 
     @Test
     fun trivial_command_runs_successfully() {
-        val command = Command(
-            exe = javaExecutable(),
-            args = listOf("-version"),
-            cwd = null,
-            env = emptyMap(),
-            stdin = null,
-            timeoutMs = 10_000
+        val command = CommandSpec(
+            executable = javaExecutable(),
+            args = listOf("-version")
         )
 
-        val result = runner.run(command)
+        val result = runner.run(command, defaultPolicy(timeoutMs = 10_000))
 
         assertEquals(0, result.exitCode)
         assertTrue(result.durationMs >= 0)
@@ -152,16 +151,12 @@ class JvmCommandRunnerTest {
 
     @Test
     fun args_with_spaces_and_cwd_with_spaces_work() {
-        val command = Command(
-            exe = javaExecutable(),
-            args = listOf("-Dcarp.test=hello world", "-version"),
-            cwd = cwdWithSpaces(),
-            env = emptyMap(),
-            stdin = null,
-            timeoutMs = 10_000
+        val command = CommandSpec(
+            executable = javaExecutable(),
+            args = listOf("-Dcarp.test=hello world", "-version")
         )
 
-        val result = runner.run(command)
+        val result = runner.run(command, defaultPolicy(timeoutMs = 10_000, workingDirectory = cwdWithSpaces()))
 
         assertEquals(0, result.exitCode)
         assertFalse(result.timedOut)
@@ -169,16 +164,12 @@ class JvmCommandRunnerTest {
 
     @Test
     fun non_zero_exit_does_not_throw() {
-        val command = Command(
-            exe = javaExecutable(),
-            args = listOf("-thisIsNotARealOption"),
-            cwd = null,
-            env = emptyMap(),
-            stdin = null,
-            timeoutMs = 5_000
+        val command = CommandSpec(
+            executable = javaExecutable(),
+            args = listOf("-thisIsNotARealOption")
         )
 
-        val result = runner.run(command)
+        val result = runner.run(command, defaultPolicy(timeoutMs = 5_000))
 
         assertTrue(result.exitCode != 0)
         assertTrue(result.stderr.isNotEmpty())
@@ -186,7 +177,7 @@ class JvmCommandRunnerTest {
 
     @Test
     fun stdout_and_stderr_are_separated() {
-        val result = runner.run(helperCommand("printOutErr"))
+        val result = runner.run(helperCommand("printOutErr"), defaultPolicy())
 
         assertEquals(0, result.exitCode)
         assertTrue(result.stdout.contains("OUT"))
@@ -195,27 +186,8 @@ class JvmCommandRunnerTest {
     }
 
     @Test
-    fun environment_injection_works() {
-        val result = runner.run(helperCommand("env", "FOO", env = mapOf("FOO" to "BAR")))
-
-        assertEquals(0, result.exitCode)
-        assertEquals("BAR", result.stdout)
-    }
-
-    @Test
-    fun stdin_piping_works() {
-        val input = "hello\nworld"
-        val command = helperCommand("echoStdin").copy(stdin = input.toByteArray())
-
-        val result = runner.run(command)
-
-        assertEquals(0, result.exitCode)
-        assertEquals(input, result.stdout)
-    }
-
-    @Test
     fun timeout_kills_process() {
-        val result = runner.run(helperCommand("sleep", "5000", timeoutMs = 100))
+        val result = runner.run(helperCommand("sleep", "5000"), defaultPolicy(timeoutMs = 100))
 
         assertTrue(result.timedOut)
         assertTrue(result.durationMs < 2_000)
@@ -223,40 +195,18 @@ class JvmCommandRunnerTest {
 
     @Test
     fun fatal_spawn_failure_throws() {
-        val command = Command(
-            exe = "definitely-not-a-real-executable-xyz",
-            args = emptyList(),
-            cwd = null,
-            env = emptyMap(),
-            stdin = null,
-            timeoutMs = 1_000
+        val command = CommandSpec(
+            executable = "definitely-not-a-real-executable-xyz"
         )
 
-        var threw = false
-        try {
-            runner.run(command)
-        } catch (_: Exception) {
-            threw = true
+        assertFailsWith<IOException> {
+            runner.run(command, defaultPolicy(timeoutMs = 1_000))
         }
-        assertTrue(threw)
-    }
-
-    @Test
-    fun invalid_cwd_throws() {
-        val command = helperCommand("printOutErr", cwd = tempDir.resolve("non-existent-cwd").toString())
-
-        var threw = false
-        try {
-            runner.run(command)
-        } catch (_: Exception) {
-            threw = true
-        }
-        assertTrue(threw)
     }
 
     @Test
     fun large_output_does_not_deadlock() {
-        val result = runner.run(helperCommand("spam", "512", timeoutMs = 5_000))
+        val result = runner.run(helperCommand("spam", "512"), defaultPolicy(timeoutMs = 5_000))
 
         assertEquals(0, result.exitCode)
         assertTrue(result.stdout.length >= 512 * 1024)

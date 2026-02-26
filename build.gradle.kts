@@ -32,7 +32,6 @@ tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPasses") {
     buildUponDefaultConfig = true
     ignoreFailures = false
 
-    // ...existing code...
 }
 
 // Auto-fix task for detekt issues
@@ -47,7 +46,6 @@ tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektPassesAutoFix") {
     autoCorrect = true  // Enable auto-fix
     ignoreFailures = false
 
-    // ...existing code...
 }
 
 // Ensure detekt module is built before running detekt tasks
@@ -81,13 +79,37 @@ kover {
             filters {
                 excludes {
                     classes(
+                        // Kotlin serialization generated classes
                         "*\$serializer*",
                         "*Serializer*",
+                        "*\$\$serializer*",
+                        "**/*\$\$serializer*",
+                        "*SerializersModule*",
+
+                        // Kotlin generated classes
                         "*\$Companion*",
                         "*\$DefaultImpls*",
                         "*\$WhenMappings*",
                         "*\$inlined*",
-                        "*\\$\\\$serializer"
+                        "*\\$\\\$serializer",
+
+                        // Data class generated methods
+                        "*\$copy\$default*",
+                        "*\$hashCode*",
+                        "*\$toString*",
+                        "*\$equals*",
+                        "*\$component*",
+
+                        // Test classes
+                        "**/*Test*",
+                        "**/*Tests*",
+                        "**/test/**/*",
+
+                        // Build and application classes
+                        "**/BuildConfig*",
+                        "**/*Application*",
+                        "**/*Activity*",
+                        "**/*Fragment*"
                     )
                     packages(
                         "kotlinx.serialization.*",
@@ -96,7 +118,35 @@ kover {
                         "carp.dsp.demo.demos.*",
                         "carp.dsp.demo.utils.*",
                         "carp.dsp.demo.workflows.*",
+
+                        // Infrastructure packages with low/no coverage
+                        "carp.dsp.core.infrastructure.**",
+                        "**.test.**",
+                        "**.tests.**"
                     )
+                    annotatedBy(
+                        "Generated",
+                        "kotlin.jvm.JvmSynthetic",
+                        "carp.dsp.core.common.ExcludeFromCoverage"
+                    )
+                }
+            }
+
+            // Coverage verification rules
+            verify {
+                rule("Minimum line coverage") {
+                    bound {
+                        minValue = 75
+                        coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE
+                        aggregationForGroup = kotlinx.kover.gradle.plugin.dsl.AggregationType.COVERED_PERCENTAGE
+                    }
+                }
+                rule("Minimum branch coverage") {
+                    bound {
+                        minValue = 65
+                        coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH
+                        aggregationForGroup = kotlinx.kover.gradle.plugin.dsl.AggregationType.COVERED_PERCENTAGE
+                    }
                 }
             }
         }

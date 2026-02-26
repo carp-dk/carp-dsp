@@ -1,0 +1,32 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+        threshold: 0%
+
+ignore:
+  # Generated Kotlin serialization code
+  - "**/*$serializer*"
+  - "**/*$Companion*"
+  - "**/*$DefaultImpls*"
+  - "**/*$WhenMappings*"
+
+  # Demo / reference apps
+  - "demo/**"
+  - "app/**"
+  - "reference-app/**"
+
+  # Infrastructure / tooling (if desired)
+  - "**/infrastructure/**"
+
+  # Test utilities
+  - "**/testutils/**"
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default

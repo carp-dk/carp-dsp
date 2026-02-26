@@ -23,7 +23,7 @@ data class CarpMeasurementMetadata(
     val measurementIndex: Int,
 
     /**
-     * The data stream identifier from the original MutableDataStream.
+     * The data stream id from the original MutableDataStream.
      * Contains device ID and data type information.
      */
     val dataStreamId: DataStreamId,

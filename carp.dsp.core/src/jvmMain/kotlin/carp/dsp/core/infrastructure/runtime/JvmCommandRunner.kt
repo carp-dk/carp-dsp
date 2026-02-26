@@ -1,17 +1,21 @@
 package carp.dsp.core.infrastructure.runtime
 
-import dk.cachet.carp.analytics.application.runtime.Command
+import carp.dsp.core.application.execution.CommandPolicy
+import carp.dsp.core.application.execution.RelativePath
+import dk.cachet.carp.analytics.application.execution.RunPolicy
+import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
-import java.io.File
 import java.io.InputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * Executes OS processes based on a structured [Command].
+ * Executes OS processes based on a structured [CommandSpec].
  *
  * Failure policy: non-zero exit codes are returned without throwing. Fatal issues such as
  * failure to start the process or invalid working directories surface as thrown exceptions.
@@ -23,14 +27,17 @@ class JvmCommandRunner(
     private val charset: Charset = StandardCharsets.UTF_8
 ) : CommandRunner {
 
-    override fun run(command: Command): CommandResult {
-        val processBuilder = ProcessBuilder(listOf(command.exe) + command.args)
-        command.cwd?.let { cwd ->
-            val dir = File(cwd)
-            require(dir.exists() && dir.isDirectory) { "Working directory does not exist or is not a directory: $cwd" }
-            processBuilder.directory(dir)
+    override fun run(command: CommandSpec, policy: RunPolicy): CommandResult {
+        policy as CommandPolicy
+
+        val processBuilder = ProcessBuilder(listOf(command.executable) + command.args)
+
+        val workspaceRoot = Files.createTempDirectory("carp-dsp-workspace-")
+        policy.workingDirectory?.let { rel ->
+            val wd = resolveUnderRoot(workspaceRoot, rel)
+            Files.createDirectories(wd)
+            processBuilder.directory(wd.toFile())
         }
-        processBuilder.environment().putAll(command.env)
 
         val start = System.nanoTime()
         val process = processBuilder.start()
@@ -41,11 +48,9 @@ class JvmCommandRunner(
         val stdoutCollector = collectStream(process.inputStream, stdout)
         val stderrCollector = collectStream(process.errorStream, stderr)
 
-        writeInput(process, command.stdin)
-
         val timedOut = try {
-            val finished = if (command.timeoutMs != null) {
-                process.waitFor(command.timeoutMs!!, TimeUnit.MILLISECONDS)
+            val finished = if (policy.timeoutMs != null) {
+                process.waitFor(policy.timeoutMs, TimeUnit.MILLISECONDS)
             } else {
                 process.waitFor()
                 true
@@ -85,15 +90,13 @@ class JvmCommandRunner(
             }
         }
 
-    private fun writeInput(process: Process, input: ByteArray?) {
-        if (input == null) {
-            process.outputStream.close()
-            return
-        }
+    internal fun resolveUnderRoot(root: Path, rel: RelativePath): Path {
+        val normalizedRoot = root.toAbsolutePath().normalize()
+        val resolved = normalizedRoot.resolve(rel.value).normalize()
 
-        process.outputStream.buffered().use { out ->
-            out.write(input)
-            out.flush()
+        require(resolved.startsWith(normalizedRoot)) {
+            "Resolved path escapes workspace root. root=$normalizedRoot rel=${rel.value} resolved=$resolved"
         }
+        return resolved
     }
 }

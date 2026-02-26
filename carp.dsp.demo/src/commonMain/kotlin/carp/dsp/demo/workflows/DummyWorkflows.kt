@@ -7,7 +7,10 @@ import dk.cachet.carp.analytics.domain.data.InMemorySource
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.data.RegistryDestination
+import dk.cachet.carp.analytics.domain.data.StepOutputSource
 import dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition
+import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.Literal
 import dk.cachet.carp.analytics.domain.tasks.TaskDefinition
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.StepMetadata
@@ -130,14 +133,14 @@ object DummyWorkflows {
                 ),
                 inputs = listOf(
                     InputDataSpec(
-                        identifier = "input_$index",
+                        id = UUID.randomUUID(),
                         name = "Input Data $index",
                         source = InMemorySource(registryKey = "analysis_env")
                     )
                 ),
                 outputs = listOf(
                     OutputDataSpec(
-                        identifier = "output_$index",
+                        id = UUID.randomUUID(),
                         name = "Output Data $index",
                         destination = RegistryDestination(key = "output_$index")
                     )
@@ -218,7 +221,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "bad_input",
+                            id = UUID.randomUUID(),
                             name = "Bad Input",
                             source = InMemorySource(registryKey = "non_existent_step") // References non-existent step
                         )
@@ -240,7 +243,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "self_ref",
+                            id =  UUID.randomUUID(),
                             name = "Self Reference",
                             source = InMemorySource(
                                 registryKey = "step_self_cycle"
@@ -264,7 +267,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "from_b",
+                            id =  UUID.randomUUID(),
                             name = "Data from Step B",
                             source = InMemorySource(registryKey = "step_cycle_b")
                         )
@@ -281,7 +284,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "from_a",
+                            id =  UUID.randomUUID(),
                             name = "Data from Step A",
                             source = InMemorySource(registryKey = "step_cycle_a")
                         )
@@ -304,7 +307,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "from_s3",
+                            id =  UUID.randomUUID(),
                             name = "Data from S3",
                             source = InMemorySource(registryKey = "step_s3")
                         )
@@ -321,7 +324,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "from_s1",
+                            id =  UUID.randomUUID(),
                             name = "Data from S1",
                             source = InMemorySource(registryKey = "step_s1")
                         )
@@ -338,7 +341,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "from_s2",
+                            id =  UUID.randomUUID(),
                             name = "Data from S2",
                             source = InMemorySource(registryKey = "step_s2")
                         )
@@ -369,7 +372,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "missing_input",
+                            id =  UUID.randomUUID(),
                             name = "Missing Input",
                             source = InMemorySource(registryKey = "non_existent")
                         )
@@ -386,7 +389,7 @@ object DummyWorkflows {
                     ),
                     inputs = listOf(
                         InputDataSpec(
-                            identifier = "another_missing",
+                            id =  UUID.randomUUID(),
                             name = "Another Missing Input",
                             source = InMemorySource(registryKey = "also_non_existent")
                         )
@@ -459,5 +462,131 @@ object DummyWorkflows {
 
         /** Workflow with both duplicate IDs and missing references */
         MULTIPLE_VIOLATIONS
+    }
+
+    /**
+     * Creates a workflow definition for P0 planning demo.
+     * Contains 3 steps with deterministic UUIDs for stable demo output:
+     * - Step A: Echo command with one output
+     * - Step B: Depends on Step A via StepOutputSource, has one output
+     * - Step C: Independent echo command (for tie-breaking demo)
+     *
+     * @return A WorkflowDefinition suitable for planning demos
+     */
+    fun p0PlanningDefinition(): WorkflowDefinition {
+        // Use fixed UUIDs for deterministic demo output
+        val environmentId = UUID("11111111-1111-1111-1111-111111111111")
+        val stepAId = UUID("22222222-2222-2222-2222-222222222222")
+        val stepBId = UUID("33333333-3333-3333-3333-333333333333")
+        val stepCId = UUID("44444444-4444-4444-4444-444444444444")
+        val outputAId = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        val outputBId = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+        val metadata = WorkflowMetadata(
+            name = "P0 Planning Demo Workflow",
+            description = "A workflow with dependencies for demonstrating P0 planning capabilities",
+            id = UUID("00000000-0000-0000-0000-000000000000")
+        )
+
+        val builder = WorkflowDefinitionBuilder(metadata)
+
+        // Create deterministic environment
+        val demoEnv = MockEnvironmentDefinition(
+            id = environmentId,
+            name = "p0_demo_env",
+            dependencies = listOf("bash"),
+            environmentVariables = mapOf("DEMO" to "true")
+        )
+        builder.addEnvironment(demoEnv)
+
+        // Step A: Producer step with output
+        val outputA = OutputDataSpec(
+            id = outputAId,
+            name = "step_a_result",
+            description = "Output from Step A",
+            schema = null,
+            destination = RegistryDestination(key = "step-a-output")
+        )
+
+        val stepA = Step(
+            metadata = StepMetadata(
+                id = stepAId,
+                name = "step_a_producer",
+                description = "Producer step that generates output for Step B"
+            ),
+            environmentId = environmentId,
+            task = CommandTaskDefinition(
+                id = UUID("aaaa1111-aaaa-1111-aaaa-111111111111"),
+                name = "echo_command_a",
+                description = "Echo command for Step A",
+                executable = "echo",
+                args = listOf(Literal("Hello from Step A"))
+            ),
+            outputs = listOf(outputA)
+        )
+
+        // Step B: Consumer step that depends on Step A
+        val inputB = InputDataSpec(
+            id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+            name = "input_from_a",
+            description = "Input from Step A",
+            schema = null,
+            source = StepOutputSource(
+                stepId = stepAId,
+                outputId = outputAId,
+                metadata = emptyMap()
+            ),
+            required = true
+        )
+
+        val outputB = OutputDataSpec(
+            id = outputBId,
+            name = "step_b_result",
+            description = "Output from Step B",
+            schema = null,
+            destination = RegistryDestination(key = "step-b-output")
+        )
+
+        val stepB = Step(
+            metadata = StepMetadata(
+                id = stepBId,
+                name = "step_b_consumer",
+                description = "Consumer step that processes output from Step A"
+            ),
+            environmentId = environmentId,
+            task = CommandTaskDefinition(
+                id = UUID("bbbb1111-bbbb-1111-bbbb-111111111111"),
+                name = "echo_command_b",
+                description = "Echo command for Step B",
+                executable = "echo",
+                args = listOf(Literal("Hello from Step B"))
+            ),
+            inputs = listOf(inputB),
+            outputs = listOf(outputB)
+        )
+
+        // Step C: Independent step for tie-breaking demonstration
+        val stepC = Step(
+            metadata = StepMetadata(
+                id = stepCId,
+                name = "step_c_independent",
+                description = "Independent step to demonstrate deterministic tie-breaking"
+            ),
+            environmentId = environmentId,
+            task = CommandTaskDefinition(
+                id = UUID("cccc1111-cccc-1111-cccc-111111111111"),
+                name = "echo_command_c",
+                description = "Echo command for Step C",
+                executable = "echo",
+                args = listOf(Literal("Hello from Step C"))
+            )
+        )
+
+        // Add components in declaration order
+        builder.addComponent(stepA)
+        builder.addComponent(stepB)
+        builder.addComponent(stepC)
+
+        return builder.build()
     }
 }
