@@ -175,13 +175,9 @@ class CommandPolicyTest {
     }
 
     @Test
-    fun `CommandPolicy data class methods work correctly`() {
-        val policy = CommandPolicy(
-            timeoutMs = 2000,
-            workingDirectory = RelativePath("test/dir")
-        )
+    fun `CommandPolicy data class copy and toString`() {
+        val policy = CommandPolicy(timeoutMs = 2000, workingDirectory = RelativePath("test/dir"))
 
-        // Test copy method
         val copied1 = policy.copy(timeoutMs = 4000)
         assertEquals(4000, copied1.timeoutMs)
         assertEquals(policy.workingDirectory, copied1.workingDirectory)
@@ -194,19 +190,74 @@ class CommandPolicyTest {
         assertEquals(null, copied3.timeoutMs)
         assertEquals(null, copied3.workingDirectory)
 
-        // Test toString
         val stringRepr = policy.toString()
         assertTrue(stringRepr.contains("CommandPolicy"))
         assertTrue(stringRepr.contains("2000"))
         assertTrue(stringRepr.contains("test/dir"))
+    }
 
-        // Test equals and hashCode
-        val identical = CommandPolicy(timeoutMs = 2000, workingDirectory = RelativePath("test/dir"))
-        assertEquals(policy, identical)
-        assertEquals(policy.hashCode(), identical.hashCode())
+    @Test
+    fun `CommandPolicy equals covers every field branch`() {
+        // Base instance — all fields non-null / non-default where possible
+        val base = CommandPolicy(
+            timeoutMs = 2000,
+            workingDirectory = RelativePath("test/dir"),
+            stopOnFailure = true,
+            failOnWarnings = false,
+            maxAttempts = 1
+        )
 
-        val different = policy.copy(timeoutMs = 3000)
-        assertNotEquals(policy, different)
+        // Identity
+        assertEquals(base, base)
+
+        // Exact copy → equal
+        assertEquals(base, base.copy())
+        assertEquals(base.hashCode(), base.copy().hashCode())
+
+        // Each field differing individually → not equal (drives the "not-equal" arm for each field)
+        assertNotEquals(base, base.copy(timeoutMs = 9999))
+        assertNotEquals(base, base.copy(workingDirectory = RelativePath("other")))
+        assertNotEquals(base, base.copy(stopOnFailure = false))
+        assertNotEquals(base, base.copy(failOnWarnings = true))
+        assertNotEquals(base, base.copy(maxAttempts = 3))
+
+        // null timeoutMs: drives the null-arm of the timeoutMs null-check in generated equals
+        val nullTimeout = base.copy(timeoutMs = null)
+        assertNotEquals(base, nullTimeout) // base has Long, nullTimeout has null
+        assertEquals(nullTimeout, nullTimeout.copy())
+
+        // null workingDirectory: drives the null-arm of the workingDirectory null-check
+        val nullWd = base.copy(workingDirectory = null)
+        assertNotEquals(base, nullWd) // base has RelativePath, nullWd has null
+        assertEquals(nullWd, nullWd.copy())
+
+        // Both nullable fields null simultaneously
+        val allNulls = CommandPolicy()
+        assertEquals(allNulls, CommandPolicy())
+        assertEquals(allNulls.hashCode(), CommandPolicy().hashCode())
+        assertNotEquals(allNulls, base)
+
+        // Comparing null-timeout against null-timeout (equal) vs non-null (not equal)
+        assertEquals(CommandPolicy(timeoutMs = null), CommandPolicy(timeoutMs = null))
+        assertNotEquals(CommandPolicy(timeoutMs = null), CommandPolicy(timeoutMs = 1))
+        assertNotEquals(CommandPolicy(timeoutMs = 1), CommandPolicy(timeoutMs = null))
+
+        // Comparing null-wd against null-wd (equal) vs non-null (not equal)
+        assertEquals(
+            CommandPolicy(workingDirectory = null),
+            CommandPolicy(workingDirectory = null)
+        )
+        assertNotEquals(
+            CommandPolicy(workingDirectory = null),
+            CommandPolicy(workingDirectory = RelativePath("x"))
+        )
+        assertNotEquals(
+            CommandPolicy(workingDirectory = RelativePath("x")),
+            CommandPolicy(workingDirectory = null)
+        )
+
+        // Non-CommandPolicy object → not equal (drives the type-check branch)
+        assertNotEquals<Any>(base, "not a policy")
     }
 
     @Test

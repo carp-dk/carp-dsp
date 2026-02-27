@@ -13,7 +13,10 @@ import java.nio.file.Path
 @Serializable
 data class CommandPolicy(
     override val timeoutMs: Long? = null,
-    val workingDirectory: RelativePath? = null
+    val workingDirectory: RelativePath? = null,
+    override val stopOnFailure: Boolean = true,
+    override val failOnWarnings: Boolean = false,
+    override val maxAttempts: Int = 1
 ) : RunPolicy {
 
     /**

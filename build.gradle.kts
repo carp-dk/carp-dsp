@@ -155,11 +155,11 @@ kover {
 
 // Ensure tests run before generating coverage
 tasks.named("koverHtmlReport") {
-    dependsOn(":carp.dsp.core:jvmTest", ":carp.dsp.demo:jvmTest")
+    dependsOn(":carp.dsp.core:jvmTest")
 }
 
 tasks.named("koverXmlReport") {
-    dependsOn(":carp.dsp.core:jvmTest", ":carp.dsp.demo:jvmTest")
+    dependsOn(":carp.dsp.core:jvmTest")
 }
 
 
