@@ -50,6 +50,8 @@ kotlin {
         jvmTest {
             dependencies {
                 implementation(kotlin("test-junit"))
+                implementation("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+                implementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
             }
         }
