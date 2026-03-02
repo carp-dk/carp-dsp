@@ -1,4 +1,4 @@
-package carp.dsp.core.application.environment.workspace
+package carp.dsp.core.application.execution.workspace
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

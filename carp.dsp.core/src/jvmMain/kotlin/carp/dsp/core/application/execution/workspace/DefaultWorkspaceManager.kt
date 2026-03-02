@@ -1,7 +1,8 @@
-package carp.dsp.core.application.environment.workspace
+package carp.dsp.core.application.execution.workspace
 
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
+import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.common.application.UUID
 import java.io.IOException
 import java.nio.file.Path
@@ -39,6 +40,20 @@ class DefaultWorkspaceManager(
     }
 
     /**
+     * Creates a new execution workspace for the given execution plan and run ID.
+     *
+     * This is a legacy method that creates a simple workspace based on runId only.
+     * For plan-based workspace creation, use PlanBasedWorkspaceManager instead.
+     *
+     * @param plan The execution plan (used for validation but not for workspace structure)
+     * @param runId Unique identifier for the execution run
+     * @return A new ExecutionWorkspace instance
+     */
+    override fun create(plan: ExecutionPlan, runId: UUID): ExecutionWorkspace {
+        return createWorkspace(runId)
+    }
+
+    /**
      * Creates a new execution workspace for the given run ID.
      *
      * The workspace directory structure created is:
@@ -52,7 +67,7 @@ class DefaultWorkspaceManager(
      * @return A new ExecutionWorkspace instance with the run's logical root
      * @throws IllegalStateException if directory creation fails
      */
-    override fun createWorkspace(runId: UUID): ExecutionWorkspace {
+    private fun createWorkspace(runId: UUID): ExecutionWorkspace {
         val executionRootPath = baseWorkspaceRoot.resolve(runId.toString())
         val stepsPath = executionRootPath.resolve("steps")
 
@@ -112,7 +127,7 @@ class DefaultWorkspaceManager(
     }
 
     /**
-     * Resolves a relative artifact path to an absolute filesystem path within the workspace.
+     * Resolves a relative artefact path to an absolute filesystem path within the workspace.
      *
      * This method ensures that:
      * 1. The path is normalized and safe from traversal attacks
@@ -127,6 +142,38 @@ class DefaultWorkspaceManager(
     fun resolveArtifactPath(workspace: ExecutionWorkspace, relativePath: String): Path {
         val executionRoot = pathResolver.resolveExecutionRoot(workspace.executionRoot)
         return pathResolver.validateAndResolve(executionRoot, relativePath)
+    }
+
+    /**
+     * Resolves and validates that a declared artifact path is within the step's outputs directory.
+     *
+     * This method enforces the critical rule that all declared artifacts must be placed
+     * within the step's outputs directory to ensure proper isolation and prevent
+     * cross-step contamination.
+     *
+     * @param workspace The execution workspace
+     * @param stepId The step identifier UUID
+     * @param relativePath The relative artefact path declared by the step
+     * @return The absolute Path to the artefact within the step's outputs directory
+     * @throws SecurityException if the path attempts to escape the execution root
+     * @throws IllegalArgumentException if the resolved path is not within the step's outputs directory
+     */
+    fun resolveStepOutputArtifact(workspace: ExecutionWorkspace, stepId: UUID, relativePath: String): Path {
+        val executionRoot = pathResolver.resolveExecutionRoot(workspace.executionRoot)
+        val outputsDir = executionRoot.resolve(workspace.stepOutputsDir(stepId))
+
+        // First, resolve the path safely within the execution root
+        val resolvedPath = pathResolver.validateAndResolve(executionRoot, relativePath)
+
+        // Then enforce that it must be within the step's outputs directory
+        if (!pathResolver.isContainedWithin(outputsDir, resolvedPath)) {
+            throw IllegalArgumentException(
+                "Declared artifact path '$relativePath' must resolve within step outputs directory. " +
+                "Resolved: $resolvedPath, Required parent: $outputsDir"
+            )
+        }
+
+        return resolvedPath
     }
 
     /**

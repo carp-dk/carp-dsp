@@ -1,4 +1,4 @@
-package carp.dsp.core.application.environment.workspace
+package carp.dsp.core.application.execution.workspace
 
 import java.nio.file.Path
 import java.nio.file.Paths
