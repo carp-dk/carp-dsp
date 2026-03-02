@@ -1,27 +1,37 @@
+@file:OptIn(kotlin.io.path.ExperimentalPathApi::class)
+
 package carp.dsp.core.application.execution.workspace
 
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.deleteRecursively
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FileSystemPathResolverTest {
 
-    @TempDir
     private lateinit var tempDir: Path
-
     private lateinit var pathResolver: FileSystemPathResolver
     private lateinit var baseRoot: Path
 
-    @BeforeEach
+    @BeforeTest
     fun setup() {
+        // Create temporary directory manually
+        tempDir = Files.createTempDirectory("pathresolver-test")
         baseRoot = tempDir.resolve("base")
         pathResolver = FileSystemPathResolver(baseRoot)
+    }
+
+    @AfterTest
+    fun cleanup() {
+        // Clean up temporary directory
+        tempDir.deleteRecursively()
     }
 
     @Test
@@ -30,7 +40,7 @@ class FileSystemPathResolverTest {
         val relativePath = Paths.get("relative/path")
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             FileSystemPathResolver(relativePath)
         }
     }
@@ -65,14 +75,42 @@ class FileSystemPathResolverTest {
     }
 
     @Test
+    fun `validateAndResolve accepts paths with multiple dots as directory names`() {
+        // Arrange
+        val root = tempDir.resolve("test-root")
+        val pathsWithDots = listOf(
+            "....//....//etc/passwd", // Four dots are valid directory names
+            ".../file.txt", // Three dots are valid directory names
+            "..../nested/file.txt" // Four dots with nested path
+        )
+
+        // Act & Assert
+        pathsWithDots.forEach { pathWithDots ->
+            val resolved = pathResolver.validateAndResolve(root, pathWithDots)
+            assertTrue(
+                resolved.startsWith(root.toAbsolutePath()),
+                      "Path with multiple dots should resolve within root: $pathWithDots"
+            )
+        }
+    }
+
+    @Test
     fun `validateAndResolve rejects absolute paths`() {
         // Arrange
         val root = tempDir.resolve("test-root")
-        val absolutePath = "/etc/passwd"
+        val windowsAbsolutePath = "C:\\etc\\passwd" // Windows-style absolute path
+        val unixAbsolutePath = "/etc/passwd" // Unix-style path (treated as relative on Windows)
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
-            pathResolver.validateAndResolve(root, absolutePath)
+        // Windows-style absolute paths should be rejected with IllegalArgumentException
+        assertFailsWith<IllegalArgumentException> {
+            pathResolver.validateAndResolve(root, windowsAbsolutePath)
+        }
+
+        // Unix-style paths on Windows are treated as relative but resolve outside root,
+        // so they trigger SecurityException for path traversal
+        assertFailsWith<SecurityException> {
+            pathResolver.validateAndResolve(root, unixAbsolutePath)
         }
     }
 
@@ -81,16 +119,15 @@ class FileSystemPathResolverTest {
         // Arrange
         val root = tempDir.resolve("test-root")
         val traversalPaths = listOf(
-            "../../../etc/passwd",
-            "dir1/../../etc/passwd",
-            "./../../etc/passwd",
-            "....//....//etc/passwd",
-            "dir/../../../etc/passwd"
+            "../../../etc/passwd", // Classic traversal
+            "dir1/../../etc/passwd", // Traversal after going into a directory
+            "./../../etc/passwd", // Traversal with current directory reference
+            "dir/../../../etc/passwd" // Mixed traversal
         )
 
         // Act & Assert
         traversalPaths.forEach { traversalPath ->
-            assertThrows<SecurityException>("Should reject traversal: $traversalPath") {
+            assertFailsWith<SecurityException>("Should reject traversal: $traversalPath") {
                 pathResolver.validateAndResolve(root, traversalPath)
             }
         }
@@ -118,7 +155,7 @@ class FileSystemPathResolverTest {
         val relativePath = "safe/path.txt"
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             pathResolver.validateAndResolve(relativeRoot, relativePath)
         }
     }
@@ -144,12 +181,18 @@ class FileSystemPathResolverTest {
         val notContained = tempDir.resolve("other/file.txt")
 
         // Act & Assert
-        assertTrue(pathResolver.isContainedWithin(container, contained),
-                  "Should detect contained path")
-        assertFalse(pathResolver.isContainedWithin(container, notContained),
-                   "Should detect non-contained path")
-        assertFalse(pathResolver.isContainedWithin(contained, container),
-                   "Container should not be contained within contained")
+        assertTrue(
+            pathResolver.isContainedWithin(container, contained),
+                  "Should detect contained path"
+        )
+        assertFalse(
+            pathResolver.isContainedWithin(container, notContained),
+                   "Should detect non-contained path"
+        )
+        assertFalse(
+            pathResolver.isContainedWithin(contained, container),
+                   "Container should not be contained within contained"
+        )
     }
 
     @Test
@@ -160,10 +203,14 @@ class FileSystemPathResolverTest {
         val traversalAttempt = container.resolve("../escape/file.txt")
 
         // Act & Assert
-        assertTrue(pathResolver.isContainedWithin(container, complexContained),
-                  "Should handle normalized contained path")
-        assertFalse(pathResolver.isContainedWithin(container, traversalAttempt),
-                   "Should detect traversal escape attempt")
+        assertTrue(
+            pathResolver.isContainedWithin(container, complexContained),
+                  "Should handle normalized contained path"
+        )
+        assertFalse(
+            pathResolver.isContainedWithin(container, traversalAttempt),
+                   "Should detect traversal escape attempt"
+        )
     }
 
     @Test
@@ -187,7 +234,7 @@ class FileSystemPathResolverTest {
         val outsideTarget = tempDir.resolve("other/file.txt")
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             pathResolver.relativize(root, outsideTarget)
         }
     }
@@ -234,8 +281,10 @@ class FileSystemPathResolverTest {
         // Act & Assert
         edgeCases.forEach { edgeCase ->
             val resolved = pathResolver.validateAndResolve(root, edgeCase)
-            assertTrue(resolved.startsWith(root.toAbsolutePath()),
-                      "Edge case should resolve within root: $edgeCase")
+            assertTrue(
+                resolved.startsWith(root.toAbsolutePath()),
+                      "Edge case should resolve within root: $edgeCase"
+            )
         }
     }
 
@@ -256,25 +305,33 @@ class FileSystemPathResolverTest {
         val path = tempDir.resolve("same/path")
 
         // Act & Assert
-        assertTrue(pathResolver.isContainedWithin(path, path),
-                  "Path should be contained within itself")
+        assertTrue(
+            pathResolver.isContainedWithin(path, path),
+                  "Path should be contained within itself"
+        )
     }
 
     @Test
     fun `path operations handle Windows and Unix path separators`() {
         // Arrange
         val root = tempDir.resolve("test-root")
-        val mixedPath = "dir1\\subdir/file.txt"  // Mixed separators
+        val mixedPath = "dir1\\subdir/file.txt" // Mixed separators
 
         // Act
         val resolved = pathResolver.validateAndResolve(root, mixedPath)
 
         // Assert
-        assertTrue(resolved.startsWith(root.toAbsolutePath()),
-                  "Mixed separator path should resolve within root")
-        assertTrue(resolved.toString().contains("dir1"),
-                  "Should preserve directory structure")
-        assertTrue(resolved.toString().contains("subdir"),
-                  "Should preserve subdirectory structure")
+        assertTrue(
+            resolved.startsWith(root.toAbsolutePath()),
+                  "Mixed separator path should resolve within root"
+        )
+        assertTrue(
+            resolved.toString().contains("dir1"),
+                  "Should preserve directory structure"
+        )
+        assertTrue(
+            resolved.toString().contains("subdir"),
+                  "Should preserve subdirectory structure"
+        )
     }
 }

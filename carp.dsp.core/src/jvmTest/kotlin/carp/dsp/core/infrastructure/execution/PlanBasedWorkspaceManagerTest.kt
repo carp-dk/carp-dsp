@@ -1,34 +1,44 @@
-package carp.dsp.infrastructure.execute.workspace
+package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.common.application.UUID
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PlanBasedWorkspaceManagerTest {
 
-    @TempDir
     private lateinit var tempDir: Path
-
     private lateinit var workspaceManager: PlanBasedWorkspaceManager
     private lateinit var baseWorkspaceRoot: Path
 
-    @BeforeEach
+    @BeforeTest
     fun setup() {
+        // Create temporary directory manually
+        tempDir = Files.createTempDirectory("workspace-test")
         baseWorkspaceRoot = tempDir.resolve("workspaces")
         workspaceManager = PlanBasedWorkspaceManager(baseWorkspaceRoot)
+    }
+
+    @OptIn(ExperimentalPathApi::class)
+    @AfterTest
+    fun cleanup() {
+        // Clean up temporary directory
+        tempDir.deleteRecursively()
     }
 
     @Test
@@ -37,7 +47,7 @@ class PlanBasedWorkspaceManagerTest {
         val relativePath = Paths.get("relative/path")
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             PlanBasedWorkspaceManager(relativePath)
         }
     }
@@ -68,8 +78,10 @@ class PlanBasedWorkspaceManagerTest {
         assertEquals(hash1, hash2, "Same plan should produce same hash")
 
         // But different runIds should produce different execution roots
-        assertNotEquals(workspace1.executionRoot, workspace2.executionRoot,
-                       "Same plan with different runIds should have different execution roots")
+        assertNotEquals(
+            workspace1.executionRoot, workspace2.executionRoot,
+            "Same plan with different runIds should have different execution roots"
+        )
     }
 
     @Test
@@ -104,7 +116,7 @@ class PlanBasedWorkspaceManagerTest {
 
         val plan2 = ExecutionPlan(
             workflowId = "workflow1", // Same workflow
-            planId = "plan1",         // Same plan ID
+            planId = "plan1", // Same plan ID
             steps = listOf(createTestPlannedStep(stepId2, "step2")) // Different step
         )
 
@@ -264,22 +276,20 @@ class PlanBasedWorkspaceManagerTest {
         val stepId1 = UUID.randomUUID()
         val stepId2 = UUID.randomUUID()
 
+        // Create the steps once to ensure they're identical
+        val step1 = createTestPlannedStep(stepId1, "step1")
+        val step2 = createTestPlannedStep(stepId2, "step2")
+
         val plan1 = ExecutionPlan(
             workflowId = "workflow1",
             planId = "plan1",
-            steps = listOf(
-                createTestPlannedStep(stepId1, "step1"),
-                createTestPlannedStep(stepId2, "step2")
-            )
+            steps = listOf(step1, step2) // Original order
         )
 
         val plan2 = ExecutionPlan(
             workflowId = "workflow1",
             planId = "plan1",
-            steps = listOf(
-                createTestPlannedStep(stepId2, "step2"), // Reversed order
-                createTestPlannedStep(stepId1, "step1")
-            )
+            steps = listOf(step2, step1) // Reversed order - same objects
         )
 
         // Act
@@ -340,7 +350,7 @@ class PlanBasedWorkspaceManagerTest {
 
         val plan2 = ExecutionPlan(
             workflowId = "workflow-beta", // Different workflow ID
-            planId = "plan1",              // Same plan ID
+            planId = "plan1", // Same plan ID
             steps = listOf(createTestPlannedStep(stepId, "transform")) // Same step
         )
 
@@ -388,15 +398,13 @@ class PlanBasedWorkspaceManagerTest {
         )
     }
 
-    private fun createTestPlannedStep(stepId: UUID, name: String): PlannedStep {
+    private fun createTestPlannedStep(stepId: UUID, name: String, environmentDefinitionId: UUID? = null): PlannedStep {
         return PlannedStep(
             stepId = stepId,
             name = name,
             process = CommandSpec("echo", listOf("hello")), // Concrete implementation
             bindings = ResolvedBindings(emptyMap(), emptyMap()),
-            environmentDefinitionId = UUID.randomUUID()
+            environmentDefinitionId = environmentDefinitionId ?: UUID.randomUUID()
         )
     }
 }
-
-

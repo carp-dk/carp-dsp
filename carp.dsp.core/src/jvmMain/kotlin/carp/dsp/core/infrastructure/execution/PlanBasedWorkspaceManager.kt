@@ -1,9 +1,10 @@
-package carp.dsp.infrastructure.execute.workspace
+package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.common.application.UUID
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.nio.file.Path
@@ -69,7 +70,7 @@ class PlanBasedWorkspaceManager(
         val planHash = computePlanHash(plan)
 
         // 2. Compute execution root directory name
-        val executionRootName = "${planHash}_${runId}"
+        val executionRootName = "${planHash}_$runId"
 
         // 3. Create directory structure
         val executionRootPath = baseWorkspaceRoot.resolve(executionRootName)
@@ -128,7 +129,9 @@ class PlanBasedWorkspaceManager(
      *
      * The hash is computed based only on the plan structure and content, excluding:
      * - runId (not part of ExecutionPlan)
+     * - planId (may be a random UUID that changes between planning runs)
      * - Execution-specific runtime data
+     * - TasksRun polymorphic content (to avoid serialization complexity)
      *
      * Uses stable JSON serialization and SHA-256 hashing.
      *
@@ -136,17 +139,30 @@ class PlanBasedWorkspaceManager(
      * @return A short hex string representing the plan hash
      */
     private fun computePlanHash(plan: ExecutionPlan): String {
-        // Create a normalized representation for hashing
-        val hashableContent = PlanHashContent(
+        // Create a simplified representation for hashing that avoids polymorphic serialization
+        val hashableContent = SimplifiedPlanHashContent(
             workflowId = plan.workflowId,
-            planId = plan.planId,
-            steps = plan.steps.sortedBy { it.stepId.toString() }, // Stable ordering
-            requiredEnvironmentHandles = plan.requiredEnvironmentHandles.sortedBy { it.toString() }
+            // Note: planId is intentionally excluded as it may be a random UUID generated at planning time
+            steps = plan.steps.sortedBy { it.stepId.toString() }.map { step ->
+                SimplifiedStepHashContent(
+                    stepId = step.stepId.toString(),
+                    name = step.name,
+                    environmentDefinitionId = step.environmentDefinitionId.toString(),
+                    // Note: We intentionally exclude the TasksRun process field to avoid polymorphic serialization
+                    // The step ID and name provide sufficient differentiation for workspace hashing
+                    inputBindings = step.bindings.inputs.keys.sortedBy { it.toString() }.map { it.toString() },
+                    outputBindings = step.bindings.outputs.keys.sortedBy { it.toString() }.map { it.toString() }
+                )
+            },
+            requiredEnvironmentHandles = plan.requiredEnvironmentHandles.sortedBy
+            {
+                it.toString()
+            }.map { it.toString() }
             // Note: deliberately excluding 'issues' as they may vary between planning runs
         )
 
         // Serialize to JSON with stable ordering
-        val jsonString = json.encodeToString(PlanHashContent.serializer(), hashableContent)
+        val jsonString = json.encodeToString(SimplifiedPlanHashContent.serializer(), hashableContent)
 
         // Compute SHA-256 hash
         val digest = MessageDigest.getInstance("SHA-256")
@@ -176,15 +192,29 @@ class PlanBasedWorkspaceManager(
 }
 
 /**
- * Data class representing the hashable content of an ExecutionPlan.
+ * Simplified data class representing the hashable content of an ExecutionPlan.
  *
- * This is used to ensure stable serialization for consistent plan hashing.
+ * This avoids polymorphic serialization issues by using only simple types.
+ * The planId is deliberately excluded as it may be a random UUID that changes between planning runs.
  */
-@kotlinx.serialization.Serializable
-private data class PlanHashContent(
+@Serializable
+private data class SimplifiedPlanHashContent(
     val workflowId: String,
-    val planId: String,
-    val steps: List<dk.cachet.carp.analytics.application.plan.PlannedStep>,
-    val requiredEnvironmentHandles: List<UUID>
+    val steps: List<SimplifiedStepHashContent>,
+    val requiredEnvironmentHandles: List<String>
+)
+
+/**
+ * Simplified data class representing the hashable content of a PlannedStep.
+ *
+ * This excludes the polymorphic TasksRun field to avoid serialization complexity.
+ */
+@Serializable
+private data class SimplifiedStepHashContent(
+    val stepId: String,
+    val name: String,
+    val environmentDefinitionId: String,
+    val inputBindings: List<String>,
+    val outputBindings: List<String>
 )
 

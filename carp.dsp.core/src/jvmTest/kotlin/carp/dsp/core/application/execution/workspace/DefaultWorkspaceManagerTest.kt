@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.io.path.ExperimentalPathApi::class)
+
 package carp.dsp.core.application.execution.workspace
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
@@ -5,29 +7,37 @@ import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.common.application.UUID
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DefaultWorkspaceManagerTest {
 
-    @TempDir
     private lateinit var tempDir: Path
-
     private lateinit var workspaceManager: DefaultWorkspaceManager
     private lateinit var baseWorkspaceRoot: Path
 
-    @BeforeEach
+    @BeforeTest
     fun setup() {
+        // Create temporary directory manually
+        tempDir = Files.createTempDirectory("workspace-test")
         baseWorkspaceRoot = tempDir.resolve("workspaces")
         workspaceManager = DefaultWorkspaceManager(baseWorkspaceRoot)
+    }
+
+    @AfterTest
+    fun cleanup() {
+        // Clean up temporary directory
+        tempDir.deleteRecursively()
     }
 
     @Test
@@ -45,7 +55,7 @@ class DefaultWorkspaceManagerTest {
         val relativePath = Paths.get("relative/path")
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             DefaultWorkspaceManager(relativePath)
         }
     }
@@ -121,8 +131,10 @@ class DefaultWorkspaceManagerTest {
         // Assert
         val expectedPath = baseWorkspaceRoot.resolve(runId.toString()).resolve(relativePath)
         assertEquals(expectedPath.normalize(), resolvedPath.normalize())
-        assertTrue(resolvedPath.startsWith(baseWorkspaceRoot.resolve(runId.toString())),
-                  "Resolved path should be under execution root")
+        assertTrue(
+            resolvedPath.startsWith(baseWorkspaceRoot.resolve(runId.toString())),
+                  "Resolved path should be under execution root"
+        )
     }
 
     @Test
@@ -134,7 +146,7 @@ class DefaultWorkspaceManagerTest {
         val traversalPath = "../../../etc/passwd"
 
         // Act & Assert
-        assertThrows<SecurityException> {
+        assertFailsWith<SecurityException> {
             workspaceManager.resolveArtifactPath(workspace, traversalPath)
         }
     }
@@ -148,7 +160,7 @@ class DefaultWorkspaceManagerTest {
         val workspace = workspaceManager.create(plan, runId)
         workspaceManager.prepareStepDirectories(workspace, stepId)
 
-        val validOutputPath = "steps/${stepId}/outputs/result.txt"
+        val validOutputPath = "steps/$stepId/outputs/result.txt"
 
         // Act
         val resolvedPath = workspaceManager.resolveStepOutputArtifact(workspace, stepId, validOutputPath)
@@ -159,8 +171,10 @@ class DefaultWorkspaceManagerTest {
 
         // Verify it's within the step's outputs directory
         val outputsDir = baseWorkspaceRoot.resolve(runId.toString()).resolve("steps").resolve(stepId.toString()).resolve("outputs")
-        assertTrue(resolvedPath.startsWith(outputsDir.normalize()),
-                  "Resolved path should be within step outputs directory")
+        assertTrue(
+            resolvedPath.startsWith(outputsDir.normalize()),
+                  "Resolved path should be within step outputs directory"
+        )
     }
 
     @Test
@@ -172,10 +186,10 @@ class DefaultWorkspaceManagerTest {
         val workspace = workspaceManager.create(plan, runId)
         workspaceManager.prepareStepDirectories(workspace, stepId)
 
-        val invalidOutputPath = "steps/${stepId}/inputs/input.txt" // Wrong subdirectory
+        val invalidOutputPath = "steps/$stepId/inputs/input.txt" // Wrong subdirectory
 
         // Act & Assert
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             workspaceManager.resolveStepOutputArtifact(workspace, stepId, invalidOutputPath)
         }
     }
@@ -196,8 +210,10 @@ class DefaultWorkspaceManagerTest {
         val expectedPath = baseWorkspaceRoot.resolve(runId.toString()).resolve("steps").resolve(stepId.toString())
         assertEquals(expectedPath.normalize(), stepWorkingDir.normalize())
         assertTrue(stepWorkingDir.isAbsolute, "Step working directory should be absolute")
-        assertTrue(stepWorkingDir.exists() && stepWorkingDir.isDirectory(),
-                  "Step working directory should exist and be a directory")
+        assertTrue(
+            stepWorkingDir.exists() && stepWorkingDir.isDirectory(),
+                  "Step working directory should exist and be a directory"
+        )
     }
 
     // Helper methods for creating test objects
