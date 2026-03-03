@@ -212,4 +212,102 @@ class JvmCommandRunnerTest {
         assertTrue(result.stdout.length >= 512 * 1024)
         assertFalse(result.timedOut)
     }
+
+    // ── run(command, policy, workspaceRoot) overload ──────────────────────────
+
+    @Test
+    fun run_with_workspace_root_and_no_relative_wd_uses_root_as_cwd() {
+        // workingDirectory = null → process runs directly in workspaceRoot
+        val policy = CommandPolicy(timeoutMs = 10_000, workingDirectory = null)
+        val result = runner.run(helperCommand("printOutErr"), policy, tempDir)
+
+        assertEquals(0, result.exitCode)
+        assertTrue(result.stdout.contains("OUT"))
+        assertTrue(result.stderr.contains("ERR"))
+        assertFalse(result.timedOut)
+    }
+
+    @Test
+    fun run_with_workspace_root_and_relative_wd_resolves_subdir() {
+        // workingDirectory set → resolveUnderRoot is exercised inside execute()
+        val subdir = RelativePath("subdir")
+        val policy = CommandPolicy(timeoutMs = 10_000, workingDirectory = subdir)
+        val result = runner.run(helperCommand("printOutErr"), policy, tempDir)
+
+        assertEquals(0, result.exitCode)
+        assertTrue(result.stdout.contains("OUT"))
+        // The subdir should have been created on disk
+        assertTrue(tempDir.resolve("subdir").toFile().isDirectory)
+        assertFalse(result.timedOut)
+    }
+
+    @Test
+    fun run_with_workspace_root_reports_non_zero_exit() {
+        val policy = CommandPolicy(timeoutMs = 10_000, workingDirectory = null)
+        val result = runner.run(helperCommand("exitCode", "42"), policy, tempDir)
+
+        assertEquals(42, result.exitCode)
+        assertFalse(result.timedOut)
+    }
+
+    // ── null timeout (process.waitFor() branch) ───────────────────────────────
+
+    @Test
+    fun null_timeout_waits_indefinitely_and_succeeds() {
+        // timeoutMs = null → execute() takes the `process.waitFor()` path
+        val policy = CommandPolicy(timeoutMs = null)
+        val result = runner.run(helperCommand("sleep", "200"), policy)
+
+        assertEquals(0, result.exitCode)
+        assertFalse(result.timedOut)
+        assertTrue(result.stdout.contains("DONE"))
+    }
+
+    @Test
+    fun null_timeout_captures_non_zero_exit() {
+        val policy = CommandPolicy(timeoutMs = null)
+        val result = runner.run(helperCommand("exitCode", "3"), policy)
+
+        assertEquals(3, result.exitCode)
+        assertFalse(result.timedOut)
+    }
+
+    // ── Custom timeoutExitCode ────────────────────────────────────────────────
+
+    @Test
+    fun custom_timeout_exit_code_is_used_on_timeout() {
+        val customRunner = JvmCommandRunner(timeoutExitCode = 124)
+        val result = customRunner.run(helperCommand("sleep", "5000"), defaultPolicy(timeoutMs = 100))
+
+        assertTrue(result.timedOut)
+        assertEquals(124, result.exitCode)
+    }
+
+    // ── resolveUnderRoot ──────────────────────────────────────────────────────
+
+    @Test
+    fun resolveUnderRoot_returns_path_inside_root() {
+        val rel = RelativePath("a/b/c")
+        val resolved = runner.resolveUnderRoot(tempDir, rel)
+
+        assertTrue(resolved.startsWith(tempDir.toAbsolutePath().normalize()))
+        assertTrue(resolved.endsWith(Paths.get("a", "b", "c")))
+    }
+
+    @Test
+    fun resolveUnderRoot_rejects_path_traversal() {
+        // RelativePath.init bars '..' at construction time, which is the intended
+        // first line of defence. Here we bypass that guard via the JVM inline-class
+        // box constructor so we can unit-test resolveUnderRoot's own require in
+        // isolation — confirming both layers independently.
+        val traversal = "../../etc/passwd"
+        val rel = RelativePath::class.java
+            .getDeclaredConstructor(String::class.java)
+            .also { it.isAccessible = true }
+            .newInstance(traversal) as RelativePath
+
+        assertFailsWith<IllegalArgumentException> {
+            runner.resolveUnderRoot(tempDir, rel)
+        }
+    }
 }
