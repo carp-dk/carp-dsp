@@ -1,6 +1,23 @@
 package carp.dsp.demo
 
+/**
+ * Platform hook for registering platform-specific demos (e.g. those requiring JVM filesystem APIs).
+ * Called before the demo dispatcher runs.
+ */
+expect fun registerPlatformDemos()
+
+/**
+ * Platform-agnostic entrypoint. Registers platform demos first, then dispatches.
+ */
 fun main(args: Array<String>) {
+    registerPlatformDemos()
+    runDemo(args)
+}
+
+/**
+ * Shared demo dispatcher. Called by [main] after platform demos are registered.
+ */
+fun runDemo(args: Array<String>) {
     if (args.isEmpty() || args[0] in setOf("-h", "--help", "help")) {
         printHelp()
         return

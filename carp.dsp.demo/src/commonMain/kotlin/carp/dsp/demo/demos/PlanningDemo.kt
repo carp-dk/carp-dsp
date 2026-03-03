@@ -22,14 +22,14 @@ object PlanningDemo : Demo {
         printDemoHeader()
 
         // Build the workflow definition
-        println("📋 Building workflow definition...")
+        println("Building workflow definition...")
         val definition = DummyWorkflows.p0PlanningDefinition()
 
-        println("✅ Created workflow: ${definition.workflow.metadata.name}")
+        println("[OK] Created workflow: ${definition.workflow.metadata.name}")
         println("   - ${definition.workflow.getComponents().size} steps")
         println("   - ${definition.environments.size} environment(s)")
 
-        println("\n🔧 Running DefaultExecutionPlanner...")
+        println("\nRunning DefaultExecutionPlanner...")
 
         // Create planner and generate execution plan
         val planner = DefaultExecutionPlanner()
@@ -43,7 +43,7 @@ object PlanningDemo : Demo {
 
     private fun printDemoHeader() {
         println("\n" + "=".repeat(60))
-        println("🚀 P0 PLANNING DEMO")
+        println("  P0 PLANNING DEMO")
         println("=".repeat(60))
         println("Demonstrating workflow planning with step dependencies")
         println()
@@ -51,12 +51,12 @@ object PlanningDemo : Demo {
 
     private fun printDemoFooter() {
         println("\n" + "=".repeat(60))
-        println("✅ P0 Planning Demo completed!")
+        println("[OK] P0 Planning Demo completed!")
         println("=".repeat(60))
     }
 
     private fun printPlanSummary(plan: dk.cachet.carp.analytics.application.plan.ExecutionPlan) {
-        println("\n📊 EXECUTION PLAN SUMMARY")
+        println("\nEXECUTION PLAN SUMMARY")
         println("-".repeat(40))
 
         // Basic plan info
@@ -66,7 +66,7 @@ object PlanningDemo : Demo {
         println("Has Errors:  ${plan.hasErrors()}")
 
         // Planned steps (in execution order)
-        println("\n📋 PLANNED STEPS (execution order):")
+        println("\nPLANNED STEPS (execution order):")
         if (plan.steps.isEmpty()) {
             println("   (no steps planned)")
         } else {
@@ -81,7 +81,7 @@ object PlanningDemo : Demo {
         }
 
         // Required environments (sorted for determinism)
-        println("\n🏗️ REQUIRED ENVIRONMENTS:")
+        println("\nREQUIRED ENVIRONMENTS:")
         if (plan.requiredEnvironmentHandles.isEmpty()) {
             println("   (no environments required)")
         } else {
@@ -91,9 +91,9 @@ object PlanningDemo : Demo {
         }
 
         // Issues grouped by severity (sorted for determinism)
-        println("\n⚠️ PLANNING ISSUES:")
+        println("\nPLANNING ISSUES:")
         if (plan.issues.isEmpty()) {
-            println("   ✅ No issues detected!")
+            println("   [OK] No issues detected!")
         } else {
             val issuesBySeverity = plan.issues
                 .groupBy { it.severity }
@@ -106,7 +106,7 @@ object PlanningDemo : Demo {
                 .forEach { severity ->
                     val issues = issuesBySeverity[severity]
                     if (!issues.isNullOrEmpty()) {
-                        println("   ${severityIcon(severity)} $severity (${issues.size}):")
+                        println("   ${severityLabel(severity)} $severity (${issues.size}):")
                         issues.forEach { issue ->
                             val stepInfo = if (issue.stepId != null) " [${issue.stepId}]" else ""
                             println("      - ${issue.code}$stepInfo: ${issue.message}")
@@ -116,9 +116,9 @@ object PlanningDemo : Demo {
         }
     }
 
-    private fun severityIcon(severity: PlanIssueSeverity): String = when (severity) {
-        PlanIssueSeverity.ERROR -> "❌"
-        PlanIssueSeverity.WARNING -> "⚠️"
-        PlanIssueSeverity.INFO -> "ℹ️"
+    private fun severityLabel(severity: PlanIssueSeverity): String = when (severity) {
+        PlanIssueSeverity.ERROR -> "[FAIL]"
+        PlanIssueSeverity.WARNING -> "[WARN]"
+        PlanIssueSeverity.INFO -> "[INFO]"
     }
 }

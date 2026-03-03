@@ -5,10 +5,16 @@ import carp.dsp.demo.demos.PlanningDemo
 
 
 object DemoRegistry {
-    val demos: List<Demo> = listOf(
+    private val _demos: MutableList<Demo> = mutableListOf(
         MinimalAuthorModelDemo,
         PlanningDemo,
     )
 
-    fun byId(id: String): Demo? = demos.firstOrNull { it.id == id }
+    val demos: List<Demo> get() = _demos
+
+    fun register(demo: Demo) {
+        _demos.add(demo)
+    }
+
+    fun byId(id: String): Demo? = _demos.firstOrNull { it.id == id }
 }
