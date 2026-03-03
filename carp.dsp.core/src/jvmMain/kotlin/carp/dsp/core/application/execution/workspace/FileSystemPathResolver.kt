@@ -55,9 +55,7 @@ class FileSystemPathResolver(
         val inputPath = Paths.get(relativePath)
 
         // Reject absolute paths - all artefact paths should be relative
-        if (inputPath.isAbsolute) {
-            throw IllegalArgumentException("Artifact paths must be relative, got: $relativePath")
-        }
+        require(!inputPath.isAbsolute) { "Artifact paths must be relative, got: $relativePath" }
 
         // Normalize and resolve the path
         val resolvedPath = root.resolve(inputPath).normalize().absolute()
@@ -108,10 +106,8 @@ class FileSystemPathResolver(
         val normalizedRoot = root.normalize().absolute()
         val normalizedTarget = target.normalize().absolute()
 
-        if (!isContainedWithin(normalizedRoot, normalizedTarget)) {
-            throw IllegalArgumentException(
-                "Target path is not within root: target=$target, root=$root"
-            )
+        require(isContainedWithin(normalizedRoot, normalizedTarget)) {
+            "Target path is not within root: target=$target, root=$root"
         }
 
         return normalizedRoot.relativize(normalizedTarget)

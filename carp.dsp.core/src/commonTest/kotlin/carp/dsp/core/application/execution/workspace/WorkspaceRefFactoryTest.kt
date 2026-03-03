@@ -19,7 +19,7 @@ class WorkspaceRefFactoryTest {
 
     @Test
     fun `toWorkspaceRelative converts path to RELATIVE_PATH ResourceRef`() {
-        val relativePath = "steps/${fixedStepId1}/outputs/result.json"
+        val relativePath = "steps/$fixedStepId1/outputs/result.json"
         val ref = WorkspaceRefFactory.toWorkspaceRelative(relativePath)
         assertEquals(ResourceKind.RELATIVE_PATH, ref.kind)
         assertEquals(relativePath, ref.value)
@@ -29,7 +29,7 @@ class WorkspaceRefFactoryTest {
     fun `toWorkspaceRelative normalizes backslashes to forward slashes before validating`() {
         // Backslash form that, after normalization, is safe
         val ref = WorkspaceRefFactory.toWorkspaceRelative("steps\\${fixedStepId1}\\outputs\\data.csv")
-        assertEquals("steps/${fixedStepId1}/outputs/data.csv", ref.value)
+        assertEquals("steps/$fixedStepId1/outputs/data.csv", ref.value)
     }
 
     @Test
@@ -74,28 +74,28 @@ class WorkspaceRefFactoryTest {
     fun `stepOutputRef creates correct reference for simple filename`() {
         val ref = WorkspaceRefFactory.stepOutputRef(fixedStepId1, "metrics.json")
         assertEquals(ResourceKind.RELATIVE_PATH, ref.kind)
-        assertEquals("steps/${fixedStepId1}/outputs/metrics.json", ref.value)
+        assertEquals("steps/$fixedStepId1/outputs/metrics.json", ref.value)
     }
 
     @Test
     fun `stepOutputRef creates correct reference for nested path`() {
         val ref = WorkspaceRefFactory.stepOutputRef(fixedStepId1, "results/run1/output.csv")
         assertEquals(ResourceKind.RELATIVE_PATH, ref.kind)
-        assertEquals("steps/${fixedStepId1}/outputs/results/run1/output.csv", ref.value)
+        assertEquals("steps/$fixedStepId1/outputs/results/run1/output.csv", ref.value)
     }
 
     @Test
     fun `stepOutputRef normalizes backslashes to forward slashes`() {
         val ref = WorkspaceRefFactory.stepOutputRef(fixedStepId1, "subdir\\file.txt")
-        assertEquals("steps/${fixedStepId1}/outputs/subdir/file.txt", ref.value)
+        assertEquals("steps/$fixedStepId1/outputs/subdir/file.txt", ref.value)
     }
 
     @Test
     fun `stepOutputRef creates references for different steps independently`() {
         val ref1 = WorkspaceRefFactory.stepOutputRef(fixedStepId1, "output1.json")
         val ref2 = WorkspaceRefFactory.stepOutputRef(fixedStepId2, "output2.json")
-        assertEquals("steps/${fixedStepId1}/outputs/output1.json", ref1.value)
-        assertEquals("steps/${fixedStepId2}/outputs/output2.json", ref2.value)
+        assertEquals("steps/$fixedStepId1/outputs/output1.json", ref1.value)
+        assertEquals("steps/$fixedStepId2/outputs/output2.json", ref2.value)
     }
 
     @Test

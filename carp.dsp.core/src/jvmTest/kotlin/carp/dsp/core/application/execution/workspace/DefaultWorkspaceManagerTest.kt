@@ -204,15 +204,16 @@ class DefaultWorkspaceManagerTest {
         workspaceManager.prepareStepDirectories(workspace, stepId)
 
         // Act
-        val stepWorkingDir = workspaceManager.getStepWorkingDirectory(workspace, stepId)
+        val stepWorkingDir = workspaceManager.resolveStepWorkingDir(workspace, stepId)
 
         // Assert
         val expectedPath = baseWorkspaceRoot.resolve(runId.toString()).resolve("steps").resolve(stepId.toString())
-        assertEquals(expectedPath.normalize(), stepWorkingDir.normalize())
-        assertTrue(stepWorkingDir.isAbsolute, "Step working directory should be absolute")
+        assertEquals(expectedPath.normalize().toString(), stepWorkingDir)
+        val resolvedPath = Path.of(checkNotNull(stepWorkingDir))
+        assertTrue(resolvedPath.isAbsolute, "Step working directory should be absolute")
         assertTrue(
-            stepWorkingDir.exists() && stepWorkingDir.isDirectory(),
-                  "Step working directory should exist and be a directory"
+            resolvedPath.exists() && resolvedPath.isDirectory(),
+            "Step working directory should exist and be a directory"
         )
     }
 

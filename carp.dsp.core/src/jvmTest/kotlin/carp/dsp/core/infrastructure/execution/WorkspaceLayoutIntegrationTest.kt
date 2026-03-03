@@ -277,5 +277,4 @@ class WorkspaceLayoutIntegrationTest {
             requiredEnvironmentHandles = listOf(fixedEnvId1, fixedEnvId2)
         )
     }
-
 }

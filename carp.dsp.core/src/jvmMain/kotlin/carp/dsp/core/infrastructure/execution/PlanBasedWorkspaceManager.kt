@@ -11,6 +11,9 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.io.path.createDirectories
 
+
+private const val PLAN_HASH_BYTES = 8
+
 /**
  * Infrastructure implementation of [WorkspaceManager] that creates workspaces based on ExecutionPlan structure.
  *
@@ -125,11 +128,24 @@ class PlanBasedWorkspaceManager(
     }
 
     /**
+     * Returns the absolute filesystem path for a step's working directory.
+     *
+     * Implements [WorkspaceManager.resolveStepWorkingDir] using the known [baseWorkspaceRoot].
+     */
+    override fun resolveStepWorkingDir(workspace: ExecutionWorkspace, stepId: UUID): String =
+        baseWorkspaceRoot
+            .resolve(workspace.executionRoot)
+            .resolve(workspace.stepDir(stepId))
+            .toAbsolutePath()
+            .normalize()
+            .toString()
+
+    /**
      * Computes a deterministic hash for the ExecutionPlan structure.
      *
      * The hash is computed based only on the plan structure and content, excluding:
      * - runId (not part of ExecutionPlan)
-     * - planId (may be a random UUID that changes between planning runs)
+     * - planId (maybe a random UUID that changes between planning runs)
      * - Execution-specific runtime data
      * - TasksRun polymorphic content (to avoid serialization complexity)
      *
@@ -169,7 +185,7 @@ class PlanBasedWorkspaceManager(
         val hashBytes = digest.digest(jsonString.toByteArray(Charsets.UTF_8))
 
         // Return first 8 bytes as hex (16 characters) for reasonable uniqueness with readability
-        return hashBytes.take(8).joinToString("") { "%02x".format(it) }
+        return hashBytes.take(PLAN_HASH_BYTES).joinToString("") { "%02x".format(it) }
     }
 
     /**

@@ -177,14 +177,12 @@ class DefaultWorkspaceManager(
     }
 
     /**
-     * Gets the absolute filesystem path for a step's working directory.
+     * Returns the absolute filesystem path for a step's working directory.
      *
-     * @param workspace The execution workspace
-     * @param stepId The step identifier UUID
-     * @return The absolute Path to the step's directory
+     * Implements [WorkspaceManager.resolveStepWorkingDir] using the known [baseWorkspaceRoot].
      */
-    fun getStepWorkingDirectory(workspace: ExecutionWorkspace, stepId: UUID): Path {
+    override fun resolveStepWorkingDir(workspace: ExecutionWorkspace, stepId: UUID): String {
         val executionRoot = pathResolver.resolveExecutionRoot(workspace.executionRoot)
-        return executionRoot.resolve(workspace.stepDir(stepId))
+        return executionRoot.resolve(workspace.stepDir(stepId)).toString()
     }
 }

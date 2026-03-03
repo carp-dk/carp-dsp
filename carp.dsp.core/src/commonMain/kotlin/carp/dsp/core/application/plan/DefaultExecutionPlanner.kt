@@ -1,6 +1,7 @@
 package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExecutionPlanner
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.application.plan.PlannedStep
@@ -20,7 +21,7 @@ import dk.cachet.carp.common.application.UUID
  * 5. Plan steps in sorted order using bindings resolution and compilation
  * 6. Construct final ExecutionPlan
  */
-class DefaultExecutionPlanner {
+class DefaultExecutionPlanner : ExecutionPlanner {
 
     private val graphBuilder = DependencyGraphBuilder()
     private val sorter = DeterministicTopologicalSorter()
@@ -33,7 +34,7 @@ class DefaultExecutionPlanner {
      * @param definition The workflow definition to plan
      * @return ExecutionPlan containing planned steps and any planning issues
      */
-    fun plan(definition: WorkflowDefinition): ExecutionPlan {
+    override fun plan(definition: WorkflowDefinition): ExecutionPlan {
         // Initialize
         val issues = mutableListOf<PlanIssue>()
         val plannedSteps = mutableMapOf<UUID, PlannedStep>()

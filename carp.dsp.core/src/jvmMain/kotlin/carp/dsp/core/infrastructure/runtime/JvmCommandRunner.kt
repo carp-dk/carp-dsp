@@ -21,20 +21,46 @@ import kotlin.concurrent.thread
  * failure to start the process or invalid working directories surface as thrown exceptions.
  * When a timeout is provided and exceeded, the process is destroyed and a [CommandResult]
  * with [CommandResult.timedOut] set to `true` and [CommandResult.exitCode] set to [timeoutExitCode] is returned.
+ *
+ * Working directory resolution:
+ * - Use [run] (interface method) when no workspace root is available; the process inherits the JVM's CWD.
+ * - Use [run] with an explicit workspaceRoot to resolve [CommandPolicy.workingDirectory] safely
+ *   against a real on-disk workspace root.
  */
 class JvmCommandRunner(
     private val timeoutExitCode: Int = -1,
     private val charset: Charset = StandardCharsets.UTF_8
 ) : CommandRunner {
 
-    override fun run(command: CommandSpec, policy: RunPolicy): CommandResult {
+    /**
+     * Runs [command] using the JVM's current working directory as the process root.
+     * [CommandPolicy.workingDirectory] is ignored — prefer [run] with an explicit workspaceRoot.
+     */
+    override fun run(command: CommandSpec, policy: RunPolicy): CommandResult =
+        execute(command, policy, workspaceRoot = null)
+
+    /**
+     * Runs [command] with [CommandPolicy.workingDirectory] resolved against [workspaceRoot].
+     *
+     * @param workspaceRoot Absolute path to the execution workspace root. The policy's relative
+     *                      working directory is resolved safely under this root.
+     */
+    fun run(command: CommandSpec, policy: RunPolicy, workspaceRoot: Path): CommandResult =
+        execute(command, policy, workspaceRoot)
+
+    // -------------------------------------------------------------------------
+    // Core implementation
+    // -------------------------------------------------------------------------
+
+    private fun execute(command: CommandSpec, policy: RunPolicy, workspaceRoot: Path?): CommandResult {
         policy as CommandPolicy
 
         val processBuilder = ProcessBuilder(listOf(command.executable) + command.args)
 
-        val workspaceRoot = Files.createTempDirectory("carp-dsp-workspace-")
-        policy.workingDirectory?.let { rel ->
-            val wd = resolveUnderRoot(workspaceRoot, rel)
+        if (workspaceRoot != null) {
+            val wd = policy.workingDirectory
+                ?.let { rel -> resolveUnderRoot(workspaceRoot, rel) }
+                ?: workspaceRoot
             Files.createDirectories(wd)
             processBuilder.directory(wd.toFile())
         }
@@ -59,7 +85,7 @@ class JvmCommandRunner(
             if (!finished) {
                 process.destroy()
                 if (process.isAlive) process.destroyForcibly()
-                process.waitFor(2, TimeUnit.SECONDS) // grace prevents collector deadlocks
+                process.waitFor(2, TimeUnit.SECONDS)
             }
             !finished
         } catch (ex: InterruptedException) {
