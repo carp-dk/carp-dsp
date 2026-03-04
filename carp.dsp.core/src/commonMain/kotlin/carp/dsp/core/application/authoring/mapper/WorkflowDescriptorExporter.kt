@@ -138,28 +138,28 @@ internal object EnvironmentExporter
         return EnvironmentDescriptor( name = env.name, kind = kind, spec = spec )
     }
 
-    private fun resolveKindAndSpec( env: EnvironmentDefinition ): Pair<String, Map<String, String>>
+    private fun resolveKindAndSpec( env: EnvironmentDefinition ): Pair<String, Map<String, List<String>>>
     {
-        val baseSpec: MutableMap<String, String> = mutableMapOf(
-            "dependencies" to env.dependencies.joinToString(","),
+        val baseSpec: MutableMap<String, List<String>> = mutableMapOf(
+            "dependencies" to env.dependencies,
         )
-        env.environmentVariables.forEach { ( k, v ) -> baseSpec["env.$k"] = v }
+        env.environmentVariables.forEach { ( k, v ) -> baseSpec["env.$k"] = listOf( v ) }
 
         return when ( env::class.simpleName )
         {
             "CondaEnvironmentDefinition" ->
             {
                 ( env as? carp.dsp.core.application.environment.CondaEnvironmentDefinition )?.let {
-                    baseSpec["pythonVersion"] = it.pythonVersion
-                    baseSpec["channels"] = it.channels.joinToString(",")
+                    baseSpec["pythonVersion"] = listOf( it.pythonVersion )
+                    baseSpec["channels"] = it.channels
                 }
                 "conda" to baseSpec
             }
             "PixiEnvironmentDefinition" ->
             {
                 ( env as? carp.dsp.core.application.environment.PixiEnvironmentDefinition )?.let {
-                    baseSpec["pythonVersion"] = it.pythonVersion
-                    baseSpec["channels"] = it.channels.joinToString(",")
+                    baseSpec["pythonVersion"] = listOf( it.pythonVersion )
+                    baseSpec["channels"] = it.channels
                 }
                 "pixi" to baseSpec
             }

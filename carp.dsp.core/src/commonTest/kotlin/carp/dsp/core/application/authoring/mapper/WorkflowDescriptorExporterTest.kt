@@ -288,9 +288,9 @@ class WorkflowDescriptorExporterTest
         val result = exporter.exportEnvironment(condaEnv)
         assertEquals("conda", result.kind)
         assertEquals("test-env", result.name)
-        assertTrue(result.spec.containsKey("pythonVersion"))
-        assertTrue(result.spec.containsKey("channels"))
-        assertTrue(result.spec.containsKey("dependencies"))
+        assertEquals(listOf("3.11"), result.spec["pythonVersion"])
+        assertEquals(listOf("conda-forge"), result.spec["channels"])
+        assertEquals(listOf("numpy", "pandas"), result.spec["dependencies"])
     }
 
     @Test
@@ -305,7 +305,8 @@ class WorkflowDescriptorExporterTest
         val result = exporter.exportEnvironment(pixiEnv)
         assertEquals("pixi", result.kind)
         assertEquals("pixi-env", result.name)
-        assertTrue(result.spec.containsKey("pythonVersion"))
+        assertEquals(listOf("3.12"), result.spec["pythonVersion"])
+        assertEquals(listOf("scipy"), result.spec["dependencies"])
     }
 
     @Test

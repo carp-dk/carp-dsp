@@ -355,7 +355,7 @@ class DescriptorDataClassTest
     @Test
     fun `EnvironmentDescriptor equals null-branch coverage`()
     {
-        val withSpec = EnvironmentDescriptor(name = "e", kind = "conda", spec = mapOf("k" to "v"))
+        val withSpec = EnvironmentDescriptor(name = "e", kind = "conda", spec = mapOf("k" to listOf("v")))
         val withoutSpec = EnvironmentDescriptor(name = "e", kind = "conda")
 
         assertNotEquals(withSpec, withoutSpec)

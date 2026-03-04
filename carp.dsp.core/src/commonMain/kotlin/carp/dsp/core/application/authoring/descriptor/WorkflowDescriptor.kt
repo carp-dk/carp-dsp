@@ -47,14 +47,15 @@ data class WorkflowMetadataDescriptor(
  * @property name Human-readable environment name.
  * @property kind Environment manager / type identifier (case-insensitive).
  * @property spec Key-value pairs forwarded verbatim to the environment factory.
- *   List values (e.g. channels, dependencies) are serialized as comma-separated strings.
- *   Using plain `String` keeps the descriptor format-agnostic (YAML and JSON compatible).
+ *   Values are `List<String>` to support both scalar fields (e.g. `pythonVersion: ["3.11"]`)
+ *   and multi-value fields (e.g. `dependencies: ["numpy","scipy"]`, `channels: ["conda-forge"]`)
+ *   without comma-joining ambiguity. Single-value fields are wrapped in a one-element list.
  */
 @Serializable
 data class EnvironmentDescriptor(
     val name: String,
     val kind: String,
-    val spec: Map<String, String> = emptyMap(),
+    val spec: Map<String, List<String>> = emptyMap(),
 )
 
 // ── WorkflowDescriptor ────────────────────────────────────────────────────────

@@ -462,7 +462,7 @@ class WorkflowYamlCodecTest
             environments = mapOf(
                 "env-1" to EnvironmentDescriptor(
                     name = "base", kind = "conda",
-                    spec = mapOf("pythonVersion" to "3.11")
+                    spec = mapOf("pythonVersion" to listOf("3.11"))
                 )
             ),
         )
