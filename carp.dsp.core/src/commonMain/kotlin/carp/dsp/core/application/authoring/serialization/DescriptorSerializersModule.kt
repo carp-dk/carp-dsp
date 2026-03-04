@@ -28,9 +28,9 @@ import kotlinx.serialization.modules.subclass
  * exporter implementation.
  *
  * Each sealed interface emits a stable discriminator field `"type"` — configured via
- * [PolymorphismStyle.Property] and [YamlConfiguration.polymorphismStyle] in [descriptorYaml] —
- * so the emitted document always reads `type: command`, `type: python`, etc., predictably
- * across refactors.
+ * `polymorphismStyle = PolymorphismStyle.Property` and `polymorphismPropertyName = "type"`
+ * in [descriptorYaml] — so the emitted document always reads `type: command`, `type: python`,
+ * etc., predictably across refactors and library upgrades.
  *
  * Registered hierarchies:
  * - [TaskDescriptor]            → [CommandTaskDescriptor], [PythonTaskDescriptor], [InProcessTaskDescriptor]
@@ -59,8 +59,14 @@ val descriptorSerializersModule: SerializersModule = SerializersModule {
 /**
  * Pre-configured [Yaml] instance for encoding and decoding [WorkflowDescriptor] documents.
  *
- * The polymorphic discriminator field is set to `"type"` via
- * `polymorphismStyle = PolymorphismStyle.Property` — the kaml-native approach.
+ * The polymorphic discriminator field is explicitly pinned to `"type"` via two
+ * [YamlConfiguration] parameters:
+ * - `polymorphismStyle = PolymorphismStyle.Property` — use an inline property key rather
+ *   than a YAML tag.
+ * - `polymorphismPropertyName = "type"` — name the property `"type"` explicitly, rather
+ *   than relying on the library default. This makes the YAML contract independent of any
+ *   future change to that default.
+ *
  * `@JsonClassDiscriminator` is a JSON-only annotation and cannot be used with kaml.
  *
  * [YamlConfiguration.encodeDefaults] is `false` so optional fields at their default
@@ -76,6 +82,7 @@ val descriptorYaml: Yaml = Yaml(
     serializersModule = descriptorSerializersModule,
     configuration = YamlConfiguration(
         polymorphismStyle = PolymorphismStyle.Property,
+        polymorphismPropertyName = "type",
         encodeDefaults = false,
         strictMode = false,
     )

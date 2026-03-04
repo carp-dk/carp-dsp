@@ -70,13 +70,17 @@ data class EnvironmentDescriptor(
  *
  * @property schemaVersion Version of the descriptor schema itself (e.g. `"1.0"`),
  *   distinct from the workflow's own [WorkflowMetadataDescriptor.version].
+ *   Defaults to `""` so that kaml treats the field as **optional** during deserialization —
+ *   an absent `schemaVersion` key in YAML decodes to `""` rather than throwing.
+ *   `WorkflowYamlCodec` replaces any blank value with `"1.0"` after parsing, so callers
+ *   always receive a non-blank version string.
  * @property metadata Workflow-level identity and documentation fields.
  * @property steps Ordered list of step descriptors.
  * @property environments Environments referenced by steps, keyed by their string id.
  */
 @Serializable
 data class WorkflowDescriptor(
-    val schemaVersion: String,
+    val schemaVersion: String = "",
     val metadata: WorkflowMetadataDescriptor,
     val steps: List<StepDescriptor> = emptyList(),
     val environments: Map<String, EnvironmentDescriptor> = emptyMap(),
