@@ -2,15 +2,22 @@ package carp.dsp.core.application.authoring.serialization
 
 import carp.dsp.core.application.authoring.descriptor.ArgTokenDescriptor
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
+import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
+import carp.dsp.core.application.authoring.descriptor.FileInputSource
+import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
+import carp.dsp.core.application.authoring.descriptor.InputSource
 import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
+import carp.dsp.core.application.authoring.descriptor.OutputDestination
 import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
+import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import com.charleskorn.kaml.PolymorphismStyle
@@ -53,6 +60,15 @@ val descriptorSerializersModule: SerializersModule = SerializersModule {
         subclass(InputRefArgDescriptor::class)
         subclass(OutputRefArgDescriptor::class)
         subclass(ParamRefArgDescriptor::class)
+    }
+    polymorphic(InputSource::class) {
+        subclass(FileInputSource::class)
+        subclass(StepOutputInputSource::class)
+        subclass(EnvironmentVariableInputSource::class)
+    }
+    polymorphic(OutputDestination::class) {
+        subclass(FileOutputDestination::class)
+        subclass(EnvironmentVariableOutputDestination::class)
     }
 }
 

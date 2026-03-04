@@ -163,6 +163,7 @@ internal object EnvironmentExporter
                 }
                 "pixi" to baseSpec
             }
+            "SystemEnvironmentDefinition" -> "system" to baseSpec
             else -> "unknown" to baseSpec
         }
     }

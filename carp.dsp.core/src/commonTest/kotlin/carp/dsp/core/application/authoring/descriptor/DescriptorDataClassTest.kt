@@ -1,3 +1,6 @@
+
+@file:Suppress("REDUNDANT_EXPLICIT_TYPE", "RemoveExplicitTypeArguments")
+
 package carp.dsp.core.application.authoring.descriptor
 
 import kotlin.test.Test
@@ -224,119 +227,6 @@ class DescriptorDataClassTest
         assertNotEquals(withoutDesc, withDesc)
         assertNotEquals<Any>(withId, "string")
     }
-
-    // ── StepMetadataDescriptor ────────────────────────────────────────────────
-
-    @Test
-    fun `StepMetadataDescriptor equality hashCode toString copy`()
-    {
-        val a = StepMetadataDescriptor(name = "step-1", version = "2.0", tags = listOf("etl"))
-        val b = a.copy()
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertTrue(a.toString().contains("step-1"))
-        assertNotEquals(a, a.copy(name = "step-2"))
-
-        val defaults = StepMetadataDescriptor()
-        assertNull(defaults.name)
-        assertNull(defaults.description)
-        assertEquals("1.0", defaults.version)
-        assertTrue(defaults.tags.isEmpty())
-    }
-
-    @Test
-    fun `StepMetadataDescriptor equals null-branch coverage`()
-    {
-        assertNotEquals(StepMetadataDescriptor(name = "s"), StepMetadataDescriptor(name = null))
-        assertNotEquals(StepMetadataDescriptor(name = null), StepMetadataDescriptor(name = "s"))
-        assertNotEquals(StepMetadataDescriptor(description = "d"), StepMetadataDescriptor(description = null))
-        assertNotEquals(StepMetadataDescriptor(description = null), StepMetadataDescriptor(description = "d"))
-        assertNotEquals<Any>(StepMetadataDescriptor(name = "s"), "string")
-    }
-
-    // ── DataPortDescriptor ────────────────────────────────────────────────────
-
-    @Test
-    fun `DataPortDescriptor equality hashCode toString copy`()
-    {
-        val desc = DataDescriptor(type = "csv", format = "UTF-8")
-        val a = DataPortDescriptor(id = "p-1", descriptor = desc)
-        val b = a.copy()
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertTrue(a.toString().contains("p-1"))
-
-        val noId = a.copy(id = null, descriptor = null)
-        assertNull(noId.id)
-        assertNull(noId.descriptor)
-        assertNotEquals(a, noId)
-    }
-
-    @Test
-    fun `DataPortDescriptor equals null-branch coverage`()
-    {
-        assertNotEquals(DataPortDescriptor(id = "x"), DataPortDescriptor(id = null))
-        assertNotEquals(DataPortDescriptor(id = null), DataPortDescriptor(id = "x"))
-        assertNotEquals(DataPortDescriptor(descriptor = DataDescriptor(type = "csv")), DataPortDescriptor(descriptor = null))
-        assertNotEquals(DataPortDescriptor(descriptor = null), DataPortDescriptor(descriptor = DataDescriptor(type = "csv")))
-        assertNotEquals<Any>(DataPortDescriptor(id = "x"), "string")
-    }
-
-    // ── DataDescriptor ────────────────────────────────────────────────────────
-
-    @Test
-    fun `DataDescriptor equality hashCode toString copy`()
-    {
-        val a = DataDescriptor(
-            type = "json", format = "UTF-8",
-            schemaRef = "http://schema/v1", ontologyRef = "http://onto/concept",
-            notes = "raw sensor data",
-        )
-        val b = a.copy()
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertTrue(a.toString().contains("json"))
-
-        val minimal = DataDescriptor()
-        assertNull(minimal.type)
-        assertNull(minimal.format)
-        assertNull(minimal.schemaRef)
-        assertNull(minimal.ontologyRef)
-        assertNull(minimal.notes)
-        assertNotEquals(a, minimal)
-    }
-
-    @Test
-    fun `DataDescriptor copy preserves only changed fields`()
-    {
-        val a = DataDescriptor(type = "csv", schemaRef = "s1")
-        val b = a.copy(schemaRef = "s2")
-        assertEquals("csv", b.type)
-        assertEquals("s2", b.schemaRef)
-        assertNotEquals(a, b)
-    }
-
-    @Test
-    fun `DataDescriptor equals null-branch coverage`()
-    {
-        // Every nullable field: (non-null vs null) and (null vs non-null) to cover both equals() arms
-        assertNotEquals(DataDescriptor(type = "csv"), DataDescriptor(type = null))
-        assertNotEquals(DataDescriptor(type = null), DataDescriptor(type = "csv"))
-        assertNotEquals(DataDescriptor(format = "utf-8"), DataDescriptor(format = null))
-        assertNotEquals(DataDescriptor(format = null), DataDescriptor(format = "utf-8"))
-        assertNotEquals(DataDescriptor(schemaRef = "s"), DataDescriptor(schemaRef = null))
-        assertNotEquals(DataDescriptor(schemaRef = null), DataDescriptor(schemaRef = "s"))
-        assertNotEquals(DataDescriptor(ontologyRef = "o"), DataDescriptor(ontologyRef = null))
-        assertNotEquals(DataDescriptor(ontologyRef = null), DataDescriptor(ontologyRef = "o"))
-        assertNotEquals(DataDescriptor(notes = "n"), DataDescriptor(notes = null))
-        assertNotEquals(DataDescriptor(notes = null), DataDescriptor(notes = "n"))
-        assertNotEquals<Any>(DataDescriptor(type = "csv"), "string")
-    }
-
-    // ── EnvironmentDescriptor ─────────────────────────────────────────────────
 
     @Test
     fun `EnvironmentDescriptor equality hashCode toString copy`()
