@@ -1,7 +1,6 @@
 package carp.dsp.core.application.authoring.descriptor
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 // ── WorkflowMetadataDescriptor ────────────────────────────────────────────────
 
@@ -48,14 +47,14 @@ data class WorkflowMetadataDescriptor(
  * @property name Human-readable environment name.
  * @property kind Environment manager / type identifier (case-insensitive).
  * @property spec Key-value pairs forwarded verbatim to the environment factory.
- *   Values are [JsonElement] to support strings, numbers, booleans, lists, and nested objects
- *   without imposing early schema constraints.
+ *   List values (e.g. channels, dependencies) are serialized as comma-separated strings.
+ *   Using plain `String` keeps the descriptor format-agnostic (YAML and JSON compatible).
  */
 @Serializable
 data class EnvironmentDescriptor(
     val name: String,
     val kind: String,
-    val spec: Map<String, JsonElement> = emptyMap(),
+    val spec: Map<String, String> = emptyMap(),
 )
 
 // ── WorkflowDescriptor ────────────────────────────────────────────────────────

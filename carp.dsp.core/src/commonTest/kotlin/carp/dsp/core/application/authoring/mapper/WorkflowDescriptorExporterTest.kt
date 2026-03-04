@@ -10,13 +10,13 @@ import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
+import carp.dsp.core.application.authoring.serialization.descriptorYaml
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
-import kotlinx.serialization.json.Json
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import dk.cachet.carp.analytics.domain.data.FileDestination
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileSystemSource
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
-import dk.cachet.carp.analytics.domain.data.FileDestination
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.InputRef
@@ -155,7 +155,7 @@ class WorkflowDescriptorExporterTest
     fun `export is deterministic - same domain object produces identical descriptors`()
     {
         val definition = makeDefinition(commandStep(), pythonScriptStep())
-        val first  = exporter.export(definition)
+        val first = exporter.export(definition)
         val second = exporter.export(definition)
         assertEquals(first, second)
     }
@@ -198,7 +198,7 @@ class WorkflowDescriptorExporterTest
     @Test
     fun `exportCommandTask maps all fields correctly`()
     {
-        val inputId  = UUID.randomUUID()
+        val inputId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
         val task = CommandTaskDefinition(
             id = taskId,
@@ -220,10 +220,10 @@ class WorkflowDescriptorExporterTest
         assertEquals("copies files", result.description)
         assertEquals("cp", result.executable)
         assertEquals(4, result.args.size)
-        assertEquals(LiteralArgDescriptor("--verbose"),          result.args[0])
-        assertEquals(InputRefArgDescriptor(inputId.toString()),  result.args[1])
+        assertEquals(LiteralArgDescriptor("--verbose"), result.args[0])
+        assertEquals(InputRefArgDescriptor(inputId.toString()), result.args[1])
         assertEquals(OutputRefArgDescriptor(outputId.toString()), result.args[2])
-        assertEquals(ParamRefArgDescriptor("flag"),              result.args[3])
+        assertEquals(ParamRefArgDescriptor("flag"), result.args[3])
     }
 
     // ── Python task export ────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ class WorkflowDescriptorExporterTest
     @Test
     fun `exportStep maps input and output ports with correct ids`()
     {
-        val inputId  = UUID.randomUUID()
+        val inputId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
 
         val step = Step(
@@ -393,57 +393,47 @@ class WorkflowDescriptorExporterTest
         assertEquals(outputId.toString(), result.outputs.first().id)
     }
 
-    // ── JSON serialization roundtrip ──────────────────────────────────────────
+    // ── YAML serialization roundtrip ──────────────────────────────────────────
+    // YAML is the primary document contract for WorkflowDescriptor.
+    // These tests verify that the full sealed-type hierarchy survives an
+    // encode → decode cycle through descriptorYaml (kaml), which is what
+    // authored .yaml files and CI pipelines consume.
 
-    /**
-     * Verifies that a [WorkflowDescriptor] can be serialized to JSON and deserialized back
-     * without data loss or type errors across all sealed hierarchies
-     * (`TaskDescriptor`, `PythonEntryPointDescriptor`, `ArgTokenDescriptor`).
-     *
-     * Uses [descriptorSerializersModule] to resolve polymorphic subtypes.
-     */
     @Test
-    fun `WorkflowDescriptor survives JSON roundtrip for command task`()
+    fun `WorkflowDescriptor survives YAML roundtrip for command task`()
     {
-        val json = Json {
-            serializersModule = descriptorSerializersModule
-            prettyPrint = false
-        }
-
         val original = exporter.export(makeDefinition(commandStep()))
-        val encoded  = json.encodeToString(WorkflowDescriptor.serializer(), original)
-        val decoded  = json.decodeFromString(WorkflowDescriptor.serializer(), encoded)
+        val yaml = descriptorYaml.encodeToString(WorkflowDescriptor.serializer(), original)
+        val decoded = descriptorYaml.decodeFromString(WorkflowDescriptor.serializer(), yaml)
 
         assertEquals(original, decoded)
+        // Discriminator field must be present in the emitted YAML
+        assertTrue(yaml.contains("type:"), "YAML must contain 'type:' discriminator, got:\n$yaml")
     }
 
     @Test
-    fun `WorkflowDescriptor survives JSON roundtrip for python script task`()
+    fun `WorkflowDescriptor survives YAML roundtrip for python script task`()
     {
-        val json = Json { serializersModule = descriptorSerializersModule }
-
         val original = exporter.export(makeDefinition(pythonScriptStep()))
-        val decoded  = json.decodeFromString(
-            WorkflowDescriptor.serializer(),
-            json.encodeToString(WorkflowDescriptor.serializer(), original)
-        )
+        val yaml = descriptorYaml.encodeToString(WorkflowDescriptor.serializer(), original)
+        val decoded = descriptorYaml.decodeFromString(WorkflowDescriptor.serializer(), yaml)
 
         assertEquals(original, decoded)
 
-        // Verify the entry point survived the trip
         val task = decoded.steps.first().task as PythonTaskDescriptor
         assertEquals(ScriptEntryPointDescriptor("analysis/run.py"), task.entryPoint)
+        // Check discriminator is present (value may be quoted or unquoted depending on kaml version)
+        assertTrue(yaml.contains("type:"), "YAML must contain 'type:' discriminator, got:\n$yaml")
+        assertTrue(yaml.contains("python"), "YAML must contain task kind 'python', got:\n$yaml")
     }
 
     @Test
-    fun `WorkflowDescriptor survives JSON roundtrip for python module task`()
+    fun `WorkflowDescriptor survives YAML roundtrip for python module task`()
     {
-        val json = Json { serializersModule = descriptorSerializersModule }
-
         val original = exporter.export(makeDefinition(pythonModuleStep()))
-        val decoded  = json.decodeFromString(
+        val decoded = descriptorYaml.decodeFromString(
             WorkflowDescriptor.serializer(),
-            json.encodeToString(WorkflowDescriptor.serializer(), original)
+            descriptorYaml.encodeToString(WorkflowDescriptor.serializer(), original)
         )
 
         assertEquals(original, decoded)
@@ -453,9 +443,9 @@ class WorkflowDescriptorExporterTest
     }
 
     @Test
-    fun `WorkflowDescriptor JSON roundtrip preserves all ArgToken variants`()
+    fun `WorkflowDescriptor YAML roundtrip preserves all ArgToken variants`()
     {
-        val inputId  = UUID.randomUUID()
+        val inputId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
         val allTokensTask = CommandTaskDefinition(
             id = taskId,
@@ -468,20 +458,36 @@ class WorkflowDescriptorExporterTest
                 ParamRef("myParam"),
             ),
         )
-        val json = Json { serializersModule = descriptorSerializersModule }
 
         val original = exporter.export(makeDefinition(commandStep(allTokensTask)))
-        val decoded  = json.decodeFromString(
+        val decoded = descriptorYaml.decodeFromString(
             WorkflowDescriptor.serializer(),
-            json.encodeToString(WorkflowDescriptor.serializer(), original)
+            descriptorYaml.encodeToString(WorkflowDescriptor.serializer(), original)
         )
 
         val args = (decoded.steps.first().task as CommandTaskDescriptor).args
-        assertEquals(LiteralArgDescriptor("--flag"),             args[0])
-        assertEquals(InputRefArgDescriptor(inputId.toString()),  args[1])
+        assertEquals(LiteralArgDescriptor("--flag"), args[0])
+        assertEquals(InputRefArgDescriptor(inputId.toString()), args[1])
         assertEquals(OutputRefArgDescriptor(outputId.toString()), args[2])
-        assertEquals(ParamRefArgDescriptor("myParam"),           args[3])
+        assertEquals(ParamRefArgDescriptor("myParam"), args[3])
+    }
+
+    @Test
+    fun `exported YAML contains stable type discriminator for each task kind`()
+    {
+        val commandYaml = descriptorYaml.encodeToString(
+            WorkflowDescriptor.serializer(),
+            exporter.export(makeDefinition(commandStep()))
+        )
+        val pythonYaml = descriptorYaml.encodeToString(
+            WorkflowDescriptor.serializer(),
+            exporter.export(makeDefinition(pythonScriptStep()))
+        )
+
+        // Value may appear as 'type: command' or 'type: "command"' depending on kaml version
+        assertTrue(commandYaml.contains("type:"), "Expected 'type:' discriminator in:\n$commandYaml")
+        assertTrue(commandYaml.contains("command"), "Expected kind 'command' in:\n$commandYaml")
+        assertTrue(pythonYaml.contains("type:"), "Expected 'type:' discriminator in:\n$pythonYaml")
+        assertTrue(pythonYaml.contains("python"), "Expected kind 'python' in:\n$pythonYaml")
     }
 }
-
-

@@ -22,6 +22,7 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-data")
                 implementation("dk.cachet.carp:carp-core-analytics")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("com.charleskorn.kaml:kaml:0.61.0")
 
                 // For coroutines support
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
