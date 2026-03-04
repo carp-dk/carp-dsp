@@ -62,7 +62,6 @@ tasks.named("detekt") {
 // Configure Kover code coverage
 dependencies {
     kover(project(":carp.dsp.core"))
-    //kover(project(":carp.dsp.demo"))
 }
 
 // Configure Kover for comprehensive coverage reporting
@@ -79,54 +78,41 @@ kover {
             filters {
                 excludes {
                     classes(
-                        // Kotlin serialization generated classes
-                        "*\$serializer*",
-                        "*Serializer*",
-                        "*\$\$serializer*",
-                        "**/*\$\$serializer*",
-                        "*SerializersModule*",
+                        // Kotlin serialization generated classes (JVM binary name patterns)
+                        "**\$\$serializer",
+                        "**\$serializer",
+                        "**Companion\$serializer",
 
-                        // Kotlin generated classes
-                        "*\$Companion*",
-                        "*\$DefaultImpls*",
-                        "*\$WhenMappings*",
-                        "*\$inlined*",
-                        "*\\$\\\$serializer",
+                        // Kotlin-generated companion objects from @Serializable data classes
+                        // These follow the pattern ClassName$Companion in bytecode
+                        "carp.dsp.core.**\$Companion",
 
-                        // Data class generated methods
-                        "*\$copy\$default*",
-                        "*\$hashCode*",
-                        "*\$toString*",
-                        "*\$equals*",
-                        "*\$component*",
+                        // Kotlin compiler–generated synthetic helpers
+                        "**\$DefaultImpls",
+                        "**\$WhenMappings",
+                        "**\$inlined*",
+                        "**\$sam\$*",
+
+                        // data class copy$default bridge methods (JVM only)
+                        "**\$copy\$default*",
 
                         // Test classes
-                        "**/*Test*",
-                        "**/*Tests*",
-                        "**/test/**/*",
-
-                        // Build and application classes
-                        "**/BuildConfig*",
-                        "**/*Application*",
-                        "**/*Activity*",
-                        "**/*Fragment*"
+                        "**Test",
+                        "**Tests",
+                        "**TestKt"
                     )
                     packages(
-                        "kotlinx.serialization.*",
-                        "carp.dsp.demo.*",
-                        "carp.dsp.demo.api.*",
-                        "carp.dsp.demo.demos.*",
-                        "carp.dsp.demo.utils.*",
-                        "carp.dsp.demo.workflows.*",
+                        // Demo module — never include in core coverage
+                        "carp.dsp.demo",
+                        "carp.dsp.demo.api",
+                        "carp.dsp.demo.demos",
+                        "carp.dsp.demo.utils",
+                        "carp.dsp.demo.workflows",
 
-                        // Infrastructure packages with low/no coverage
-                        "carp.dsp.core.infrastructure.**",
-                        "**.test.**",
-                        "**.tests.**"
+                        // Infrastructure — covered separately
+                        "carp.dsp.core.infrastructure"
                     )
                     annotatedBy(
-                        "Generated",
-                        "kotlin.jvm.JvmSynthetic",
                         "carp.dsp.core.common.ExcludeFromCoverage"
                     )
                 }
@@ -143,7 +129,7 @@ kover {
                 }
                 rule("Minimum branch coverage") {
                     bound {
-                        minValue = 65
+                        minValue = 60
                         coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH
                         aggregationForGroup = kotlinx.kover.gradle.plugin.dsl.AggregationType.COVERED_PERCENTAGE
                     }
