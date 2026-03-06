@@ -4,6 +4,7 @@ import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
 import dk.cachet.carp.analytics.domain.workflow.Step
 import java.io.File
 import kotlin.test.Test
@@ -174,8 +175,8 @@ class SignalProcessingFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
 
         assertEquals(0, errors.size, "Fixture should have no linting errors")
     }
@@ -187,8 +188,10 @@ class SignalProcessingFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        val issues = linter.lint(descriptor)
-        val cycleErrors = issues.filter { it.level == "ERROR" && it.message.contains("Circular") }
+        val lintResult = linter.lint(descriptor)
+        val cycleErrors = lintResult.issues.filter {
+            it.severity == ValidationSeverity.ERROR && it.message.contains("Circular")
+        }
 
         assertEquals(0, cycleErrors.size, "Fixture should have no circular dependencies")
     }
@@ -244,8 +247,8 @@ class SignalProcessingFixtureTest
         val descriptor = decodeResult.descriptor
 
         // Lint
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
         assertEquals(0, errors.size, "Should have no errors")
 
         // Import

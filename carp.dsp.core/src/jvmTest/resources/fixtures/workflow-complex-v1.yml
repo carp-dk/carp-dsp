@@ -50,12 +50,9 @@ steps:
     description: "Run file validation script"
     executable: "python"
     args:
-    - type: "literal"
-      value: "validate_eeg.py"
-    - type: "input-ref"
-      inputId: "port-raw-eeg-001"
-    - type: "param-ref"
-      name: "strict_mode"
+    - "validate_eeg.py"
+    - "input.0"
+    - "param:strict_mode"
   inputs:
   - id: "port-raw-eeg-001"
     descriptor:
@@ -78,12 +75,9 @@ steps:
       type: "script"
       scriptPath: "pipeline/preprocess.py"
     args:
-    - type: "input-ref"
-      inputId: "port-raw-eeg-001"
-    - type: "output-ref"
-      outputId: "port-clean-eeg-002"
-    - type: "literal"
-      value: "--notch-freq=50"
+    - "input.0"
+    - "output.0"
+    - "--notch-freq=50"
   inputs:
   - id: "port-raw-eeg-001"
   outputs:
@@ -107,10 +101,8 @@ steps:
       type: "module"
       moduleName: "eeg_pipeline.features"
     args:
-    - type: "input-ref"
-      inputId: "port-clean-eeg-002"
-    - type: "output-ref"
-      outputId: "port-features-003"
+    - "input.0"
+    - "output.0"
   inputs:
   - id: "port-clean-eeg-002"
   outputs:
@@ -131,12 +123,9 @@ steps:
     name: "render-report"
     executable: "python"
     args:
-    - type: "literal"
-      value: "render_report.py"
-    - type: "input-ref"
-      inputId: "port-features-003"
-    - type: "param-ref"
-      name: "output_format"
+    - "render_report.py"
+    - "input.0"
+    - "param:output_format"
   inputs:
   - id: "port-features-003"
   outputs: []

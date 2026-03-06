@@ -46,12 +46,9 @@ steps:
       description: "Run EEG file validation"
       executable: "python"
       args:
-        - type: "literal"
-          value: "validate_eeg.py"
-        - type: "input-ref"
-          inputId: "port-raw-eeg"
-        - type: "literal"
-          value: "--strict"
+        - "validate_eeg.py"
+        - "input.0"
+        - "--strict"
     inputs:
       - id: "port-raw-eeg"
         descriptor:
@@ -83,16 +80,11 @@ steps:
         type: "script"
         scriptPath: "pipeline/preprocess.py"
       args:
-        - type: "input-ref"
-          inputId: "port-validated-eeg"
-        - type: "output-ref"
-          outputId: "port-clean-eeg"
-        - type: "literal"
-          value: "--notch-freq=50"
-        - type: "literal"
-          value: "--highpass=0.5"
-        - type: "literal"
-          value: "--lowpass=100"
+        - "input.0"
+        - "output.0"
+        - "--notch-freq=50"
+        - "--highpass=0.5"
+        - "--lowpass=100"
     inputs:
       - id: "port-validated-eeg"
         descriptor:
@@ -123,14 +115,10 @@ steps:
         type: "module"
         moduleName: "eeg_pipeline.features"
       args:
-        - type: "input-ref"
-          inputId: "port-clean-eeg"
-        - type: "output-ref"
-          outputId: "port-features-csv"
-        - type: "literal"
-          value: "--freq-bands=delta,theta,alpha,beta,gamma"
-        - type: "literal"
-          value: "--zscore"
+        - "input.0"
+        - "output.0"
+        - "--freq-bands=delta,theta,alpha,beta,gamma"
+        - "--zscore"
     inputs:
       - id: "port-clean-eeg"
         descriptor:
@@ -159,16 +147,11 @@ steps:
       description: "Render analysis report from features"
       executable: "python"
       args:
-        - type: "literal"
-          value: "render_report.py"
-        - type: "input-ref"
-          inputId: "port-features-csv"
-        - type: "literal"
-          value: "templates/eeg_report.html"
-        - type: "output-ref"
-          outputId: "port-report-html"
-        - type: "literal"
-          value: "--theme=scientific"
+        - "render_report.py"
+        - "input.0"
+        - "templates/eeg_report.html"
+        - "output.0"
+        - "--theme=scientific"
     inputs:
       - id: "port-features-csv"
         descriptor:

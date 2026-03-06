@@ -22,74 +22,6 @@ import kotlin.test.assertTrue
  */
 class DescriptorDataClassTest
 {
-    // ── ArgTokenDescriptor subtypes ───────────────────────────────────────────
-
-    @Test
-    fun `LiteralArgDescriptor equality hashCode toString copy`()
-    {
-        val a = LiteralArgDescriptor("hello")
-        val b = LiteralArgDescriptor("hello")
-        val c = LiteralArgDescriptor("world")
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertNotEquals(a, c)
-        assertTrue(a.toString().contains("hello"))
-
-        val copied = a.copy(value = "world")
-        assertEquals(c, copied)
-        assertEquals("hello", a.value)
-        assertNotEquals<Any>(a, "not-a-descriptor")
-    }
-
-    @Test
-    fun `InputRefArgDescriptor equality hashCode toString copy`()
-    {
-        val a = InputRefArgDescriptor("id-1")
-        val b = InputRefArgDescriptor("id-1")
-        val c = InputRefArgDescriptor("id-2")
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertNotEquals(a, c)
-        assertTrue(a.toString().contains("id-1"))
-
-        val copied = a.copy(inputId = "id-2")
-        assertEquals(c, copied)
-        assertNotEquals<Any>(a, "not-a-descriptor")
-    }
-
-    @Test
-    fun `OutputRefArgDescriptor equality hashCode toString copy`()
-    {
-        val a = OutputRefArgDescriptor("out-1")
-        val b = OutputRefArgDescriptor("out-1")
-        val c = OutputRefArgDescriptor("out-2")
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertNotEquals(a, c)
-        assertTrue(a.toString().contains("out-1"))
-
-        assertEquals(c, a.copy(outputId = "out-2"))
-        assertNotEquals<Any>(a, "not-a-descriptor")
-    }
-
-    @Test
-    fun `ParamRefArgDescriptor equality hashCode toString copy`()
-    {
-        val a = ParamRefArgDescriptor("flag")
-        val b = ParamRefArgDescriptor("flag")
-        val c = ParamRefArgDescriptor("other")
-
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-        assertNotEquals(a, c)
-        assertTrue(a.toString().contains("flag"))
-
-        assertEquals(c, a.copy(name = "other"))
-        assertNotEquals<Any>(a, "not-a-descriptor")
-    }
 
     // ── PythonEntryPointDescriptor subtypes ───────────────────────────────────
 
@@ -132,7 +64,7 @@ class DescriptorDataClassTest
     {
         val a = CommandTaskDescriptor(
             id = "tid-1", name = "cmd", description = "desc",
-            executable = "echo", args = listOf(LiteralArgDescriptor("hi")),
+            executable = "echo", args = listOf("hi"),
         )
         val b = a.copy()
 
@@ -167,7 +99,7 @@ class DescriptorDataClassTest
         val ep = ScriptEntryPointDescriptor("run.py")
         val a = PythonTaskDescriptor(
             id = "tid-2", name = "py", entryPoint = ep,
-            args = listOf(LiteralArgDescriptor("--v")),
+            args = listOf("--v"),
         )
         val b = a.copy()
 

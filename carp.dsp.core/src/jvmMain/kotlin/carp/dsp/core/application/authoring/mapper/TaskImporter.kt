@@ -1,16 +1,13 @@
 package carp.dsp.core.application.authoring.mapper
 
-import carp.dsp.core.application.authoring.descriptor.ArgTokenDescriptor
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.tasks.ArgToken
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.InputRef
@@ -58,11 +55,15 @@ internal object TaskImporter
      *
      * @param descriptor The command task descriptor
      * @param workflowNamespace The namespace UUID for deterministic ID generation
+     * @param inputs List of input ports (for argument inference)
+     * @param outputs List of output ports (for argument inference)
      * @return Domain CommandTaskDefinition
      */
     fun importCommandTask(
         descriptor: CommandTaskDescriptor,
-        workflowNamespace: UUID
+        workflowNamespace: UUID,
+        inputs: List<InputDataSpec> = emptyList(),
+        outputs: List<OutputDataSpec> = emptyList()
     ): CommandTaskDefinition =
         CommandTaskDefinition(
             id = descriptor.id?.let { tryParseUuid( it ) }
@@ -70,7 +71,7 @@ internal object TaskImporter
             name = descriptor.name,
             description = descriptor.description,
             executable = descriptor.executable,
-            args = descriptor.args.map { importArgToken( it, workflowNamespace ) },
+            args = descriptor.args.map { inferAndImportArgument(it, inputs, outputs, workflowNamespace) },
         )
 
     /**
@@ -78,11 +79,15 @@ internal object TaskImporter
      *
      * @param pythonTaskDescriptor The Python task descriptor
      * @param workflowNamespace The namespace UUID for deterministic ID generation
+     * @param inputs List of input ports (for argument inference)
+     * @param outputs List of output ports (for argument inference)
      * @return Domain PythonTaskDefinition
      */
     fun importPythonTask(
         pythonTaskDescriptor: PythonTaskDescriptor,
-        workflowNamespace: UUID
+        workflowNamespace: UUID,
+        inputs: List<InputDataSpec> = emptyList(),
+        outputs: List<OutputDataSpec> = emptyList()
     ): PythonTaskDefinition =
         PythonTaskDefinition(
             id = pythonTaskDescriptor.id?.let { tryParseUuid( it ) }
@@ -94,29 +99,66 @@ internal object TaskImporter
                 is ScriptEntryPointDescriptor -> Script( ep.scriptPath )
                 is ModuleEntryPointDescriptor -> Module( ep.moduleName )
             },
-            args = pythonTaskDescriptor.args.map { importArgToken( it, workflowNamespace ) },
+            args = pythonTaskDescriptor.args.map { inferAndImportArgument(it, inputs, outputs, workflowNamespace) },
         )
 
     /**
-     * Maps an argument token descriptor to a domain arg token.
+     * Infers the type of an argument string and converts it to a domain ArgToken.
      *
-     * @param argTokenDescriptor The argument token descriptor
-     * @param workflowNamespace The namespace UUID for deterministic ID generation
+     * Type inference rules:
+     * - `input.N` → InputRef(inputsN.id)
+     * - `output.N` → OutputRef(outputsN.id)
+     * - `param:NAME` → ParamRef(NAME)
+     * - Anything else → Literal
+     *
+     * @param argument The argument string
+     * @param inputs List of input ports
+     * @param outputs List of output ports
+     * @param workflowNamespace Namespace for UUID generation (if needed)
      * @return Domain ArgToken
      */
-    fun importArgToken( argTokenDescriptor: ArgTokenDescriptor, workflowNamespace: UUID ): ArgToken =
-        when ( argTokenDescriptor )
-        {
-            is LiteralArgDescriptor -> Literal( argTokenDescriptor.value )
-            is InputRefArgDescriptor -> InputRef(
-                tryParseUuid( argTokenDescriptor.inputId )
-                    ?: DeterministicUUID.v5( workflowNamespace, "port:input:${argTokenDescriptor.inputId}" )
-            )
-            is OutputRefArgDescriptor -> OutputRef(
-                tryParseUuid( argTokenDescriptor.outputId )
-                    ?: DeterministicUUID.v5( workflowNamespace, "port:output:${argTokenDescriptor.outputId}" )
-            )
-            is ParamRefArgDescriptor -> ParamRef( argTokenDescriptor.name )
+    private fun inferAndImportArgument(
+        argument: String,
+        inputs: List<InputDataSpec>,
+        outputs: List<OutputDataSpec>,
+        workflowNamespace: UUID
+    ): ArgToken {
+        return when {
+            // Rule 1: input.N → InputRef
+            argument.matches(Regex("^input\\.(\\d+)$")) -> {
+                val index = argument.substringAfter(".").toInt()
+                if (index >= inputs.size) {
+                    // Fallback: generate deterministic UUID
+                    InputRef(
+                        DeterministicUUID.v5(workflowNamespace, "port:input:$argument")
+                    )
+                } else {
+                    InputRef(inputs[index].id)
+                }
+            }
+
+            // Rule 2: output.N → OutputRef
+            argument.matches(Regex("^output\\.(\\d+)$")) -> {
+                val index = argument.substringAfter(".").toInt()
+                if (index >= outputs.size) {
+                    // Fallback: generate deterministic UUID
+                    OutputRef(
+                        DeterministicUUID.v5(workflowNamespace, "port:output:$argument")
+                    )
+                } else {
+                    OutputRef(outputs[index].id)
+                }
+            }
+
+            // Rule 3: param:NAME → ParamRef
+            argument.matches(Regex("^param:([a-zA-Z0-9_]+)$")) -> {
+                val name = argument.substringAfter("param:")
+                ParamRef(name)
+            }
+
+            // Rule 4 & 5: Everything else → Literal
+            else -> Literal(argument)
         }
+    }
 }
 

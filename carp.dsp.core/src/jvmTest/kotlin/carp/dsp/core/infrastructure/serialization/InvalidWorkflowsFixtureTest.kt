@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
 import kotlin.test.Test
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -26,7 +27,6 @@ class InvalidWorkflowsFixtureTest
 {
     private val codec = WorkflowYamlCodec()
     private val linter = WorkflowLinter
-
     // ── Helper: Invalid workflow examples ─────────────────────────────────────
 
     private fun duplicateStepIds(): String = """
@@ -265,8 +265,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("duplicated") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("duplicated") }
 
         assertTrue(errors.isNotEmpty(), "Should detect duplicate step IDs")
         assertTrue(errors[0].message.contains("validate"), "Error should identify the duplicate ID")
@@ -281,12 +281,13 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("not found") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter {
+            it.severity == ValidationSeverity.ERROR && it.message.contains("non-existent environment")
+        }
 
         assertTrue(errors.isNotEmpty(), "Should detect missing environment")
         assertTrue(errors[0].message.contains("missing-env"), "Error should name the missing environment")
-        assertTrue(errors[0].suggestion != null, "Error should include suggestion")
     }
 
     // ── Test: Unknown Environment Kind ───────────────────────────────────────
@@ -298,8 +299,10 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val warnings = issues.filter { it.level == "WARNING" && it.message.contains("not recognized") }
+        val lintResult = linter.lint(result.descriptor)
+        val warnings = lintResult.issues.filter {
+            it.severity == ValidationSeverity.WARNING && it.message.contains("not recognized")
+        }
 
         assertTrue(warnings.isNotEmpty(), "Should warn about unknown environment kind")
         assertTrue(warnings[0].message.contains("singularity"), "Warning should name the unknown kind")
@@ -314,8 +317,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("Circular") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("Circular") }
 
         assertTrue(errors.isNotEmpty(), "Should detect circular dependency")
     }
@@ -329,8 +332,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("Circular") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("Circular") }
 
         assertTrue(errors.isNotEmpty(), "Should detect self-cycle")
     }
@@ -344,8 +347,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("non-existent") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("non-existent") }
 
         assertTrue(errors.isNotEmpty(), "Should detect missing upstream step")
         assertTrue(errors[0].message.contains("missing-step"), "Error should name the missing step")
@@ -360,8 +363,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.fieldName == "inputs" }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.path?.contains("inputs") == true }
 
         assertTrue(errors.isNotEmpty(), "Should detect duplicate input ports")
         assertTrue(errors[0].message.contains("port-1"), "Error should identify the duplicate port")
@@ -376,8 +379,10 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.fieldName == "outputs" }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter {
+            it.severity == ValidationSeverity.ERROR && it.path?.contains("outputs") == true
+        }
 
         assertTrue(errors.isNotEmpty(), "Should detect duplicate output ports")
         assertTrue(errors[0].message.contains("out-1"), "Error should identify the duplicate port")
@@ -392,8 +397,8 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("Circular") }
+        val lintResult = linter.lint(result.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("Circular") }
 
         assertTrue(errors.isNotEmpty(), "Should detect multi-step cycle")
     }
@@ -407,16 +412,15 @@ steps:
         val result = codec.decode(yaml)
         assertIs<DecodeResult.Success>(result)
 
-        val issues = linter.lint(result.descriptor)
-        val error = issues.find { it.level == "ERROR" && it.message.contains("not found") }
+        val lintResult = linter.lint(result.descriptor)
+        val error = lintResult.issues.find {
+            it.severity == ValidationSeverity.ERROR && it.message.contains("non-existent environment")
+        }
 
         assertIs<Any>(error, "Should have error")
         assertTrue(error.message.isNotEmpty(), "Error message should be non-empty")
-        assertTrue(
-            !error.suggestion.isNullOrEmpty(),
-            "Error should have actionable suggestion"
-        )
-        assertTrue(error.fieldName != null, "Error should specify field")
+        assertTrue(error.message.contains("Add environment"), "Error should have actionable guidance in message")
+        assertTrue(error.path != null, "Error should specify path")
     }
 
     // ── Test: Parsing vs Linting ─────────────────────────────────────────────
@@ -441,8 +445,8 @@ steps:
             assertIs<DecodeResult.Success>(result, "Even invalid workflows should parse as YAML")
 
             // But linter should find errors
-            val issues = linter.lint(result.descriptor)
-            val errors = issues.filter { it.level == "ERROR" }
+            val lintResult = linter.lint(result.descriptor)
+            val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
             assertTrue(errors.isNotEmpty(), "Invalid workflow should have linting errors")
         }
     }
@@ -466,8 +470,8 @@ steps:
         errorTypes.forEach { (errorType, fixture) ->
             val yaml = fixture()
             val result = codec.decode(yaml) as DecodeResult.Success
-            val issues = linter.lint(result.descriptor)
-            val errors = issues.filter { it.level == "ERROR" }
+            val lintResult = linter.lint(result.descriptor)
+            val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
 
             assertTrue(
                 errors.isNotEmpty(),

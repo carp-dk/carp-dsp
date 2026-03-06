@@ -29,8 +29,7 @@ steps:
       description: "Echo a simple greeting"
       executable: "echo"
       args:
-        - type: "literal"
-          value: "Hello from the minimal workflow!"
+        - "Hello from the minimal workflow!"
     inputs: []
     outputs: []
 
@@ -48,7 +47,6 @@ steps:
       description: "Echo a farewell message"
       executable: "echo"
       args:
-        - type: "literal"
-          value: "Goodbye from the minimal workflow!"
+        - "Goodbye from the minimal workflow!"
     inputs: []
     outputs: []
