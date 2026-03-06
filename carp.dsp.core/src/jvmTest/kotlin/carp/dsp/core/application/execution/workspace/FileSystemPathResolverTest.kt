@@ -98,19 +98,12 @@ class FileSystemPathResolverTest {
     fun `validateAndResolve rejects absolute paths`() {
         // Arrange
         val root = tempDir.resolve("test-root")
-        val windowsAbsolutePath = "C:\\etc\\passwd" // Windows-style absolute path
-        val unixAbsolutePath = "/etc/passwd" // Unix-style path (treated as relative on Windows)
+        // Construct an absolute path using tempDir so it is absolute on every OS
+        val absolutePath = tempDir.resolve("etc/passwd").toAbsolutePath().toString()
 
         // Act & Assert
-        // Windows-style absolute paths should be rejected with IllegalArgumentException
         assertFailsWith<IllegalArgumentException> {
-            pathResolver.validateAndResolve(root, windowsAbsolutePath)
-        }
-
-        // Unix-style paths on Windows are treated as relative but resolve outside root,
-        // so they trigger SecurityException for path traversal
-        assertFailsWith<SecurityException> {
-            pathResolver.validateAndResolve(root, unixAbsolutePath)
+            pathResolver.validateAndResolve(root, absolutePath)
         }
     }
 
