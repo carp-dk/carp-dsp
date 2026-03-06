@@ -7,6 +7,9 @@ import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.plan.TasksRun
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.Module
+import dk.cachet.carp.analytics.domain.tasks.PythonTaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.Script
 import dk.cachet.carp.analytics.domain.tasks.TaskDefinition
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
@@ -68,14 +71,14 @@ class StepCompiler {
     ): TasksRun? {
         return when (task) {
             is CommandTaskDefinition -> compileCommand(task, bindings, stepId, issues)
+            is PythonTaskDefinition -> compilePython(task, bindings, stepId, issues)
             else -> {
-                // For P0: Only CommandTaskDefinition is supported
                 issues.add(
                     PlanIssue(
                         severity = PlanIssueSeverity.ERROR,
                         code = "UNSUPPORTED_TASK_TYPE",
-                        message = "Task type '${task::class.simpleName}' is not supported in P0. " +
-                                "Only CommandTaskDefinition is supported.",
+                        message = "Task type '${task::class.simpleName}' is not supported. " +
+                                "Only CommandTaskDefinition and PythonTaskDefinition are supported.",
                         stepId = stepId
                     )
                 )
@@ -100,6 +103,27 @@ class StepCompiler {
         return CommandSpec(
             executable = task.executable,
             args = expandedArgs
+        )
+    }
+
+    private fun compilePython(
+        task: PythonTaskDefinition,
+        bindings: ResolvedBindings,
+        stepId: UUID,
+        issues: MutableList<PlanIssue>
+    ): CommandSpec {
+        // Resolve entry-point args: [-m <module>] or [<scriptPath>]
+        val entryPointArgs = when (val ep = task.entryPoint) {
+            is Script -> listOf(ep.scriptPath)
+            is Module -> listOf("-m", ep.moduleName)
+        }
+
+        // Expand user-supplied ArgTokens
+        val expandedArgs = argTokenExpander.expand(task.args, bindings, issues, stepId)
+
+        return CommandSpec(
+            executable = "python",
+            args = entryPointArgs + expandedArgs
         )
     }
 

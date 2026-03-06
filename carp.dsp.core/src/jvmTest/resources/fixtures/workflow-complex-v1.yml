@@ -1,0 +1,143 @@
+schemaVersion: "1.0"
+metadata:
+  id: "a1b2c3d4-0000-0000-0000-000000000001"
+  name: "Signal Processing Pipeline"
+  description: "Multi-step EEG signal processing workflow covering all task kinds and arg token variants."
+  version: "2.0"
+  tags:
+  - "eeg"
+  - "signal-processing"
+  - "research"
+
+environments:
+  "env-conda-001":
+    name: "eeg-analysis"
+    kind: "conda"
+    spec:
+      dependencies:
+      - "numpy"
+      - "scipy"
+      - "mne"
+      pythonVersion:
+      - "3.11"
+      channels:
+      - "conda-forge"
+      - "defaults"
+  "env-pixi-002":
+    name: "report-gen"
+    kind: "pixi"
+    spec:
+      dependencies:
+      - "matplotlib"
+      - "jinja2"
+      pythonVersion:
+      - "3.12"
+      channels:
+      - "conda-forge"
+
+steps:
+- id: "step-001"
+  metadata:
+    name: "Validate Input"
+    description: "Checks raw EEG file exists and is well-formed."
+    version: "1.0"
+  environmentId: "env-conda-001"
+  dependsOn: []
+  task:
+    type: "command"
+    id: "task-001"
+    name: "validate-eeg"
+    description: "Run file validation script"
+    executable: "python"
+    args:
+    - type: "literal"
+      value: "validate_eeg.py"
+    - type: "input-ref"
+      inputId: "port-raw-eeg-001"
+    - type: "param-ref"
+      name: "strict_mode"
+  inputs:
+  - id: "port-raw-eeg-001"
+    descriptor:
+      type: "edf"
+      format: "binary"
+  outputs: []
+
+- id: "step-002"
+  metadata:
+    name: "Preprocess EEG"
+    description: "Band-pass filter and artifact rejection."
+  environmentId: "env-conda-001"
+  dependsOn:
+  - "step-001"
+  task:
+    type: "python"
+    id: "task-002"
+    name: "preprocess"
+    entryPoint:
+      type: "script"
+      scriptPath: "pipeline/preprocess.py"
+    args:
+    - type: "input-ref"
+      inputId: "port-raw-eeg-001"
+    - type: "output-ref"
+      outputId: "port-clean-eeg-002"
+    - type: "literal"
+      value: "--notch-freq=50"
+  inputs:
+  - id: "port-raw-eeg-001"
+  outputs:
+  - id: "port-clean-eeg-002"
+    descriptor:
+      type: "edf"
+      format: "binary"
+
+- id: "step-003"
+  metadata:
+    name: "Extract Features"
+    description: "Compute spectral features using a Python module."
+  environmentId: "env-conda-001"
+  dependsOn:
+  - "step-002"
+  task:
+    type: "python"
+    id: "task-003"
+    name: "extract-features"
+    entryPoint:
+      type: "module"
+      moduleName: "eeg_pipeline.features"
+    args:
+    - type: "input-ref"
+      inputId: "port-clean-eeg-002"
+    - type: "output-ref"
+      outputId: "port-features-003"
+  inputs:
+  - id: "port-clean-eeg-002"
+  outputs:
+  - id: "port-features-003"
+    descriptor:
+      type: "csv"
+      format: "utf-8"
+
+- id: "step-004"
+  metadata:
+    name: "Generate Report"
+  environmentId: "env-pixi-002"
+  dependsOn:
+  - "step-003"
+  task:
+    type: "command"
+    id: "task-004"
+    name: "render-report"
+    executable: "python"
+    args:
+    - type: "literal"
+      value: "render_report.py"
+    - type: "input-ref"
+      inputId: "port-features-003"
+    - type: "param-ref"
+      name: "output_format"
+  inputs:
+  - id: "port-features-003"
+  outputs: []
+

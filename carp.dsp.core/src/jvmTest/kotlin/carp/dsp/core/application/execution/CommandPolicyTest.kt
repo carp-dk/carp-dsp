@@ -1,3 +1,5 @@
+@file:Suppress("REDUNDANT_EXPLICIT_TYPE", "RemoveExplicitTypeArguments")
+
 package carp.dsp.core.application.execution
 
 import kotlinx.serialization.json.Json

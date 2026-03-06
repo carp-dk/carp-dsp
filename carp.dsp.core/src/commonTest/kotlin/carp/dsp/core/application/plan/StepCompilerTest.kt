@@ -113,7 +113,7 @@ class StepCompilerTest {
         assertNotNull(errorIssue)
         assertEquals(PlanIssueSeverity.ERROR, errorIssue.severity)
         assertTrue(errorIssue.message.contains("MockTaskDefinition"))
-        assertTrue(errorIssue.message.contains("Only CommandTaskDefinition is supported"))
+        assertTrue(errorIssue.message.contains("Only CommandTaskDefinition and PythonTaskDefinition are supported"))
         assertEquals(step.metadata.id, errorIssue.stepId)
     }
 
@@ -205,5 +205,55 @@ class StepCompilerTest {
         assertTrue(result.process is CommandSpec)
     }
 
-    // External process validation tests removed since P0 only supports CommandTaskDefinition
+    @Test
+    fun `compile produces CommandSpec for PythonTaskDefinition with Script entry point`() {
+        // Arrange
+        val pythonTask = PythonTaskDefinition(
+            id = UUID.randomUUID(),
+            name = "python-script-task",
+            entryPoint = Script("analysis/run.py"),
+            args = listOf(Literal("--verbose"))
+        )
+        val step = createTestStep("Python Script Step", "python-task", task = pythonTask)
+        val bindings = createEmptyBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val result = compiler.compile(step, bindings, issues)
+
+        // Assert
+        assertNotNull(result)
+        assertTrue(issues.isEmpty())
+        assertTrue(result.process is CommandSpec)
+
+        val commandSpec = result.process as CommandSpec
+        assertEquals("python", commandSpec.executable)
+        assertEquals(listOf("analysis/run.py", "--verbose"), commandSpec.args)
+    }
+
+    @Test
+    fun `compile produces CommandSpec for PythonTaskDefinition with Module entry point`() {
+        // Arrange
+        val pythonTask = PythonTaskDefinition(
+            id = UUID.randomUUID(),
+            name = "python-module-task",
+            entryPoint = Module("mypackage.cli"),
+            args = listOf(Literal("--input"), Literal("data.csv"))
+        )
+        val step = createTestStep("Python Module Step", "python-task", task = pythonTask)
+        val bindings = createEmptyBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val result = compiler.compile(step, bindings, issues)
+
+        // Assert
+        assertNotNull(result)
+        assertTrue(issues.isEmpty())
+        assertTrue(result.process is CommandSpec)
+
+        val commandSpec = result.process as CommandSpec
+        assertEquals("python", commandSpec.executable)
+        assertEquals(listOf("-m", "mypackage.cli", "--input", "data.csv"), commandSpec.args)
+    }
 }

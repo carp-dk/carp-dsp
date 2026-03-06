@@ -4,7 +4,7 @@ import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
-import dk.cachet.carp.analytics.infrastructure.serialization.DspSerializer
+import dk.cachet.carp.analytics.infrastructure.serialization.CoreAnalyticsSerializer
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
@@ -128,8 +128,8 @@ class WorkspaceLayoutIntegrationTest {
         val plan1 = createPlanA()
 
         // Act: Serialize and deserialize the plan
-        val serializedPlan = DspSerializer.json.encodeToString(ExecutionPlan.serializer(), plan1)
-        val plan2 = DspSerializer.json.decodeFromString(ExecutionPlan.serializer(), serializedPlan)
+        val serializedPlan = CoreAnalyticsSerializer.json.encodeToString(ExecutionPlan.serializer(), plan1)
+        val plan2 = CoreAnalyticsSerializer.json.decodeFromString(ExecutionPlan.serializer(), serializedPlan)
 
         // Create workspaces from original and deserialized plans
         val ws1 = workspaceManager.create(plan1, fixedRunId1)

@@ -1,0 +1,182 @@
+schemaVersion: "1.0"
+metadata:
+  id: "signal-processing-workflow-001"
+  name: "EEG Signal Processing Pipeline"
+  description: "Multi-step EEG signal processing workflow demonstrating input/output references, dependencies, and mixed task types"
+  version: "1.0"
+  tags:
+    - "eeg"
+    - "signal-processing"
+    - "neuroscience"
+    - "fixture"
+
+environments:
+  conda-eeg:
+    name: "EEG Analysis Environment"
+    kind: "conda"
+    spec:
+      dependencies:
+        - "numpy"
+        - "scipy"
+        - "mne"
+      pythonVersion:
+        - "3.11"
+      channels:
+        - "conda-forge"
+        - "defaults"
+
+  report-env:
+    name: "Report Generation Environment"
+    kind: "system"
+    spec: {}
+
+steps:
+  # Step 1: Validate raw EEG input
+  - id: "validate-input"
+    metadata:
+      name: "Validate EEG Input"
+      description: "Checks raw EEG file exists and is well-formed"
+      version: "1.0"
+    environmentId: "conda-eeg"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "validate-task"
+      name: "validate-eeg"
+      description: "Run EEG file validation"
+      executable: "python"
+      args:
+        - type: "literal"
+          value: "validate_eeg.py"
+        - type: "input-ref"
+          inputId: "port-raw-eeg"
+        - type: "literal"
+          value: "--strict"
+    inputs:
+      - id: "port-raw-eeg"
+        descriptor:
+          type: "edf"
+          format: "binary"
+          notes: "Raw EEG data in EDF format"
+    outputs:
+      - id: "port-validated-eeg"
+        descriptor:
+          type: "edf"
+          format: "binary"
+          notes: "Validated EEG file"
+
+  # Step 2: Preprocess (band-pass filter, artifact rejection)
+  - id: "preprocess-eeg"
+    metadata:
+      name: "Preprocess EEG"
+      description: "Apply band-pass filtering and artifact rejection"
+      version: "1.0"
+    environmentId: "conda-eeg"
+    dependsOn:
+      - "validate-input"
+    task:
+      type: "python"
+      id: "preprocess-task"
+      name: "preprocess"
+      description: "Run EEG preprocessing pipeline"
+      entryPoint:
+        type: "script"
+        scriptPath: "pipeline/preprocess.py"
+      args:
+        - type: "input-ref"
+          inputId: "port-validated-eeg"
+        - type: "output-ref"
+          outputId: "port-clean-eeg"
+        - type: "literal"
+          value: "--notch-freq=50"
+        - type: "literal"
+          value: "--highpass=0.5"
+        - type: "literal"
+          value: "--lowpass=100"
+    inputs:
+      - id: "port-validated-eeg"
+        descriptor:
+          type: "edf"
+          format: "binary"
+    outputs:
+      - id: "port-clean-eeg"
+        descriptor:
+          type: "edf"
+          format: "binary"
+          notes: "Preprocessed EEG data"
+
+  # Step 3: Extract spectral features
+  - id: "extract-features"
+    metadata:
+      name: "Extract Features"
+      description: "Compute spectral features and generate feature matrix"
+      version: "1.0"
+    environmentId: "conda-eeg"
+    dependsOn:
+      - "preprocess-eeg"
+    task:
+      type: "python"
+      id: "features-task"
+      name: "extract-features"
+      description: "Extract spectral and temporal features from preprocessed EEG"
+      entryPoint:
+        type: "module"
+        moduleName: "eeg_pipeline.features"
+      args:
+        - type: "input-ref"
+          inputId: "port-clean-eeg"
+        - type: "output-ref"
+          outputId: "port-features-csv"
+        - type: "literal"
+          value: "--freq-bands=delta,theta,alpha,beta,gamma"
+        - type: "literal"
+          value: "--zscore"
+    inputs:
+      - id: "port-clean-eeg"
+        descriptor:
+          type: "edf"
+          format: "binary"
+    outputs:
+      - id: "port-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Feature matrix (samples × features)"
+
+  # Step 4: Generate report
+  - id: "generate-report"
+    metadata:
+      name: "Generate Report"
+      description: "Create HTML report with analysis results and visualizations"
+      version: "1.0"
+    environmentId: "report-env"
+    dependsOn:
+      - "extract-features"
+    task:
+      type: "command"
+      id: "report-task"
+      name: "render-report"
+      description: "Render analysis report from features"
+      executable: "python"
+      args:
+        - type: "literal"
+          value: "render_report.py"
+        - type: "input-ref"
+          inputId: "port-features-csv"
+        - type: "literal"
+          value: "templates/eeg_report.html"
+        - type: "output-ref"
+          outputId: "port-report-html"
+        - type: "literal"
+          value: "--theme=scientific"
+    inputs:
+      - id: "port-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+    outputs:
+      - id: "port-report-html"
+        descriptor:
+          type: "html"
+          format: "utf-8"
+          notes: "HTML analysis report"

@@ -4,6 +4,7 @@ detekt = "1.23.8"
 kover = "0.8.3"
 kotlinx-serialization = "1.6.3"
 kotlinx-coroutines = "1.8.0"
+kaml = "0.61.0"
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -12,3 +13,4 @@ detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 
 [libraries]
+kaml = { module = "com.charleskorn.kaml:kaml", version.ref = "kaml" }
