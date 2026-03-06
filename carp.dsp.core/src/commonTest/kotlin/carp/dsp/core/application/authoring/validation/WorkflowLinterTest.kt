@@ -564,7 +564,7 @@ class WorkflowLinterTest
         }
 
         assertNotNull(error)
-        assertEquals(ValidationSeverity.WARNING, error.severity)
+        assertEquals(ValidationSeverity.ERROR, error.severity)
         assertTrue(error.message.contains("description"))
     }
 
