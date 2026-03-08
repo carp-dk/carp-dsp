@@ -2,13 +2,13 @@ package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
+import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
+import dk.cachet.carp.analytics.domain.data.RegistryDestination
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.InputRef
 import dk.cachet.carp.analytics.domain.tasks.Literal
@@ -118,26 +118,103 @@ class TaskImporterTest
     }
 
     @Test
-    fun `importCommandTask maps all arg token variants`()
+    fun `importCommandTask maps literal arg`()
     {
-        val inputId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
         val d = CommandTaskDescriptor(
             name = "t", executable = "tool",
-            args = listOf(
-                LiteralArgDescriptor("--flag"),
-                InputRefArgDescriptor(inputId.toString()),
-                OutputRefArgDescriptor(outputId.toString()),
-                ParamRefArgDescriptor("myParam"),
-            )
+            args = listOf("--flag")
         )
 
         val result = TaskImporter.importCommandTask( d, namespace )
+        assertEquals(listOf(Literal("--flag")), result.args)
+    }
+
+    @Test
+    fun `importCommandTask maps input-ref by index`()
+    {
+        val inputId = UUID.randomUUID()
+        val input = InputDataSpec(id = inputId, name = "port", source = InMemorySource("k"))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("input.0")
+        )
+
+        val result = TaskImporter.importCommandTask( d, namespace, inputs = listOf(input) )
+        assertEquals(InputRef(inputId), result.args[0])
+    }
+
+    @Test
+    fun `importCommandTask maps output-ref by index`()
+    {
+        val outputId = UUID.randomUUID()
+        val output = OutputDataSpec(id = outputId, name = "port", destination = RegistryDestination("k"))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("output.0")
+        )
+
+        val result = TaskImporter.importCommandTask( d, namespace, outputs = listOf(output) )
+        assertEquals(OutputRef(outputId), result.args[0])
+    }
+
+    @Test
+    fun `importCommandTask maps param-ref`()
+    {
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("param:myParam")
+        )
+
+        val result = TaskImporter.importCommandTask( d, namespace )
+        assertEquals(ParamRef("myParam"), result.args[0])
+    }
+
+    @Test
+    fun `importCommandTask maps all arg inference variants`()
+    {
+        val inputId = UUID.randomUUID()
+        val outputId = UUID.randomUUID()
+        val input = InputDataSpec(id = inputId, name = "port", source = InMemorySource("k"))
+        val output = OutputDataSpec(id = outputId, name = "port", destination = RegistryDestination("k"))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("--flag", "input.0", "output.0", "param:myParam")
+        )
+
+        val result = TaskImporter.importCommandTask(
+            d, namespace,
+            inputs = listOf(input),
+            outputs = listOf(output)
+        )
         assertEquals(4, result.args.size)
         assertEquals(Literal("--flag"), result.args[0])
         assertEquals(InputRef(inputId), result.args[1])
         assertEquals(OutputRef(outputId), result.args[2])
         assertEquals(ParamRef("myParam"), result.args[3])
+    }
+
+    @Test
+    fun `importCommandTask input-ref out-of-range generates deterministic UUID`()
+    {
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("input.5")
+        )
+        val result = TaskImporter.importCommandTask( d, namespace )
+        val inputRef = assertIs<InputRef>(result.args[0])
+        assertNotNull(inputRef.inputId)
+    }
+
+    @Test
+    fun `importCommandTask output-ref out-of-range generates deterministic UUID`()
+    {
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("output.5")
+        )
+        val result = TaskImporter.importCommandTask( d, namespace )
+        val outputRef = assertIs<OutputRef>(result.args[0])
+        assertNotNull(outputRef.outputId)
     }
 
     // ── PythonTask: script entrypoint
@@ -180,13 +257,13 @@ class TaskImporterTest
     }
 
     @Test
-    fun `importPythonTask preserves name description and args`()
+    fun `importPythonTask preserves name description and maps literal args`()
     {
         val d = PythonTaskDescriptor(
             name = "analyse",
             description = "Runs analysis",
             entryPoint = ScriptEntryPointDescriptor("analyse.py"),
-            args = listOf(LiteralArgDescriptor("--verbose")),
+            args = listOf("--verbose"),
         )
 
         val result = TaskImporter.importPythonTask( d, namespace )
@@ -253,100 +330,319 @@ class TaskImporterTest
         }
     }
 
-    // ── importArgToken variants
+    // ── Arg inference helpers
+
+    private fun makeInput(id: UUID = UUID.randomUUID()) =
+        InputDataSpec(id = id, name = "port", source = InMemorySource("k"))
+
+    private fun makeOutput(id: UUID = UUID.randomUUID()) =
+        OutputDataSpec(id = id, name = "port", destination = RegistryDestination("k"))
+
+    private fun infer(arg: String, inputs: List<InputDataSpec> = emptyList(), outputs: List<OutputDataSpec> = emptyList()) =
+        TaskImporter.importCommandTask(
+            CommandTaskDescriptor(name = "t", executable = "echo", args = listOf(arg)),
+            namespace, inputs, outputs
+        ).args[0]
+
+    // ── Input references
 
     @Test
-    fun `importArgToken maps LiteralArgDescriptor`()
-    {
-        assertEquals( Literal("hello"), TaskImporter.importArgToken( LiteralArgDescriptor("hello"), namespace ) )
-    }
-
-    @Test
-    fun `importArgToken maps LiteralArgDescriptor with empty string`()
-    {
-        assertEquals( Literal(""), TaskImporter.importArgToken( LiteralArgDescriptor(""), namespace ) )
-    }
-
-    @Test
-    fun `importArgToken maps InputRefArgDescriptor with UUID string`()
-    {
-        val id = UUID.randomUUID()
-        assertEquals( InputRef(id), TaskImporter.importArgToken( InputRefArgDescriptor( id.toString() ), namespace ) )
-    }
-
-    @Test
-    fun `importArgToken maps OutputRefArgDescriptor with UUID string`()
+    fun `input-ref index 0 resolves to first input id`()
     {
         val id = UUID.randomUUID()
-        assertEquals( OutputRef(id), TaskImporter.importArgToken( OutputRefArgDescriptor( id.toString() ), namespace ) )
+        assertEquals(InputRef(id), infer("input.0", inputs = listOf(makeInput(id))))
     }
 
     @Test
-    fun `importArgToken maps ParamRefArgDescriptor`()
+    fun `input-ref index 2 resolves to third input id`()
     {
-        assertEquals( ParamRef("debug"), TaskImporter.importArgToken( ParamRefArgDescriptor("debug"), namespace ) )
-    }
-
-    // ── importArgToken: human-readable (non-UUID) port IDs
-
-    @Test
-    fun `importArgToken InputRef with human-readable id generates deterministic UUID`()
-    {
-        val result = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), namespace )
-        val inputRef = assertIs<InputRef>( result )
-        assertNotNull( inputRef.inputId )
+        val ids = List(3) { UUID.randomUUID() }
+        val inputs = ids.map { makeInput(it) }
+        assertEquals(InputRef(ids[2]), infer("input.2", inputs = inputs))
     }
 
     @Test
-    fun `importArgToken InputRef with human-readable id is deterministic`()
+    fun `input-ref out-of-range generates deterministic UUID`()
     {
-        val a = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), namespace )
-        val b = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), namespace )
-        assertEquals( assertIs<InputRef>(a).inputId, assertIs<InputRef>(b).inputId )
+        val a = assertIs<InputRef>(infer("input.5"))
+        val b = assertIs<InputRef>(infer("input.5"))
+        assertEquals(a.inputId, b.inputId)
     }
 
     @Test
-    fun `importArgToken InputRef human-readable id differs from UUID string of different name`()
+    fun `input-ref out-of-range differs from in-range for same index`()
     {
-        val a = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), namespace )
-        val b = TaskImporter.importArgToken( InputRefArgDescriptor("port-clean-eeg"), namespace )
-        assertNotEquals( assertIs<InputRef>(a).inputId, assertIs<InputRef>(b).inputId )
+        val id = UUID.randomUUID()
+        val inRange = assertIs<InputRef>(infer("input.0", inputs = listOf(makeInput(id))))
+        val outRange = assertIs<InputRef>(infer("input.0"))
+        assertNotEquals(inRange.inputId, outRange.inputId)
     }
 
     @Test
-    fun `importArgToken InputRef human-readable id differs across namespaces`()
+    fun `input-ref fallback UUID differs for different index strings`()
     {
-        val other = UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
-        val a = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), namespace )
-        val b = TaskImporter.importArgToken( InputRefArgDescriptor("port-raw-eeg"), other )
-        assertNotEquals( assertIs<InputRef>(a).inputId, assertIs<InputRef>(b).inputId )
+        val a = assertIs<InputRef>(infer("input.0"))
+        val b = assertIs<InputRef>(infer("input.1"))
+        assertNotEquals(a.inputId, b.inputId)
+    }
+
+    // ── Output references
+
+    @Test
+    fun `output-ref index 0 resolves to first output id`()
+    {
+        val id = UUID.randomUUID()
+        assertEquals(OutputRef(id), infer("output.0", outputs = listOf(makeOutput(id))))
     }
 
     @Test
-    fun `importArgToken OutputRef with human-readable id generates deterministic UUID`()
+    fun `output-ref index 1 resolves to second output id`()
     {
-        val result = TaskImporter.importArgToken( OutputRefArgDescriptor("port-features-csv"), namespace )
-        val outputRef = assertIs<OutputRef>( result )
-        assertNotNull( outputRef.outputId )
+        val ids = List(2) { UUID.randomUUID() }
+        val outputs = ids.map { makeOutput(it) }
+        assertEquals(OutputRef(ids[1]), infer("output.1", outputs = outputs))
     }
 
     @Test
-    fun `importArgToken OutputRef with human-readable id is deterministic`()
+    fun `output-ref out-of-range generates deterministic UUID`()
     {
-        val a = TaskImporter.importArgToken( OutputRefArgDescriptor("port-features-csv"), namespace )
-        val b = TaskImporter.importArgToken( OutputRefArgDescriptor("port-features-csv"), namespace )
-        assertEquals( assertIs<OutputRef>(a).outputId, assertIs<OutputRef>(b).outputId )
+        val a = assertIs<OutputRef>(infer("output.9"))
+        val b = assertIs<OutputRef>(infer("output.9"))
+        assertEquals(a.outputId, b.outputId)
     }
 
     @Test
-    fun `importArgToken InputRef and OutputRef with same human-readable id produce different UUIDs`()
+    fun `output-ref fallback UUID differs for different index strings`()
     {
-        // "port:input:x" and "port:output:x" have different prefixes so must produce different UUIDs
-        val input =
-            assertIs<InputRef>( TaskImporter.importArgToken( InputRefArgDescriptor("shared-port"), namespace ) )
-        val output =
-            assertIs<OutputRef>( TaskImporter.importArgToken( OutputRefArgDescriptor("shared-port"), namespace ) )
-        assertNotEquals( input.inputId, output.outputId )
+        val a = assertIs<OutputRef>(infer("output.0"))
+        val b = assertIs<OutputRef>(infer("output.2"))
+        assertNotEquals(a.outputId, b.outputId)
+    }
+
+    @Test
+    fun `input-ref and output-ref with same index produce different UUIDs`()
+    {
+        val inputRef = assertIs<InputRef>(infer("input.0"))
+        val outputRef = assertIs<OutputRef>(infer("output.0"))
+        assertNotEquals(inputRef.inputId, outputRef.outputId)
+    }
+
+    // ── Parameter references
+
+    @Test
+    fun `param-ref simple name maps to ParamRef`()
+    {
+        assertEquals(ParamRef("debug"), infer("param:debug"))
+    }
+
+    @Test
+    fun `param-ref with underscores maps to ParamRef`()
+    {
+        assertEquals(ParamRef("strict_mode"), infer("param:strict_mode"))
+    }
+
+    @Test
+    fun `param-ref with alphanumeric name maps to ParamRef`()
+    {
+        assertEquals(ParamRef("threshold2"), infer("param:threshold2"))
+    }
+
+    @Test
+    fun `param-ref name is preserved exactly`()
+    {
+        val result = assertIs<ParamRef>(infer("param:output_format"))
+        assertEquals("output_format", result.name)
+    }
+
+    @Test
+    fun `param-ref is deterministic across calls`()
+    {
+        assertEquals(infer("param:alpha"), infer("param:alpha"))
+    }
+
+    // ── Flags and options (treated as Literals)
+
+    @Test
+    fun `double-dash flag maps to Literal`()
+    {
+        assertEquals(Literal("--verbose"), infer("--verbose"))
+    }
+
+    @Test
+    fun `double-dash flag with value maps to Literal`()
+    {
+        assertEquals(Literal("--notch-freq=50"), infer("--notch-freq=50"))
+    }
+
+    @Test
+    fun `single-dash flag maps to Literal`()
+    {
+        assertEquals(Literal("-v"), infer("-v"))
+    }
+
+    @Test
+    fun `double-dash flag with path value maps to Literal`()
+    {
+        assertEquals(Literal("--config=/etc/app.conf"), infer("--config=/etc/app.conf"))
+    }
+
+    @Test
+    fun `flag-like string without leading dash maps to Literal`()
+    {
+        assertEquals(Literal("no-dash-flag"), infer("no-dash-flag"))
+    }
+
+    // ── Literals
+
+    @Test
+    fun `plain word maps to Literal`()
+    {
+        assertEquals(Literal("hello"), infer("hello"))
+    }
+
+    @Test
+    fun `empty string maps to Literal`()
+    {
+        assertEquals(Literal(""), infer(""))
+    }
+
+    @Test
+    fun `file path string maps to Literal`()
+    {
+        assertEquals(Literal("pipeline/run.py"), infer("pipeline/run.py"))
+    }
+
+    @Test
+    fun `numeric string maps to Literal`()
+    {
+        assertEquals(Literal("42"), infer("42"))
+    }
+
+    @Test
+    fun `string resembling param prefix but missing colon maps to Literal`()
+    {
+        // "param" alone has no colon separator → Literal, not ParamRef
+        assertEquals(Literal("param"), infer("param"))
+    }
+
+    // ── Error / boundary cases
+
+    @Test
+    fun `input-dot-without-digits maps to Literal`()
+    {
+        // "input." without digits doesn't match the regex → Literal
+        assertEquals(Literal("input."), infer("input."))
+    }
+
+    @Test
+    fun `output-dot-without-digits maps to Literal`()
+    {
+        assertEquals(Literal("output."), infer("output."))
+    }
+
+    @Test
+    fun `input-prefix-only maps to Literal`()
+    {
+        assertEquals(Literal("input"), infer("input"))
+    }
+
+    @Test
+    fun `param-ref with special characters in name maps to Literal`()
+    {
+        // "param:my-param" has a hyphen, doesn't match [a-zA-Z0-9_]+ → Literal
+        assertEquals(Literal("param:my-param"), infer("param:my-param"))
+    }
+
+    @Test
+    fun `param-ref with empty name maps to Literal`()
+    {
+        // "param:" has nothing after the colon → Literal
+        assertEquals(Literal("param:"), infer("param:"))
+    }
+
+    // ── Integration
+
+    @Test
+    fun `all five arg kinds resolved in a single task`()
+    {
+        val inputId = UUID.randomUUID()
+        val outputId = UUID.randomUUID()
+        val inputs = listOf(makeInput(inputId))
+        val outputs = listOf(makeOutput(outputId))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("script.py", "input.0", "output.0", "param:mode", "--strict")
+        )
+
+        val args = TaskImporter.importCommandTask(d, namespace, inputs, outputs).args
+        assertEquals(5, args.size)
+        assertEquals(Literal("script.py"), args[0])
+        assertEquals(InputRef(inputId), args[1])
+        assertEquals(OutputRef(outputId), args[2])
+        assertEquals(ParamRef("mode"), args[3])
+        assertEquals(Literal("--strict"), args[4])
+    }
+
+    @Test
+    fun `python task applies same arg inference rules`()
+    {
+        val inputId = UUID.randomUUID()
+        val inputs = listOf(makeInput(inputId))
+        val d = PythonTaskDescriptor(
+            name = "py", entryPoint = ScriptEntryPointDescriptor("run.py"),
+            args = listOf("input.0", "--verbose", "param:debug")
+        )
+
+        val args = TaskImporter.importPythonTask(d, namespace, inputs = inputs).args
+        assertEquals(InputRef(inputId), args[0])
+        assertEquals(Literal("--verbose"), args[1])
+        assertEquals(ParamRef("debug"), args[2])
+    }
+
+    @Test
+    fun `arg order is preserved`()
+    {
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "echo",
+            args = listOf("c", "a", "b")
+        )
+        val args = TaskImporter.importCommandTask(d, namespace).args
+        assertEquals(listOf(Literal("c"), Literal("a"), Literal("b")), args)
+    }
+
+    @Test
+    fun `multiple input refs resolve independently by index`()
+    {
+        val id0 = UUID.randomUUID()
+        val id1 = UUID.randomUUID()
+        val inputs = listOf(makeInput(id0), makeInput(id1))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("input.1", "input.0")
+        )
+        val args = TaskImporter.importCommandTask(d, namespace, inputs = inputs).args
+        assertEquals(InputRef(id1), args[0])
+        assertEquals(InputRef(id0), args[1])
+    }
+
+    @Test
+    fun `mixed in-range and out-of-range refs in one task`()
+    {
+        val inId = UUID.randomUUID()
+        val outId = UUID.randomUUID()
+        val inputs = listOf(makeInput(inId))
+        val outputs = listOf(makeOutput(outId))
+        val d = CommandTaskDescriptor(
+            name = "t", executable = "tool",
+            args = listOf("input.0", "input.9", "output.0", "output.9")
+        )
+        val args = TaskImporter.importCommandTask(d, namespace, inputs, outputs).args
+        assertEquals(InputRef(inId), args[0]) // in-range → actual id
+        assertIs<InputRef>(args[1]) // out-of-range → fallback UUID
+        assertNotEquals(inId, assertIs<InputRef>(args[1]).inputId)
+        assertEquals(OutputRef(outId), args[2]) // in-range → actual id
+        assertIs<OutputRef>(args[3]) // out-of-range → fallback UUID
+        assertNotEquals(outId, assertIs<OutputRef>(args[3]).outputId)
     }
 
     // ── Result type correctness

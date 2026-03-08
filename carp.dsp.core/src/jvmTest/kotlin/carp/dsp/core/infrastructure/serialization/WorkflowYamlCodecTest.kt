@@ -6,7 +6,6 @@ import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepMetadataDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
@@ -324,10 +323,7 @@ steps: []
                         name = "validate",
                         description = "Run validation",
                         executable = "python",
-                        args = listOf(
-                            LiteralArgDescriptor("validate.py"),
-                            LiteralArgDescriptor("--strict")
-                        )
+                        args = listOf("validate.py", "--strict")
                     ),
                     inputs = listOf(
                         DataPortDescriptor(

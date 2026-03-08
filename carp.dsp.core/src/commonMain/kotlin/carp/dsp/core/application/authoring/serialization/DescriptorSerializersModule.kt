@@ -1,25 +1,6 @@
 package carp.dsp.core.application.authoring.serialization
 
-import carp.dsp.core.application.authoring.descriptor.ArgTokenDescriptor
-import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
-import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
-import carp.dsp.core.application.authoring.descriptor.FileInputSource
-import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
-import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputSource
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.OutputDestination
-import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.PythonEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
-import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
+import carp.dsp.core.application.authoring.descriptor.*
 import com.charleskorn.kaml.PolymorphismStyle
 import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlConfiguration
@@ -42,8 +23,6 @@ import kotlinx.serialization.modules.subclass
  * Registered hierarchies:
  * - [TaskDescriptor]            → [CommandTaskDescriptor], [PythonTaskDescriptor], [InProcessTaskDescriptor]
  * - [PythonEntryPointDescriptor]→ [ScriptEntryPointDescriptor], [ModuleEntryPointDescriptor]
- * - [ArgTokenDescriptor]        → [LiteralArgDescriptor], [InputRefArgDescriptor],
- *                                 [OutputRefArgDescriptor], [ParamRefArgDescriptor]
  */
 val descriptorSerializersModule: SerializersModule = SerializersModule {
     polymorphic(TaskDescriptor::class) {
@@ -54,12 +33,6 @@ val descriptorSerializersModule: SerializersModule = SerializersModule {
     polymorphic(PythonEntryPointDescriptor::class) {
         subclass(ScriptEntryPointDescriptor::class)
         subclass(ModuleEntryPointDescriptor::class)
-    }
-    polymorphic(ArgTokenDescriptor::class) {
-        subclass(LiteralArgDescriptor::class)
-        subclass(InputRefArgDescriptor::class)
-        subclass(OutputRefArgDescriptor::class)
-        subclass(ParamRefArgDescriptor::class)
     }
     polymorphic(InputSource::class) {
         subclass(FileInputSource::class)

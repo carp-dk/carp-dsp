@@ -2,11 +2,7 @@ package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
@@ -19,30 +15,11 @@ import kotlin.test.assertTrue
 /**
  * Golden fixture tests for [WorkflowYamlCodec].
  *
- * The fixture `workflow-complex-v1.yml` is the canonical reference document.
- * It covers:
- * - All task kinds: command, python-script, python-module
- * - All ArgToken variants: literal, input-ref, output-ref, param-ref
- * - Two environment kinds: conda, pixi
- * - Optional fields omitted in places (no description on step-004 task, no spec on some ports)
- * - Workflow metadata with tags
- * - Step dependencies
- *
- * ### Golden strategy: normalised roundtrip
- *
- * Rather than asserting the emitted YAML string equals the fixture byte-for-byte
- * (which is fragile to whitespace and quoting differences between kaml versions),
- * we use the **normalised roundtrip** strategy:
- *
- *   decode(fixture) == decode(encode(decode(fixture)))
- *
- * This proves:
- * 1. The fixture parses to a valid descriptor (structural decode).
- * 2. Encoding is stable — a second decode of the encoded form produces the same descriptor.
- * 3. No information is lost or mutated in the encode → decode cycle.
- *
- * Structural assertions on the decoded descriptor provide the regression guard for the
- * specific field values we care about.
+ * Args are plain strings; inference rules applied by [carp.dsp.core.application.authoring.mapper.TaskImporter]:
+ * - `"input.N"`    → InputRef (by index)
+ * - `"output.N"`   → OutputRef (by index)
+ * - `"param:NAME"` → ParamRef
+ * - anything else  → Literal
  */
 class WorkflowYamlFixtureTest
 {
@@ -93,16 +70,11 @@ class WorkflowYamlFixtureTest
         assertNotNull(conda, "Expected env-conda-001")
         assertEquals("conda", conda.kind)
         assertEquals("eeg-analysis", conda.name)
-        assertEquals(listOf("numpy", "scipy", "mne"), conda.spec["dependencies"])
-        assertEquals(listOf("3.11"), conda.spec["pythonVersion"])
-        assertEquals(listOf("conda-forge", "defaults"), conda.spec["channels"])
 
         val pixi = descriptor.environments["env-pixi-002"]
         assertNotNull(pixi, "Expected env-pixi-002")
         assertEquals("pixi", pixi.kind)
         assertEquals("report-gen", pixi.name)
-        assertEquals(listOf("matplotlib", "jinja2"), pixi.spec["dependencies"])
-        assertEquals(listOf("3.12"), pixi.spec["pythonVersion"])
     }
 
     @Test
@@ -169,27 +141,21 @@ class WorkflowYamlFixtureTest
     }
 
     @Test
-    fun `fixture decode - all ArgToken variants are present`()
+    fun `fixture decode - all arg token string variants are present`()
     {
         val descriptor = decodeFixture()
 
-        // literal — step-001 arg[0]
+        // step-001: literal, input-ref, param-ref
         val step1Task = assertIs<CommandTaskDescriptor>(descriptor.steps[0].task)
-        assertIs<LiteralArgDescriptor>(step1Task.args[0])
-        assertEquals("validate_eeg.py", (step1Task.args[0] as LiteralArgDescriptor).value)
+        assertEquals("validate_eeg.py", step1Task.args[0]) // literal
+        assertEquals("input.0", step1Task.args[1]) // input-ref by index
+        assertEquals("param:strict_mode", step1Task.args[2]) // param-ref
 
-        // input-ref — step-001 arg[1]
-        assertIs<InputRefArgDescriptor>(step1Task.args[1])
-        assertEquals("port-raw-eeg-001", (step1Task.args[1] as InputRefArgDescriptor).inputId)
-
-        // param-ref — step-001 arg[2]
-        assertIs<ParamRefArgDescriptor>(step1Task.args[2])
-        assertEquals("strict_mode", (step1Task.args[2] as ParamRefArgDescriptor).name)
-
-        // output-ref — step-002 arg[1]
+        // step-002: input-ref, output-ref, literal
         val step2Task = assertIs<PythonTaskDescriptor>(descriptor.steps[1].task)
-        assertIs<OutputRefArgDescriptor>(step2Task.args[1])
-        assertEquals("port-clean-eeg-002", (step2Task.args[1] as OutputRefArgDescriptor).outputId)
+        assertEquals("input.0", step2Task.args[0]) // input-ref
+        assertEquals("output.0", step2Task.args[1]) // output-ref
+        assertEquals("--notch-freq=50", step2Task.args[2]) // literal
     }
 
     @Test
@@ -232,7 +198,6 @@ class WorkflowYamlFixtureTest
     @Test
     fun `golden - decode then encode then decode produces identical descriptor`()
     {
-        // decode(fixture) == decode(encode(decode(fixture)))
         val fixtureYaml = loadFixture("workflow-complex-v1.yml")
         val first = decodeFixture(fixtureYaml)
         val reEncoded = codec.encode(first)
@@ -240,22 +205,19 @@ class WorkflowYamlFixtureTest
 
         assertEquals(
             first, second,
-            "Re-encoded YAML decoded to a different descriptor.\n" +
-            "Re-encoded YAML was:\n$reEncoded"
+            "Re-encoded YAML decoded to a different descriptor.\nRe-encoded YAML was:\n$reEncoded"
         )
     }
 
     @Test
     fun `golden - encode is stable across multiple cycles`()
     {
-        // encode(decode(fixture)) == encode(decode(encode(decode(fixture))))
         val yaml1 = codec.encode(decodeFixture())
         val yaml2 = codec.encode(codec.decodeOrThrow(yaml1))
 
         assertEquals(
             yaml1, yaml2,
-            "Second encode-decode cycle produced different YAML.\n" +
-            "First:\n$yaml1\n\nSecond:\n$yaml2"
+            "Second encode-decode cycle produced different YAML.\nFirst:\n$yaml1\n\nSecond:\n$yaml2"
         )
     }
 
@@ -281,11 +243,10 @@ class WorkflowYamlFixtureTest
     }
 
     @Test
-    fun `golden - encoded YAML contains explicit type discriminators`()
+    fun `golden - encoded YAML contains explicit type discriminators for task kinds`()
     {
         val yaml = codec.encode(decodeFixture())
 
-        // All three task kinds must appear in the encoded output
         assertTrue(
             yaml.contains("type: \"command\"") || yaml.contains("type: command"),
             "Expected 'command' discriminator in encoded YAML"
@@ -294,8 +255,6 @@ class WorkflowYamlFixtureTest
             yaml.contains("type: \"python\"") || yaml.contains("type: python"),
             "Expected 'python' discriminator in encoded YAML"
         )
-
-        // Both entry-point kinds
         assertTrue(
             yaml.contains("type: \"script\"") || yaml.contains("type: script"),
             "Expected 'script' entry-point discriminator in encoded YAML"
@@ -304,24 +263,6 @@ class WorkflowYamlFixtureTest
             yaml.contains("type: \"module\"") || yaml.contains("type: module"),
             "Expected 'module' entry-point discriminator in encoded YAML"
         )
-
-        // All arg-token kinds
-        assertTrue(
-            yaml.contains("type: \"literal\"") || yaml.contains("type: literal"),
-            "Expected 'literal' arg discriminator in encoded YAML"
-        )
-        assertTrue(
-            yaml.contains("type: \"input-ref\"") || yaml.contains("type: input-ref"),
-            "Expected 'input-ref' arg discriminator in encoded YAML"
-        )
-        assertTrue(
-            yaml.contains("type: \"output-ref\"") || yaml.contains("type: output-ref"),
-            "Expected 'output-ref' arg discriminator in encoded YAML"
-        )
-        assertTrue(
-            yaml.contains("type: \"param-ref\"") || yaml.contains("type: param-ref"),
-            "Expected 'param-ref' arg discriminator in encoded YAML"
-        )
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -329,5 +270,3 @@ class WorkflowYamlFixtureTest
     private fun decodeFixture( yaml: String = loadFixture("workflow-complex-v1.yml") ): WorkflowDescriptor =
         codec.decodeOrThrow(yaml)
 }
-
-

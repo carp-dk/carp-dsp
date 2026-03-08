@@ -3,43 +3,6 @@ package carp.dsp.core.application.authoring.descriptor
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// ── ArgTokenDescriptor ────────────────────────────────────────────────────────
-
-/**
- * Sealed descriptor for a single argument token in a task's argument list.
- *
- * Mirrors [dk.cachet.carp.analytics.domain.tasks.ArgToken] using plain strings,
- * making the descriptor YAML-friendly and free of UUID imports.
- *
- * Variants:
- * - [LiteralArgDescriptor] — a raw string value passed as-is.
- * - [InputRefArgDescriptor] — reference to a declared input port (resolved at plan time).
- * - [OutputRefArgDescriptor] — reference to a declared output port (resolved at plan time).
- * - [ParamRefArgDescriptor] — reference to a named step parameter (future feature).
- */
-@Serializable
-sealed interface ArgTokenDescriptor
-
-/** A literal string argument. Maps to [dk.cachet.carp.analytics.domain.tasks.Literal]. */
-@Serializable
-@SerialName("literal")
-data class LiteralArgDescriptor( val value: String ) : ArgTokenDescriptor
-
-/** Reference to an input data port, resolved to its path at plan time. Maps to [dk.cachet.carp.analytics.domain.tasks.InputRef]. */
-@Serializable
-@SerialName("input-ref")
-data class InputRefArgDescriptor( val inputId: String ) : ArgTokenDescriptor
-
-/** Reference to an output data port, resolved to its path at plan time. Maps to [dk.cachet.carp.analytics.domain.tasks.OutputRef]. */
-@Serializable
-@SerialName("output-ref")
-data class OutputRefArgDescriptor( val outputId: String ) : ArgTokenDescriptor
-
-/** Reference to a named step parameter (optional / future feature). Maps to [dk.cachet.carp.analytics.domain.tasks.ParamRef]. */
-@Serializable
-@SerialName("param-ref")
-data class ParamRefArgDescriptor( val name: String ) : ArgTokenDescriptor
-
 // ── PythonEntryPointDescriptor ────────────────────────────────────────────────
 
 /**
@@ -105,7 +68,7 @@ sealed interface TaskDescriptor
  *
  * @property id Optional stable UUID. Omit in authored YAML; the importer generates one.
  * @property executable The program to run (e.g. `"cp"`, `"Rscript"`).
- * @property args Structured argument list — each element is an [ArgTokenDescriptor].
+ * @property args Structured argument list — each element is a string argument token.
  */
 @Serializable
 @SerialName("command")
@@ -114,7 +77,7 @@ data class CommandTaskDescriptor(
     override val name: String,
     override val description: String? = null,
     val executable: String,
-    val args: List<ArgTokenDescriptor> = emptyList(),
+    val args: List<String> = emptyList(),
 ) : TaskDescriptor
 
 // ── PythonTaskDescriptor ──────────────────────────────────────────────────────
@@ -127,7 +90,7 @@ data class CommandTaskDescriptor(
  * @property id Optional stable UUID. Omit in authored YAML; the importer generates one.
  * @property entryPoint How to invoke Python — either run a [ScriptEntryPointDescriptor]
  *   or a [ModuleEntryPointDescriptor].
- * @property args Structured argument list appended after the entry-point args.
+ * @property args Structured argument list — each element is a string argument token.
  */
 @Serializable
 @SerialName("python")
@@ -136,7 +99,7 @@ data class PythonTaskDescriptor(
     override val name: String,
     override val description: String? = null,
     val entryPoint: PythonEntryPointDescriptor,
-    val args: List<ArgTokenDescriptor> = emptyList(),
+    val args: List<String> = emptyList(),
 ) : TaskDescriptor
 
 // ── InProcessTaskDescriptor ───────────────────────────────────────────────────

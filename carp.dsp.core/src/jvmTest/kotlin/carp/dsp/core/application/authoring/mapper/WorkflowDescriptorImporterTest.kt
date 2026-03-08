@@ -4,7 +4,6 @@ import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
@@ -240,7 +239,7 @@ class WorkflowDescriptorImporterTest
                     environmentId = envId,
                     task = CommandTaskDescriptor(
                         name = "run", executable = "python",
-                        args = listOf( LiteralArgDescriptor("script.py") ),
+                        args = listOf( "script.py" ),
                     ),
                 )
             )
@@ -424,7 +423,7 @@ class WorkflowDescriptorImporterTest
                         id = taskId.toString(),
                         name = "cmd",
                         executable = "python",
-                        args = listOf( LiteralArgDescriptor("run.py") ),
+                        args = listOf( "run.py" ),
                     ),
                     inputs = listOf( DataPortDescriptor( id = inputId.toString() ) ),
                     outputs = listOf(

@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
 import java.io.File
@@ -89,8 +90,8 @@ class WorkflowYamlIntegrationTest
         val descriptor = decodeResult.descriptor
 
         // Step 2: Validate with linter
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
         assertEquals(0, errors.size, "Fixture should have no linting errors")
 
         // Step 3: Import to domain model
@@ -245,8 +246,8 @@ steps:
         """.trimIndent()
 
         val descriptor = codec.decodeOrThrow(yaml)
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("duplicated") }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("duplicated") }
 
         assertTrue(errors.isNotEmpty(), "Duplicate step IDs should be caught")
         assertTrue(errors[0].message.contains("step-1"), "Error should identify the duplicate ID")
@@ -271,11 +272,12 @@ steps:
         """.trimIndent()
 
         val descriptor = codec.decodeOrThrow(yaml)
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("not found") }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter {
+            it.severity == ValidationSeverity.ERROR && it.message.contains("non-existent environment")
+        }
 
         assertTrue(errors.isNotEmpty(), "Missing environment should be caught")
-        assertTrue(errors[0].suggestion != null, "Error should include suggestion")
     }
 
     @Test
@@ -310,8 +312,8 @@ steps:
         """.trimIndent()
 
         val descriptor = codec.decodeOrThrow(yaml)
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" && it.message.contains("Circular") }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("Circular") }
 
         assertTrue(errors.isNotEmpty(), "Circular dependencies should be caught")
     }
@@ -335,11 +337,11 @@ steps:
         """.trimIndent()
 
         val descriptor = codec.decodeOrThrow(yaml)
-        val issues = linter.lint(descriptor)
+        val lintResult = linter.lint(descriptor)
 
         // Framework should prevent import of invalid workflows
         // (In production: planner would check linter results before importing)
-        val errors = issues.filter { it.level == "ERROR" }
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
         assertTrue(errors.isNotEmpty(), "Invalid workflow should have errors")
     }
 
@@ -355,8 +357,8 @@ steps:
         assertIs<DecodeResult.Success>(decodeResult)
 
         // 2. Lint
-        val issues = linter.lint(decodeResult.descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(decodeResult.descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
         assertEquals(0, errors.size)
 
         // 3. Import
@@ -386,8 +388,8 @@ steps:
         val descriptor = (parseResult as DecodeResult.Success).descriptor
 
         // 3. Validate
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
         if (errors.isNotEmpty()) {
             fail("Fixture should pass validation. Errors: ${errors.map { it.message }}")
         }

@@ -8,6 +8,7 @@ import dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition
 import dk.cachet.carp.analytics.domain.tasks.*
 import dk.cachet.carp.analytics.domain.workflow.*
 import dk.cachet.carp.common.application.UUID
+import kotlin.collections.emptyList
 
 // ── MetadataExporter ──────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ internal object TaskExporter
             name = task.name,
             description = task.description,
             executable = task.executable,
-            args = task.args.map { exportArgToken( it ) },
+            args = task.args.map { exportArgTokenToString(it, emptyList(), emptyList()) },
         )
 
     fun exportPythonTask( task: PythonTaskDefinition ): PythonTaskDescriptor =
@@ -99,17 +100,56 @@ internal object TaskExporter
                 is Script -> ScriptEntryPointDescriptor( ep.scriptPath )
                 is Module -> ModuleEntryPointDescriptor( ep.moduleName )
             },
-            args = task.args.map { exportArgToken( it ) },
+            args = task.args.map { exportArgTokenToString(it, emptyList(), emptyList()) },
         )
 
-    fun exportArgToken( token: ArgToken ) =
-        when ( token )
-        {
-            is Literal -> LiteralArgDescriptor( token.value )
-            is InputRef -> InputRefArgDescriptor( token.inputId.toString() )
-            is OutputRef -> OutputRefArgDescriptor( token.outputId.toString() )
-            is ParamRef -> ParamRefArgDescriptor( token.name )
+    /**
+     * Converts a domain ArgToken back to a string argument.
+     *
+     * Reverse of the inference logic in TaskImporter:
+     * - Literal(value) → value
+     * - InputRef(id) → "input.N" (if id matches inputsN.id)
+     * - OutputRef(id) → "output.N" (if id matches outputsN.id)
+     * - ParamRef(name) → "param:name"
+     *
+     * @param token The domain ArgToken
+     * @param inputs List of input specs (for reverse lookup)
+     * @param outputs List of output specs (for reverse lookup)
+     * @return String representation of the argument
+     */
+    fun exportArgTokenToString(
+        token: ArgToken,
+        inputs: List<InputDataSpec>,
+        outputs: List<OutputDataSpec>
+    ): String {
+        return when (token) {
+            is Literal -> token.value
+
+            is InputRef -> {
+                // Try to find the index of this input by ID
+                val index = inputs.indexOfFirst { it.id == token.inputId }
+                if (index >= 0) {
+                    "input.$index"
+                } else {
+                    // Fallback: use UUID as literal (not ideal but safe)
+                    "input.${token.inputId}"
+                }
+            }
+
+            is OutputRef -> {
+                // Try to find the index of this output by ID
+                val index = outputs.indexOfFirst { it.id == token.outputId }
+                if (index >= 0) {
+                    "output.$index"
+                } else {
+                    // Fallback: use UUID as literal (not ideal but safe)
+                    "output.${token.outputId}"
+                }
+            }
+
+            is ParamRef -> "param:${token.name}"
         }
+    }
 }
 
 // ── EnvironmentExporter ───────────────────────────────────────────────────────
@@ -220,18 +260,13 @@ class WorkflowDescriptorExporter
             outputs = step.outputs.map { PortExporter.exportOutputPort( it ) },
         )
 
-    // ── Delegating shims (keep test call-sites unchanged) ─────────────────────
-
-    internal fun exportCommandTask( task: CommandTaskDefinition ) =
+    internal fun exportCommandTask( task: CommandTaskDefinition ): CommandTaskDescriptor =
         TaskExporter.exportCommandTask( task )
 
-    internal fun exportArgToken( token: ArgToken ) =
-        TaskExporter.exportArgToken( token )
-
-    internal fun exportTask( task: TaskDefinition ) =
+    internal fun exportTask( task: TaskDefinition ): TaskDescriptor =
         TaskExporter.exportTask( task )
 
-    internal fun exportEnvironment( env: EnvironmentDefinition ) =
+    internal fun exportEnvironment( env: EnvironmentDefinition ): EnvironmentDescriptor =
         EnvironmentExporter.exportEnvironment( env )
 }
 

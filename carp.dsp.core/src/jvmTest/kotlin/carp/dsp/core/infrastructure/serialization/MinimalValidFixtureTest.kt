@@ -2,9 +2,9 @@ package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -14,10 +14,10 @@ import kotlin.test.assertTrue
  * Verification tests for the `minimal-valid.yaml` golden fixture.
  *
  * This test suite demonstrates that the minimal-valid.yaml fixture:
- * 1. ✅ Parses without error (YAML syntax + schema validation)
- * 2. ✅ Passes linter (no ERROR issues)
- * 3. ✅ Imports to WorkflowDefinition (domain model)
- * 4. ✅ Contains expected structure (2 steps, 1 environment, etc.)
+ * 1. Parses without error (YAML syntax + schema validation)
+ * 2. Passes linter (no ERROR issues)
+ * 3. Imports to WorkflowDefinition (domain model)
+ * 4. Contains expected structure (2 steps, 1 environment, etc.)
  *
  * Use this as a reference for:
  * - How to load and test YAML fixtures
@@ -32,59 +32,13 @@ class MinimalValidFixtureTest
 
     // ── Load fixture YAML ─────────────────────────────────────────────────────
 
-    private fun loadFixtureYaml(): String
-    {
-        // In a real test suite, load from project resources:
-        // return this::class.java.getResource("/fixtures/minimal-valid.yaml")?.readText()
-        //     ?: error("Fixture not found")
-
-        // For now, we can define it inline or load from File
-        val fixturesDir = File("src/test/resources/fixtures")
-        val fixtureFile = File(fixturesDir, "minimal-valid.yaml")
-
-        return if (fixtureFile.exists()) {
-            fixtureFile.readText()
-        } else {
-            // Fallback: inline minimal fixture for testing
-            """
-schemaVersion: "1.0"
-metadata:
-  name: "Minimal Valid Workflow"
-  version: "1.0"
-environments:
-  system-env:
-    name: "System Environment"
-    kind: "system"
-    spec: {}
-steps:
-  - id: "echo-hello"
-    environmentId: "system-env"
-    dependsOn: []
-    task:
-      type: "command"
-      name: "echo-greeting"
-      executable: "echo"
-      args:
-        - type: "literal"
-          value: "Hello!"
-    inputs: []
-    outputs: []
-  - id: "echo-goodbye"
-    environmentId: "system-env"
-    dependsOn:
-      - "echo-hello"
-    task:
-      type: "command"
-      name: "echo-farewell"
-      executable: "echo"
-      args:
-        - type: "literal"
-          value: "Goodbye!"
-    inputs: []
-    outputs: []
-            """.trimIndent()
-        }
-    }
+    private fun loadFixtureYaml(): String =
+        checkNotNull(
+            MinimalValidFixtureTest::class.java.classLoader
+                .getResourceAsStream("fixtures/minimal-valid.yaml")
+        ) { "Fixture not found: fixtures/minimal-valid.yaml" }
+            .bufferedReader()
+            .readText()
 
     // ── Test: YAML Parsing ────────────────────────────────────────────────────
 
@@ -193,8 +147,8 @@ steps:
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        val issues = linter.lint(descriptor)
-        val errors = issues.filter { it.level == "ERROR" }
+        val lintResult = linter.lint(descriptor)
+        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
 
         assertEquals(0, errors.size, "Fixture should have no linting errors")
     }
@@ -206,8 +160,8 @@ steps:
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        val issues = linter.lint(descriptor)
-        val warnings = issues.filter { it.level == "WARNING" }
+        val lintResult = linter.lint(descriptor)
+        val warnings = lintResult.issues.filter { it.severity == ValidationSeverity.WARNING }
 
         // Note: May have UUID format warnings if using semantic IDs, which is OK
         // (warnings are non-blocking)

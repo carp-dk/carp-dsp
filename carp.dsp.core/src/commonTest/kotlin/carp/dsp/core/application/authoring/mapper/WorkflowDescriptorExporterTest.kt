@@ -1,11 +1,7 @@
 package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.InputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.LiteralArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.OutputRefArgDescriptor
-import carp.dsp.core.application.authoring.descriptor.ParamRefArgDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
@@ -139,7 +135,7 @@ class WorkflowDescriptorExporterTest
         assertEquals("echo-task", task.name)
         assertEquals("echo", task.executable)
         assertEquals(1, task.args.size)
-        assertEquals(LiteralArgDescriptor("hello"), task.args.first())
+        assertEquals("hello", task.args.first())
 
         // Environment keyed by UUID string
         assertEquals(1, result.environments.size)
@@ -163,14 +159,12 @@ class WorkflowDescriptorExporterTest
     @Test
     fun `export is deterministic - environments are sorted by key`()
     {
-        // Use two UUIDs where we know the lexicographic string order
         val id1 = UUID.randomUUID()
         val id2 = UUID.randomUUID()
         val env1 = CondaEnvironmentDefinition(id = id1, name = "env-1")
         val env2 = CondaEnvironmentDefinition(id = id2, name = "env-2")
 
         val wf = makeWorkflow()
-        // Insert in both orders — exporter should always produce sorted keys
         val definitionAB = WorkflowDefinition(
             workflow = wf,
             environments = mapOf<UUID, dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition>(
@@ -187,9 +181,7 @@ class WorkflowDescriptorExporterTest
         val keysAB = exporter.export(definitionAB).environments.keys.toList()
         val keysBA = exporter.export(definitionBA).environments.keys.toList()
 
-        // Both must yield the same sorted order
         assertEquals(keysAB, keysBA)
-        // Keys must actually be sorted lexicographically
         assertEquals(keysAB, keysAB.sorted())
     }
 
@@ -220,10 +212,14 @@ class WorkflowDescriptorExporterTest
         assertEquals("copies files", result.description)
         assertEquals("cp", result.executable)
         assertEquals(4, result.args.size)
-        assertEquals(LiteralArgDescriptor("--verbose"), result.args[0])
-        assertEquals(InputRefArgDescriptor(inputId.toString()), result.args[1])
-        assertEquals(OutputRefArgDescriptor(outputId.toString()), result.args[2])
-        assertEquals(ParamRefArgDescriptor("flag"), result.args[3])
+        // Literal → plain string
+        assertEquals("--verbose", result.args[0])
+        // InputRef with no port list → fallback "input.<uuid>"
+        assertTrue(result.args[1].startsWith("input."), "expected input. prefix")
+        // OutputRef with no port list → fallback "output.<uuid>"
+        assertTrue(result.args[2].startsWith("output."), "expected output. prefix")
+        // ParamRef → "param:<name>"
+        assertEquals("param:flag", result.args[3])
     }
 
     // ── Python task export ────────────────────────────────────────────────────
@@ -238,7 +234,7 @@ class WorkflowDescriptorExporterTest
         assertEquals(taskId.toString(), task.id)
         assertEquals("run-analysis", task.name)
         assertEquals(ScriptEntryPointDescriptor("analysis/run.py"), task.entryPoint)
-        assertEquals(listOf(LiteralArgDescriptor("--verbose")), task.args)
+        assertEquals(listOf("--verbose"), task.args)
     }
 
     @Test
@@ -252,32 +248,49 @@ class WorkflowDescriptorExporterTest
         assertTrue(task.args.isEmpty())
     }
 
-    // ── ArgToken variants ─────────────────────────────────────────────────────
+    // ── exportArgTokenToString variants ──────────────────────────────────────
 
     @Test
-    fun `exportArgToken maps Literal`()
+    fun `exportArgTokenToString maps Literal`()
     {
-        assertEquals(LiteralArgDescriptor("hello"), exporter.exportArgToken(Literal("hello")))
+        assertEquals("hello", TaskExporter.exportArgTokenToString(Literal("hello"), emptyList(), emptyList()))
     }
 
     @Test
-    fun `exportArgToken maps InputRef`()
+    fun `exportArgTokenToString maps InputRef by index`()
     {
         val id = UUID.randomUUID()
-        assertEquals(InputRefArgDescriptor(id.toString()), exporter.exportArgToken(InputRef(id)))
+        val input = InputDataSpec(
+            id = id, name = "port",
+            source = FileSystemSource(path = "/in.csv", format = FileFormat.CSV)
+        )
+        assertEquals("input.0", TaskExporter.exportArgTokenToString(InputRef(id), listOf(input), emptyList()))
     }
 
     @Test
-    fun `exportArgToken maps OutputRef`()
+    fun `exportArgTokenToString maps OutputRef by index`()
     {
         val id = UUID.randomUUID()
-        assertEquals(OutputRefArgDescriptor(id.toString()), exporter.exportArgToken(OutputRef(id)))
+        val output = OutputDataSpec(
+            id = id, name = "port",
+            destination = FileDestination(path = "/out.csv", format = FileFormat.CSV)
+        )
+        assertEquals("output.0", TaskExporter.exportArgTokenToString(OutputRef(id), emptyList(), listOf(output)))
     }
 
     @Test
-    fun `exportArgToken maps ParamRef`()
+    fun `exportArgTokenToString maps ParamRef`()
     {
-        assertEquals(ParamRefArgDescriptor("myParam"), exporter.exportArgToken(ParamRef("myParam")))
+        assertEquals("param:myParam", TaskExporter.exportArgTokenToString(ParamRef("myParam"), emptyList(), emptyList()))
+    }
+
+    @Test
+    fun `exportArgTokenToString InputRef fallback uses uuid when not in list`()
+    {
+        val id = UUID.randomUUID()
+        val result = TaskExporter.exportArgTokenToString(InputRef(id), emptyList(), emptyList())
+        assertTrue(result.startsWith("input."), "Expected 'input.<uuid>' fallback, got: $result")
+        assertTrue(result.contains(id.toString()))
     }
 
     // ── Environment export ────────────────────────────────────────────────────
@@ -288,9 +301,9 @@ class WorkflowDescriptorExporterTest
         val result = exporter.exportEnvironment(condaEnv)
         assertEquals("conda", result.kind)
         assertEquals("test-env", result.name)
-        assertEquals(listOf("3.11"), result.spec["pythonVersion"])
-        assertEquals(listOf("conda-forge"), result.spec["channels"])
-        assertEquals(listOf("numpy", "pandas"), result.spec["dependencies"])
+        assertEquals(listOf("3.11"), result.spec["pythonVersion"] as List<*>)
+        assertEquals(listOf("conda-forge"), result.spec["channels"] as List<*>)
+        assertEquals(listOf("numpy", "pandas"), result.spec["dependencies"] as List<*>)
     }
 
     @Test
@@ -305,8 +318,8 @@ class WorkflowDescriptorExporterTest
         val result = exporter.exportEnvironment(pixiEnv)
         assertEquals("pixi", result.kind)
         assertEquals("pixi-env", result.name)
-        assertEquals(listOf("3.12"), result.spec["pythonVersion"])
-        assertEquals(listOf("scipy"), result.spec["dependencies"])
+        assertEquals(listOf("3.12"), result.spec["pythonVersion"] as List<*>)
+        assertEquals(listOf("scipy"), result.spec["dependencies"] as List<*>)
     }
 
     @Test
@@ -395,10 +408,6 @@ class WorkflowDescriptorExporterTest
     }
 
     // ── YAML serialization roundtrip ──────────────────────────────────────────
-    // YAML is the primary document contract for WorkflowDescriptor.
-    // These tests verify that the full sealed-type hierarchy survives an
-    // encode → decode cycle through descriptorYaml (kaml), which is what
-    // authored .yaml files and CI pipelines consume.
 
     @Test
     fun `WorkflowDescriptor survives YAML roundtrip for command task`()
@@ -408,7 +417,6 @@ class WorkflowDescriptorExporterTest
         val decoded = descriptorYaml.decodeFromString(WorkflowDescriptor.serializer(), yaml)
 
         assertEquals(original, decoded)
-        // Discriminator field must be present in the emitted YAML
         assertTrue(yaml.contains("type:"), "YAML must contain 'type:' discriminator, got:\n$yaml")
     }
 
@@ -423,7 +431,6 @@ class WorkflowDescriptorExporterTest
 
         val task = decoded.steps.first().task as PythonTaskDescriptor
         assertEquals(ScriptEntryPointDescriptor("analysis/run.py"), task.entryPoint)
-        // Check discriminator is present (value may be quoted or unquoted depending on kaml version)
         assertTrue(yaml.contains("type:"), "YAML must contain 'type:' discriminator, got:\n$yaml")
         assertTrue(yaml.contains("python"), "YAML must contain task kind 'python', got:\n$yaml")
     }
@@ -444,7 +451,7 @@ class WorkflowDescriptorExporterTest
     }
 
     @Test
-    fun `WorkflowDescriptor YAML roundtrip preserves all ArgToken variants`()
+    fun `WorkflowDescriptor YAML roundtrip preserves all arg token string variants`()
     {
         val inputId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
@@ -467,10 +474,12 @@ class WorkflowDescriptorExporterTest
         )
 
         val args = (decoded.steps.first().task as CommandTaskDescriptor).args
-        assertEquals(LiteralArgDescriptor("--flag"), args[0])
-        assertEquals(InputRefArgDescriptor(inputId.toString()), args[1])
-        assertEquals(OutputRefArgDescriptor(outputId.toString()), args[2])
-        assertEquals(ParamRefArgDescriptor("myParam"), args[3])
+        assertEquals(4, args.size)
+        assertEquals("--flag", args[0])
+        // InputRef/OutputRef without port list → fallback strings starting with "input."/"output."
+        assertTrue(args[1].startsWith("input."), "expected input. prefix")
+        assertTrue(args[2].startsWith("output."), "expected output. prefix")
+        assertEquals("param:myParam", args[3])
     }
 
     @Test
@@ -485,7 +494,6 @@ class WorkflowDescriptorExporterTest
             exporter.export(makeDefinition(pythonScriptStep()))
         )
 
-        // Value may appear as 'type: command' or 'type: "command"' depending on kaml version
         assertTrue(commandYaml.contains("type:"), "Expected 'type:' discriminator in:\n$commandYaml")
         assertTrue(commandYaml.contains("command"), "Expected kind 'command' in:\n$commandYaml")
         assertTrue(pythonYaml.contains("type:"), "Expected 'type:' discriminator in:\n$pythonYaml")
