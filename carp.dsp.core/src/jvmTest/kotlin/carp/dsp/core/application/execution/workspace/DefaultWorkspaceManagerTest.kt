@@ -4,6 +4,7 @@ package carp.dsp.core.application.execution.workspace
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.common.application.UUID
@@ -232,9 +233,9 @@ class DefaultWorkspaceManagerTest {
         return PlannedStep(
             stepId = stepId,
             name = name,
-            process = CommandSpec("echo", listOf("hello")),
+            process = CommandSpec("echo", listOf(ExpandedArg.Literal("hello"))),
             bindings = ResolvedBindings(emptyMap(), emptyMap()),
-            environmentDefinitionId = UUID.randomUUID()
+            environmentRef = UUID.randomUUID()
         )
     }
 }

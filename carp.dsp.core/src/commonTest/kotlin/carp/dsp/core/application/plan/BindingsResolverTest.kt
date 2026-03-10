@@ -2,6 +2,7 @@ package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.DataRef
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.application.plan.PlannedStep
@@ -96,9 +97,9 @@ class BindingsResolverTest {
         return PlannedStep(
             stepId = stepId,
             name = "Planned Step",
-            process = CommandSpec("echo", listOf("test")),
+            process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = bindings,
-            environmentDefinitionId = UUID.randomUUID()
+            environmentRef = UUID.randomUUID()
         )
     }
 
@@ -509,7 +510,8 @@ class BindingsResolverTest {
         assertEquals(bindings1, plannedStep1.bindings)
         assertTrue(plannedStep1.process is CommandSpec)
         assertEquals("echo", (plannedStep1.process as CommandSpec).executable)
-        assertEquals(listOf("test"), (plannedStep1.process as CommandSpec).args)
+        assertEquals(1, (plannedStep1.process as CommandSpec).args.size)
+        assertEquals(ExpandedArg.Literal("test"), (plannedStep1.process as CommandSpec).args[0])
 
         assertEquals(stepId2, plannedStep2.stepId)
         assertEquals(bindings2, plannedStep2.bindings)

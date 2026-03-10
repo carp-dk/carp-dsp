@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import kotlin.test.AfterTest
@@ -35,7 +36,9 @@ class EnvironmentSetupExecutorTest {
         val exists = executor.condaEnvironmentExists("dev")
 
         assertTrue(exists)
-        assertEquals(listOf("conda", "env", "list"), runner.commands.single().let { listOf(it.executable) + it.args })
+        val cmd = runner.commands.single()
+        val cmdArgs = cmd.args.map { (it as ExpandedArg.Literal).value }
+        assertEquals(listOf("conda", "env", "list"), listOf(cmd.executable) + cmdArgs)
     }
 
     @Test
@@ -60,7 +63,8 @@ class EnvironmentSetupExecutorTest {
         assertEquals(2, runner.commands.size)
         val createCmd = runner.commands[1]
         assertEquals("conda", createCmd.executable)
-        assertTrue(createCmd.args.containsAll(listOf("create", "-n", "dev", "python=3.11", "--yes")))
+        val createCmdArgs = createCmd.args.map { (it as ExpandedArg.Literal).value }
+        assertTrue(createCmdArgs.containsAll(listOf("create", "-n", "dev", "python=3.11", "--yes")))
     }
 
     @Test

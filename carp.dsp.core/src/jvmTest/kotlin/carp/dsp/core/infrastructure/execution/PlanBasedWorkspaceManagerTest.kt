@@ -2,8 +2,10 @@ package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
+import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
@@ -256,7 +258,7 @@ class PlanBasedWorkspaceManagerTest {
             planId = plan1.planId,
             steps = plan1.steps,
             issues = plan1.issues,
-            requiredEnvironmentHandles = plan1.requiredEnvironmentHandles
+            requiredEnvironmentRefs = plan1.requiredEnvironmentRefs
         )
 
         // Act
@@ -313,14 +315,18 @@ class PlanBasedWorkspaceManagerTest {
             workflowId = "workflow1",
             planId = "plan1",
             steps = listOf(createTestPlannedStep(UUID.randomUUID(), "step1")),
-            requiredEnvironmentHandles = listOf(envHandle1)
+            requiredEnvironmentRefs = mapOf(
+                envHandle1 to SystemEnvironmentRef(id = envHandle1.toString(), dependencies = emptyList())
+            )
         )
 
         val plan2 = ExecutionPlan(
             workflowId = "workflow1",
             planId = "plan1",
             steps = listOf(createTestPlannedStep(UUID.randomUUID(), "step1")),
-            requiredEnvironmentHandles = listOf(envHandle2)
+            requiredEnvironmentRefs = mapOf(
+                envHandle2 to SystemEnvironmentRef(id = envHandle2.toString(), dependencies = emptyList())
+            )
         )
 
         // Act
@@ -402,9 +408,9 @@ class PlanBasedWorkspaceManagerTest {
         return PlannedStep(
             stepId = stepId,
             name = name,
-            process = CommandSpec("echo", listOf("hello")), // Concrete implementation
+            process = CommandSpec("echo", listOf(ExpandedArg.Literal("hello"))), // Concrete implementation
             bindings = ResolvedBindings(emptyMap(), emptyMap()),
-            environmentDefinitionId = environmentDefinitionId ?: UUID.randomUUID()
+            environmentRef = environmentDefinitionId ?: UUID.randomUUID()
         )
     }
 }

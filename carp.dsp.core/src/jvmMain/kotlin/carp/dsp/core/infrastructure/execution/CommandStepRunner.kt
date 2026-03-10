@@ -6,6 +6,7 @@ import dk.cachet.carp.analytics.application.execution.*
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.InTasksRun
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
@@ -124,7 +125,7 @@ class CommandStepRunner(
         }
 
         val detail = StepRunDetail(
-            command = listOf(spec.executable) + spec.args,
+            command = listOf(spec.executable) + spec.args.map { it.toDisplayString() },
             workingDirectory = workspace.stepDir(step.stepId),
             exitCode = result.exitCode,
             stdout = inlineRef(result.stdout),
@@ -183,3 +184,13 @@ class CommandStepRunner(
         if (text.isBlank()) null
         else ResourceRef(kind = ResourceKind.URI, value = "data:text/plain,${text.trim()}")
 }
+
+/**
+ * Converts an [ExpandedArg] to a string for display/logging purposes.
+ */
+private fun ExpandedArg.toDisplayString(): String = when (this) {
+    is ExpandedArg.Literal -> value
+    is ExpandedArg.DataReference -> dataRefId.toString()
+    is ExpandedArg.PathSubstitution -> template.replace("$()", dataRefId.toString())
+}
+

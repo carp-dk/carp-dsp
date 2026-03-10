@@ -3,6 +3,7 @@ package carp.dsp.core.infrastructure.runtime
 import carp.dsp.core.application.execution.CommandPolicy
 import carp.dsp.core.application.execution.RelativePath
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import org.junit.Assume.assumeTrue
 import java.io.File
 import java.io.IOException
@@ -130,7 +131,7 @@ class JvmCommandRunnerTest {
         val baseArgs = listOf("-cp", outputDir.toString(), "RunnerTestMain") + args.toList()
         return CommandSpec(
             executable = javaExecutable(),
-            args = baseArgs
+            args = baseArgs.map { ExpandedArg.Literal(it) }
         )
     }
 
@@ -138,7 +139,7 @@ class JvmCommandRunnerTest {
     fun trivial_command_runs_successfully() {
         val command = CommandSpec(
             executable = javaExecutable(),
-            args = listOf("-version")
+            args = listOf(ExpandedArg.Literal("-version"))
         )
 
         val result = runner.run(command, defaultPolicy(timeoutMs = 10_000))
@@ -153,7 +154,7 @@ class JvmCommandRunnerTest {
     fun args_with_spaces_and_cwd_with_spaces_work() {
         val command = CommandSpec(
             executable = javaExecutable(),
-            args = listOf("-Dcarp.test=hello world", "-version")
+            args = listOf("-Dcarp.test=hello world", "-version").map { ExpandedArg.Literal(it) }
         )
 
         val result = runner.run(command, defaultPolicy(timeoutMs = 10_000, workingDirectory = cwdWithSpaces()))
@@ -166,7 +167,7 @@ class JvmCommandRunnerTest {
     fun non_zero_exit_does_not_throw() {
         val command = CommandSpec(
             executable = javaExecutable(),
-            args = listOf("-thisIsNotARealOption")
+            args = listOf(ExpandedArg.Literal("-thisIsNotARealOption"))
         )
 
         val result = runner.run(command, defaultPolicy(timeoutMs = 5_000))

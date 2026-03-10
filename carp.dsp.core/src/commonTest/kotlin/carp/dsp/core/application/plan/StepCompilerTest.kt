@@ -86,13 +86,13 @@ class StepCompilerTest {
 
         assertEquals("Test Step", result.name)
         assertEquals(step.metadata.id, result.stepId)
-        assertEquals(step.environmentId, result.environmentDefinitionId)
+        assertEquals(step.environmentId, result.environmentRef)
         assertEquals(bindings, result.bindings)
         assertTrue(result.process is CommandSpec)
 
         val commandSpec = result.process as CommandSpec
         assertEquals("echo", commandSpec.executable)
-        assertEquals(listOf("hello"), commandSpec.args)
+        assertEquals(listOf(ExpandedArg.Literal("hello")), commandSpec.args)
     }
 
     @Test
@@ -228,7 +228,7 @@ class StepCompilerTest {
 
         val commandSpec = result.process as CommandSpec
         assertEquals("python", commandSpec.executable)
-        assertEquals(listOf("analysis/run.py", "--verbose"), commandSpec.args)
+        assertEquals(listOf(ExpandedArg.Literal("analysis/run.py"), ExpandedArg.Literal("--verbose")), commandSpec.args)
     }
 
     @Test
@@ -254,6 +254,14 @@ class StepCompilerTest {
 
         val commandSpec = result.process as CommandSpec
         assertEquals("python", commandSpec.executable)
-        assertEquals(listOf("-m", "mypackage.cli", "--input", "data.csv"), commandSpec.args)
+        assertEquals(
+            listOf(
+            ExpandedArg.Literal("-m"),
+            ExpandedArg.Literal("mypackage.cli"),
+            ExpandedArg.Literal("--input"),
+            ExpandedArg.Literal("data.csv")
+            ),
+            commandSpec.args
+        )
     }
 }

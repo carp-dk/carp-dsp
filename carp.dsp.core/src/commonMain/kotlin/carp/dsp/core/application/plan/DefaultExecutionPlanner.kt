@@ -1,9 +1,9 @@
 package carp.dsp.core.application.plan
 
+import carp.dsp.core.application.environment.EnvironmentRefResolver
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.ExecutionPlanner
 import dk.cachet.carp.analytics.application.plan.PlanIssue
-import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.Workflow
@@ -11,7 +11,7 @@ import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 import dk.cachet.carp.common.application.UUID
 
 /**
- * DefaultExecutionPlanner transforms a WorkflowDefinition (author-time model) into an ExecutionPlan (plan-time artifact).
+ * requiredEnvironmentRefs transforms a WorkflowDefinition (author-time model) into an ExecutionPlan (plan-time artifact).
  *
  * The planner uses a multi-stage algorithm:
  * 1. Flatten workflow steps preserving declaration order
@@ -27,6 +27,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
     private val sorter = DeterministicTopologicalSorter()
     private val bindingsResolver = BindingsResolver()
     private val stepCompiler = StepCompiler()
+    private val envRefResolver = EnvironmentRefResolver()
 
     /**
      * Transforms a WorkflowDefinition into an ExecutionPlan.
@@ -38,13 +39,17 @@ class DefaultExecutionPlanner : ExecutionPlanner {
         // Initialize
         val issues = mutableListOf<PlanIssue>()
         val plannedSteps = mutableMapOf<UUID, PlannedStep>()
-        val requiredEnvironments = mutableSetOf<UUID>()
 
         // Flatten Steps - preserve declaration order
         val steps = collectSteps(definition.workflow)
 
-        // Validate Environment References
-        validateEnvironmentReferences(definition, steps, issues)
+        // Resolve Environment References (also validates and reports missing environments)
+        val envRefs = envRefResolver.resolveEnvironments(
+            steps,
+            definition.environments,
+            issues
+        )
+
 
         // Build Dependency Graph
         val dag = graphBuilder.build(steps)
@@ -61,12 +66,10 @@ class DefaultExecutionPlanner : ExecutionPlanner {
             if (step != null) {
                 // Resolve bindings
                 val bindings = bindingsResolver.resolve(step, plannedSteps, issues)
-
                 // Compile step
                 val compiled = stepCompiler.compile(step, bindings, issues)
                 if (compiled != null) {
                     plannedSteps[stepId] = compiled
-                    requiredEnvironments.add(step.environmentId)
                 }
             }
         }
@@ -77,7 +80,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
             planId = UUID.randomUUID().toString(),
             steps = plannedSteps.values.toList(),
             issues = issues.toList(),
-            requiredEnvironmentHandles = requiredEnvironments.toList().sortedBy { it.toString() }
+            requiredEnvironmentRefs = envRefs
         )
     }
 
@@ -96,31 +99,5 @@ class DefaultExecutionPlanner : ExecutionPlanner {
         }
 
         return steps.toList()
-    }
-
-    /**
-     * Validates that all step environment references exist in the definition.
-     */
-    private fun validateEnvironmentReferences(
-        definition: WorkflowDefinition,
-        steps: List<Step>,
-        issues: MutableList<PlanIssue>
-    ) {
-        val availableEnvironments = definition.environments.keys
-
-        for (step in steps) {
-            if (step.environmentId !in availableEnvironments) {
-                issues.add(
-                    PlanIssue(
-                        severity = PlanIssueSeverity.ERROR,
-                        code = "MISSING_ENVIRONMENT",
-                        message = "Step '${step.metadata.name}' references environment '${step.environmentId}' " +
-                                "which is not defined in the workflow definition. " +
-                                "Available environments: ${availableEnvironments.map { it.toString() }.sorted()}.",
-                        stepId = step.metadata.id
-                    )
-                )
-            }
-        }
     }
 }

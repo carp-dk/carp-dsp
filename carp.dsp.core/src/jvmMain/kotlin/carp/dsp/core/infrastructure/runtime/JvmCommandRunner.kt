@@ -4,6 +4,7 @@ import carp.dsp.core.application.execution.CommandPolicy
 import carp.dsp.core.application.execution.RelativePath
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import java.io.InputStream
@@ -55,7 +56,15 @@ class JvmCommandRunner(
     private fun execute(command: CommandSpec, policy: RunPolicy, workspaceRoot: Path?): CommandResult {
         policy as CommandPolicy
 
-        val processBuilder = ProcessBuilder(listOf(command.executable) + command.args)
+        val resolvedArgs = command.args.map { arg ->
+            when (arg) {
+                is ExpandedArg.Literal -> arg.value
+                is ExpandedArg.DataReference -> arg.dataRefId.toString()
+                is ExpandedArg.PathSubstitution -> arg.template.replace("$()", arg.dataRefId.toString())
+            }
+        }
+
+        val processBuilder = ProcessBuilder(listOf(command.executable) + resolvedArgs)
 
         if (workspaceRoot != null) {
             val wd = policy.workingDirectory
