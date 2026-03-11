@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.runtime.command
 
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 
 /**
  * Pure builder for pixi-related commands.
@@ -18,7 +19,7 @@ class PixiCommands {
             args.addAll(features)
         }
 
-        return CommandSpec(executable = "pixi", args = args)
+        return CommandSpec(executable = "pixi", args = args.map { ExpandedArg.Literal(it) })
     }
 
     fun run(
@@ -28,6 +29,6 @@ class PixiCommands {
     ): CommandSpec =
         CommandSpec(
             executable = "pixi",
-            args = listOf("run", "-e", environment.name, exe) + args
+            args = (listOf("run", "-e", environment.name, exe) + args).map { ExpandedArg.Literal(it) }
         )
 }

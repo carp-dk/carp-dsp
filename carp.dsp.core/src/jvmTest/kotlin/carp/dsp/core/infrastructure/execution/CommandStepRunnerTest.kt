@@ -7,6 +7,7 @@ import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspa
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.InTasksRun
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
@@ -82,9 +83,9 @@ class CommandStepRunnerTest {
     ) = PlannedStep(
         stepId = UUID.randomUUID(),
         name = name,
-        process = CommandSpec(executable, args),
+        process = CommandSpec(executable, args.map { ExpandedArg.Literal(it) }),
         bindings = ResolvedBindings(),
-        environmentDefinitionId = UUID.randomUUID()
+        environmentRef = UUID.randomUUID()
     )
 
     private fun inProcessStep(name: String = "in-process") = PlannedStep(
@@ -92,7 +93,7 @@ class CommandStepRunnerTest {
         name = name,
         process = InTasksRun(operationId = "some.operation"),
         bindings = ResolvedBindings(),
-        environmentDefinitionId = UUID.randomUUID()
+        environmentRef = UUID.randomUUID()
     )
 
     /** Convenience: creates a [CommandStepRunner] backed by a [FixedCommandRunner]. */
@@ -126,7 +127,10 @@ class CommandStepRunnerTest {
         val step = commandStep(executable = "python", args = listOf("run.py", "--verbose", "--output", "out.csv"))
         CommandStepRunner(CapturingWorkspaceManager(), recording).run(step, workspace)
 
-        assertEquals(listOf("run.py", "--verbose", "--output", "out.csv"), recording.lastCommand?.args)
+        assertEquals(
+            listOf("run.py", "--verbose", "--output", "out.csv").map { ExpandedArg.Literal(it) },
+            recording.lastCommand?.args as List<ExpandedArg>
+        )
     }
 
     @Test

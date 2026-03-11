@@ -11,7 +11,7 @@ import dk.cachet.carp.common.application.UUID
  *
  * Exercises the full Plan → Workspace path without executing any steps:
  * - Builds a WorkflowDefinition
- * - Produces an ExecutionPlan via DefaultExecutionPlanner
+ * - Produces an ExecutionPlan via requiredEnvironmentRefs
  * - Creates a deterministic execution workspace
  * - Prints the workspace layout (root + per-step dirs)
  *

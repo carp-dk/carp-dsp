@@ -6,6 +6,7 @@ import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspa
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.runtime.CommandResult
@@ -59,9 +60,9 @@ class DefaultPlanExecutorTest {
     private fun plannedStep(name: String = "step") = PlannedStep(
         stepId = UUID.randomUUID(),
         name = name,
-        process = CommandSpec("echo", listOf(name)),
+        process = CommandSpec("echo", listOf(ExpandedArg.Literal(name))),
         bindings = ResolvedBindings(),
-        environmentDefinitionId = UUID.randomUUID()
+        environmentRef = UUID.randomUUID()
     )
 
     private fun plan(vararg steps: PlannedStep) = ExecutionPlan(

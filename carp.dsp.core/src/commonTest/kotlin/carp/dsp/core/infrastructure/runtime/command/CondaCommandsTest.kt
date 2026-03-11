@@ -1,5 +1,6 @@
 package carp.dsp.core.infrastructure.runtime.command
 
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,14 +14,14 @@ class CondaCommandsTest {
         val command = builder.envList()
 
         assertEquals("conda", command.executable)
-        assertEquals(listOf("env", "list"), command.args)
+        assertEquals(listOf(ExpandedArg.Literal("env"), ExpandedArg.Literal("list")), command.args)
     }
 
     @Test
     fun envList_with_timeout_builds_expected_commandSpec() {
         val command = builder.envList()
         assertEquals("conda", command.executable)
-        assertEquals(listOf("env", "list"), command.args)
+        assertEquals(listOf(ExpandedArg.Literal("env"), ExpandedArg.Literal("list")), command.args)
     }
 
     @Test
@@ -33,8 +34,9 @@ class CondaCommandsTest {
         )
 
         assertEquals("conda", command.executable)
-        assertEquals(
-            listOf("create", "-n", "test-env", "-c", "conda-forge", "python=3.11", "pandas", "numpy", "--yes"),
+        assertEquals<List<ExpandedArg>>(
+            listOf("create", "-n", "test-env", "-c", "conda-forge", "python=3.11", "pandas", "numpy", "--yes")
+                .map { ExpandedArg.Literal(it) },
             command.args
         )
     }
@@ -43,8 +45,8 @@ class CondaCommandsTest {
     fun createEnv_with_defaults_builds_expected_args() {
         val command = builder.createEnv(name = "default-env")
         assertEquals("conda", command.executable)
-        assertEquals(
-            listOf("create", "-n", "default-env", "python", "--yes"),
+        assertEquals<List<ExpandedArg>>(
+            listOf("create", "-n", "default-env", "python", "--yes").map { ExpandedArg.Literal(it) },
             command.args
         )
     }
@@ -53,7 +55,10 @@ class CondaCommandsTest {
     fun createEnv_empty_channels_and_packages() {
         val command = builder.createEnv(name = "empty-env", channels = emptyList(), packages = emptyList())
         assertEquals("conda", command.executable)
-        assertEquals(listOf("create", "-n", "empty-env", "python", "--yes"), command.args)
+        assertEquals<List<ExpandedArg>>(
+            listOf("create", "-n", "empty-env", "python", "--yes").map { ExpandedArg.Literal(it) },
+            command.args
+        )
     }
 
     @Test
@@ -65,8 +70,9 @@ class CondaCommandsTest {
         )
 
         assertEquals("conda", command.executable)
-        assertEquals(
-            listOf("run", "-n", "test-env", "conda", "install", "-c", "conda-forge", "scipy", "-y"),
+        assertEquals<List<ExpandedArg>>(
+            listOf("run", "-n", "test-env", "conda", "install", "-c", "conda-forge", "scipy", "-y")
+                .map { ExpandedArg.Literal(it) },
             command.args
         )
     }
@@ -75,7 +81,10 @@ class CondaCommandsTest {
     fun installPackages_no_channels_no_packages() {
         val command = builder.installPackages(envName = "empty", packages = emptyList(), channels = emptyList())
         assertEquals("conda", command.executable)
-        assertEquals(listOf("run", "-n", "empty", "conda", "install", "-y"), command.args)
+        assertEquals<List<ExpandedArg>>(
+            listOf("run", "-n", "empty", "conda", "install", "-y").map { ExpandedArg.Literal(it) },
+            command.args
+        )
     }
 
     @Test
@@ -87,14 +96,25 @@ class CondaCommandsTest {
         )
 
         assertEquals("conda", command.executable)
-        assertEquals(listOf("run", "-n", "test-env", "python", "-m", "pip", "list"), command.args)
+        assertEquals<List<ExpandedArg>>(
+            listOf("run", "-n", "test-env", "python", "-m", "pip", "list")
+                .map { ExpandedArg.Literal(it) },
+            command.args
+        )
     }
 
     @Test
     fun runInEnv_with_no_args() {
         val command = builder.runInEnv(envName = "test-env", exe = "bash")
         assertEquals("conda", command.executable)
-        assertEquals(listOf("run", "-n", "test-env", "bash"), command.args)
-        assertTrue(command.args.none { it.isBlank() })
+        assertEquals<List<ExpandedArg>>(
+            listOf("run", "-n", "test-env", "bash").map { ExpandedArg.Literal(it) },
+            command.args
+        )
+        assertTrue(
+            command.args.none { arg ->
+            (arg as? ExpandedArg.Literal)?.value?.isBlank() ?: false
+        }
+        )
     }
 }

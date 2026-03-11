@@ -1,6 +1,7 @@
 package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.application.plan.PlannedStep
@@ -56,7 +57,7 @@ class StepCompiler {
             name = step.metadata.name,
             process = tasksRun,
             bindings = bindings,
-            environmentDefinitionId = step.environmentId
+            environmentRef = step.environmentId
         )
     }
 
@@ -112,10 +113,19 @@ class StepCompiler {
         stepId: UUID,
         issues: MutableList<PlanIssue>
     ): CommandSpec {
-        // Resolve entry-point args: [-m <module>] or [<scriptPath>]
+        // Convert entry point to ExpandedArg.Literal objects
         val entryPointArgs = when (val ep = task.entryPoint) {
-            is Script -> listOf(ep.scriptPath)
-            is Module -> listOf("-m", ep.moduleName)
+            is Script -> {
+                // Script: just the script path
+                listOf(ExpandedArg.Literal(ep.scriptPath))
+            }
+            is Module -> {
+                // Module: -m flag + module name
+                listOf(
+                    ExpandedArg.Literal("-m"),
+                    ExpandedArg.Literal(ep.moduleName)
+                )
+            }
         }
 
         // Expand user-supplied ArgTokens

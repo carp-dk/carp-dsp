@@ -3,14 +3,17 @@ package carp.dsp.demo.demos
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.demo.api.Demo
 import carp.dsp.demo.workflows.DummyWorkflows
+import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
+import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
+import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 
 /**
- * Demo showcasing P0 planning capabilities with DefaultExecutionPlanner.
+ * Demo showcasing P0 planning capabilities with requiredEnvironmentRefs.
  *
  * This demo demonstrates:
  * - Building a WorkflowDefinition with step dependencies
- * - Running DefaultExecutionPlanner.plan() to create an ExecutionPlan
+ * - Running requiredEnvironmentRefs.plan() to create an ExecutionPlan
  * - Displaying plan summary with deterministic ordering
  * - Showing issue detection and runnable status
  */
@@ -29,7 +32,7 @@ object PlanningDemo : Demo {
         println("   - ${definition.workflow.getComponents().size} steps")
         println("   - ${definition.environments.size} environment(s)")
 
-        println("\nRunning DefaultExecutionPlanner...")
+        println("\nRunning requiredEnvironmentRefs...")
 
         // Create planner and generate execution plan
         val planner = DefaultExecutionPlanner()
@@ -82,11 +85,16 @@ object PlanningDemo : Demo {
 
         // Required environments (sorted for determinism)
         println("\nREQUIRED ENVIRONMENTS:")
-        if (plan.requiredEnvironmentHandles.isEmpty()) {
+        if (plan.requiredEnvironmentRefs.isEmpty()) {
             println("   (no environments required)")
         } else {
-            plan.requiredEnvironmentHandles.sortedBy { it.toString() }.forEach { envId ->
-                println("   - $envId")
+            plan.requiredEnvironmentRefs.entries.sortedBy { it.key.toString() }.forEach { (envId, envRef) ->
+                val envType = when (envRef) {
+                    is CondaEnvironmentRef -> "conda"
+                    is PixiEnvironmentRef -> "pixi"
+                    is SystemEnvironmentRef -> "system"
+                }
+                println("   - $envId ($envType)")
             }
         }
 

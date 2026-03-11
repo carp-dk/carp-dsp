@@ -148,6 +148,20 @@ internal object TaskExporter
             }
 
             is ParamRef -> "param:${token.name}"
+
+            // Input path substitution: "--flag=$(input.INDEX)" or "--flag=$(input.UUID)"
+            is InputPathSubstitutionRef -> {
+                val index = inputs.indexOfFirst { it.id == token.inputId }
+                val refPattern = if (index >= 0) "input.$index" else "input.${token.inputId}"
+                token.template.replace("$()", "\$(input.$refPattern)")
+            }
+
+            // Output path substitution: "--flag=$(output.INDEX)" or "--flag=$(output.UUID)"
+            is OutputPathSubstitutionRef -> {
+                val index = outputs.indexOfFirst { it.id == token.outputId }
+                val refPattern = if (index >= 0) "output.$index" else "output.${token.outputId}"
+                token.template.replace("$()", "\$(output.$refPattern)")
+            }
         }
     }
 }

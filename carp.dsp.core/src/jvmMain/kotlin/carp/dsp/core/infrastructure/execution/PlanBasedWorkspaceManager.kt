@@ -163,14 +163,14 @@ class PlanBasedWorkspaceManager(
                 SimplifiedStepHashContent(
                     stepId = step.stepId.toString(),
                     name = step.name,
-                    environmentDefinitionId = step.environmentDefinitionId.toString(),
+                    environmentDefinitionId = step.environmentRef.toString(),
                     // Note: We intentionally exclude the TasksRun process field to avoid polymorphic serialization
                     // The step ID and name provide sufficient differentiation for workspace hashing
                     inputBindings = step.bindings.inputs.keys.sortedBy { it.toString() }.map { it.toString() },
                     outputBindings = step.bindings.outputs.keys.sortedBy { it.toString() }.map { it.toString() }
                 )
             },
-            requiredEnvironmentHandles = plan.requiredEnvironmentHandles.sortedBy
+            requiredEnvironmentHandles = plan.requiredEnvironmentRefs.keys.sortedBy
             {
                 it.toString()
             }.map { it.toString() }

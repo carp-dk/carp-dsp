@@ -1,10 +1,10 @@
 package carp.dsp.core.infrastructure.runtime.command
 
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class PixiCommandsTest {
 
@@ -16,7 +16,15 @@ class PixiCommandsTest {
         val command = builder.install(features = listOf("feature1", "feature2"))
 
         assertEquals("pixi", command.executable)
-        assertEquals(listOf("install", "--features", "feature1", "feature2"), command.args)
+        assertEquals(
+            listOf(
+            ExpandedArg.Literal("install"),
+            ExpandedArg.Literal("--features"),
+            ExpandedArg.Literal("feature1"),
+            ExpandedArg.Literal("feature2")
+            ),
+                command.args
+        )
     }
 
     @Test
@@ -24,7 +32,7 @@ class PixiCommandsTest {
         val command = builder.install()
 
         assertEquals("pixi", command.executable)
-        assertEquals(listOf("install"), command.args)
+        assertEquals(listOf(ExpandedArg.Literal("install")), command.args)
     }
 
     @Test
@@ -36,14 +44,32 @@ class PixiCommandsTest {
         )
 
         assertEquals("pixi", command.executable)
-        assertEquals(listOf("run", "-e", "dev", "python", "-m", "pip", "list"), command.args)
+        assertEquals(
+            listOf(
+            ExpandedArg.Literal("run"),
+            ExpandedArg.Literal("-e"),
+            ExpandedArg.Literal("dev"),
+            ExpandedArg.Literal("python"),
+            ExpandedArg.Literal("-m"),
+            ExpandedArg.Literal("pip"),
+            ExpandedArg.Literal("list")
+            ),
+                command.args
+        )
     }
 
     @Test
     fun run_without_extra_args_invokes_executable_only() {
         val command = builder.run(environment = env, exe = "bash")
 
-        assertEquals(listOf("run", "-e", "dev", "bash"), command.args)
-        assertTrue(command.args.none { it.isBlank() })
+        assertEquals(
+            listOf(
+            ExpandedArg.Literal("run"),
+            ExpandedArg.Literal("-e"),
+            ExpandedArg.Literal("dev"),
+            ExpandedArg.Literal("bash")
+            ),
+                command.args
+        )
     }
 }

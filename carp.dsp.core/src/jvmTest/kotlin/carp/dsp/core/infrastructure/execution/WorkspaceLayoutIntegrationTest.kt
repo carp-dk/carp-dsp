@@ -2,8 +2,10 @@ package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
+import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.analytics.infrastructure.serialization.CoreAnalyticsSerializer
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
@@ -228,31 +230,34 @@ class WorkspaceLayoutIntegrationTest {
                 PlannedStep(
                     stepId = fixedStepId1,
                     name = "data-ingestion",
-                    process = CommandSpec("python", listOf("ingest.py", "--source", "sensor")),
+                    process = CommandSpec("python", listOf("ingest.py", "--source", "sensor").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
-                    environmentDefinitionId = fixedEnvId1
+                    environmentRef = fixedEnvId1
                 ),
                 PlannedStep(
                     stepId = fixedStepId2,
                     name = "data-transform",
-                    process = CommandSpec("python", listOf("transform.py", "--algorithm", "fft")),
+                    process = CommandSpec("python", listOf("transform.py", "--algorithm", "fft").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
-                    environmentDefinitionId = fixedEnvId1
+                    environmentRef = fixedEnvId1
                 ),
                 PlannedStep(
                     stepId = fixedStepId3,
                     name = "analysis-output",
-                    process = CommandSpec("python", listOf("analyze.py", "--format", "json")),
+                    process = CommandSpec("python", listOf("analyze.py", "--format", "json").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
-                    environmentDefinitionId = fixedEnvId2
+                    environmentRef = fixedEnvId2
                 )
             ),
-            requiredEnvironmentHandles = listOf(fixedEnvId1, fixedEnvId2)
+            requiredEnvironmentRefs = mapOf(
+                fixedEnvId1 to SystemEnvironmentRef(id = fixedEnvId1.toString(), dependencies = emptyList()),
+                fixedEnvId2 to SystemEnvironmentRef(id = fixedEnvId2.toString(), dependencies = emptyList())
+            )
         )
     }
 
     /**
-     * Creates a different ExecutionPlan with different structure for testing.
+     * Creates a different test plan for collision testing.
      */
     private fun createPlanB(): ExecutionPlan {
         return ExecutionPlan(
@@ -262,19 +267,22 @@ class WorkspaceLayoutIntegrationTest {
                 PlannedStep(
                     stepId = fixedStepId1,
                     name = "data-processing",
-                    process = CommandSpec("R", listOf("process.R", "--method", "linear")),
+                    process = CommandSpec("R", listOf("process.R", "--method", "linear").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
-                    environmentDefinitionId = fixedEnvId2
+                    environmentRef = fixedEnvId2
                 ),
                 PlannedStep(
                     stepId = fixedStepId2,
                     name = "visualization",
-                    process = CommandSpec("python", listOf("plot.py", "--type", "scatter")),
+                    process = CommandSpec("python", listOf("plot.py", "--type", "scatter").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
-                    environmentDefinitionId = fixedEnvId1
+                    environmentRef = fixedEnvId1
                 )
             ),
-            requiredEnvironmentHandles = listOf(fixedEnvId1, fixedEnvId2)
+            requiredEnvironmentRefs = mapOf(
+                fixedEnvId1 to SystemEnvironmentRef(id = fixedEnvId1.toString(), dependencies = emptyList()),
+                fixedEnvId2 to SystemEnvironmentRef(id = fixedEnvId2.toString(), dependencies = emptyList())
+            )
         )
     }
 }

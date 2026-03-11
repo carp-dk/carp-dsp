@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.runtime.command
 
 import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
 
 /**
  * Pure builder for conda-related commands.
@@ -10,7 +11,7 @@ class CondaCommands {
     fun envList(): CommandSpec =
         CommandSpec(
             executable = "conda",
-            args = listOf("env", "list")
+            args = listOf("env", "list").map { ExpandedArg.Literal(it) }
         )
 
     fun createEnv(
@@ -31,7 +32,7 @@ class CondaCommands {
         if (packages.isNotEmpty()) args += packages
         args += "--yes"
 
-        return CommandSpec(executable = "conda", args = args)
+        return CommandSpec(executable = "conda", args = args.map { ExpandedArg.Literal(it) })
     }
 
     fun installPackages(
@@ -49,7 +50,7 @@ class CondaCommands {
         args += packages
         args += "-y"
 
-        return CommandSpec(executable = "conda", args = args)
+        return CommandSpec(executable = "conda", args = args.map { ExpandedArg.Literal(it) })
     }
 
     fun runInEnv(
@@ -59,6 +60,6 @@ class CondaCommands {
     ): CommandSpec =
         CommandSpec(
             executable = "conda",
-            args = listOf("run", "-n", envName, exe) + args
+            args = (listOf("run", "-n", envName, exe) + args).map { ExpandedArg.Literal(it) }
         )
 }
