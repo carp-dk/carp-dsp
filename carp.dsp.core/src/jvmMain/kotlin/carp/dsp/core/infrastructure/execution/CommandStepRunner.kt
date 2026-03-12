@@ -13,7 +13,10 @@ import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
+import java.security.MessageDigest
 
 /**
  * Runs a single [PlannedStep] against a live [ExecutionWorkspace].
@@ -30,6 +33,7 @@ import java.nio.file.Paths
 class CommandStepRunner(
     private val workspaceManager: WorkspaceManager,
     private val commandRunner: CommandRunner,
+    private val artefactStore: ArtefactStore,
     private val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
     private val clock: Clock = Clock.System
 ) {
@@ -73,17 +77,23 @@ class CommandStepRunner(
         val finishedAt: Instant = clock.now()
 
         val validation = validateOutputs(step, status, absWorkingDir)
-        val outputs = validation?.producedOutputRefs ?: emptyList()
         val validationIssues = validation?.issues ?: emptyList()
         val finalStatus = validation?.forcedStatus ?: status
         val finalFailure = if (validation?.forcedStatus != null) validation.failure else failure
+
+        // Record produced artefacts to the artefact store
+        val producedArtifacts = if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
+            recordProducedArtifacts(step, absWorkingDir)
+        } else {
+            emptyList()
+        }
 
         return StepRunResult(
             stepId = step.stepId,
             status = finalStatus,
             startedAt = startedAt,
             finishedAt = finishedAt,
-            outputs = outputs,
+            outputs = producedArtifacts,
             failure = finalFailure,
             detail = detail.copy(metrics = null)
         ).also { _pendingIssues[step.stepId] = validationIssues }
@@ -101,7 +111,7 @@ class CommandStepRunner(
         spec: CommandSpec,
         workspace: ExecutionWorkspace,
         policy: RunPolicy,
-        absWorkingDir: java.nio.file.Path?
+        absWorkingDir: Path?
     ): CommandOutcome {
         val result = if (absWorkingDir != null && commandRunner is JvmCommandRunner) {
             commandRunner.run(spec, policy, absWorkingDir)
@@ -139,7 +149,7 @@ class CommandStepRunner(
     private fun validateOutputs(
         step: PlannedStep,
         status: ExecutionStatus,
-        absWorkingDir: java.nio.file.Path?
+        absWorkingDir: Path?
     ): ValidationResult? {
         if (status != ExecutionStatus.SUCCEEDED || absWorkingDir == null) return null
         return StepOutputValidator.validate(
@@ -155,6 +165,108 @@ class CommandStepRunner(
     /** Drains and returns any [ExecutionIssue]s recorded during the last run of [stepId]. */
     fun drainIssues(stepId: UUID): List<ExecutionIssue> =
         _pendingIssues.remove(stepId) ?: emptyList()
+
+    // -------------------------------------------------------------------------
+    // Artifact Recording
+    // -------------------------------------------------------------------------
+
+    /**
+     * Records produced artefacts from a successfully executed step to the artefact store.
+     *
+     * Scans the step's output directories for each declared output binding, calculates
+     * metadata (size, SHA-256 hash, content type), and registers them with the [artefactStore].
+     *
+     * @param step The executed step with output bindings
+     * @param absWorkingDir The absolute path to the step's working directory
+     * @return List of successfully recorded artefact references
+     */
+    private fun recordProducedArtifacts(
+        step: PlannedStep,
+        absWorkingDir: Path
+    ): List<ProducedOutputRef> =
+        step.bindings.outputs.values.mapNotNull { output ->
+            recordOutputArtefact(step, output, absWorkingDir)
+        }
+
+    private fun recordOutputArtefact(
+        step: PlannedStep,
+        output: dk.cachet.carp.analytics.application.plan.DataRef,
+        absWorkingDir: Path
+    ): ProducedOutputRef? {
+        val dataFile = absWorkingDir
+            .resolve("outputs")
+            .resolve(output.id.toString())
+            .resolve("data")
+
+        if (!Files.exists(dataFile) || !Files.isRegularFile(dataFile)) return null
+
+        return try {
+            artefactStore.recordArtefact(
+                stepId = step.stepId,
+                outputId = output.id,
+                location = ResourceRef(
+                    kind = ResourceKind.RELATIVE_PATH,
+                    value = "steps/${step.stepId}/outputs/${output.id}/data"
+                ),
+                metadata = ArtefactMetadata(
+                    sizeBytes = Files.size(dataFile),
+                    sha256 = calculateSha256(dataFile),
+                    contentType = determineContentType(dataFile, output.type)
+                )
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Calculates the SHA-256 hash of a file.
+     */
+    private fun calculateSha256(file: Path): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(file).use { inputStream ->
+            val buffer = ByteArray(SHA256_BUFFER_SIZE)
+            var bytesRead: Int
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Determines the content type based on the declared output type, falling back to
+     * extension-based detection on the file name.
+     */
+    private fun determineContentType(file: Path, declaredType: String?): String {
+        if (!declaredType.isNullOrBlank() && declaredType.contains("/")) return declaredType
+        return contentTypeFromExtension(file.fileName.toString().lowercase())
+    }
+
+    private fun contentTypeFromExtension(fileName: String): String =
+        EXTENSION_CONTENT_TYPES.entries
+            .firstOrNull { (ext, _) -> fileName.endsWith(ext) }
+            ?.value ?: "application/octet-stream"
+
+    companion object {
+        private const val SHA256_BUFFER_SIZE = 8192
+
+        private val EXTENSION_CONTENT_TYPES = mapOf(
+            ".json" to "application/json",
+            ".xml" to "application/xml",
+            ".csv" to "text/csv",
+            ".txt" to "text/plain",
+            ".html" to "text/html",
+            ".htm" to "text/html",
+            ".pdf" to "application/pdf",
+            ".zip" to "application/zip",
+            ".png" to "image/png",
+            ".jpg" to "image/jpeg",
+            ".jpeg" to "image/jpeg",
+            ".gif" to "image/gif",
+            ".parquet" to "application/vnd.apache.parquet"
+        )
+    }
 
     // -------------------------------------------------------------------------
     // Unsupported process types

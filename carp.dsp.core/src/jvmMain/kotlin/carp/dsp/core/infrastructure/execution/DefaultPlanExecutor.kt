@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import dk.cachet.carp.analytics.application.execution.ArtefactStore
 import dk.cachet.carp.analytics.application.execution.ExecutionIssue
 import dk.cachet.carp.analytics.application.execution.ExecutionIssueKind
 import dk.cachet.carp.analytics.application.execution.ExecutionReport
@@ -29,12 +30,15 @@ import kotlinx.datetime.Clock
  * be recorded as [ExecutionStatus.SKIPPED].
  *
  * @param workspaceManager  Materializes the run workspace on disk and resolves step paths.
+ * @param artefactStore     Stores metadata about produced outputs/artifacts.
  * @param commandRunner     Underlying OS-process driver. Defaults to [JvmCommandRunner].
  * @param stepOrderStrategy Controls the execution order of steps. Defaults to [SequentialPlanOrder].
+ * @param outputValidationPolicy Controls post-execution output checks. Defaults to [OutputValidationPolicy.DEFAULT].
  * @param clock             Wall-clock source used by [CommandStepRunner]. Defaults to [Clock.System].
  */
 class DefaultPlanExecutor(
     private val workspaceManager: WorkspaceManager,
+    private val artefactStore: ArtefactStore,
     private val commandRunner: CommandRunner = JvmCommandRunner(),
     private val stepOrderStrategy: StepOrderStrategy = SequentialPlanOrder,
     private val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
@@ -65,7 +69,8 @@ class DefaultPlanExecutor(
         val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.stepId }
 
         // 3. Run each step, respecting stopOnFailure
-        val stepRunner = CommandStepRunner(workspaceManager, commandRunner, outputValidationPolicy, clock)
+        val stepRunner =
+            CommandStepRunner(workspaceManager, commandRunner, artefactStore, outputValidationPolicy, clock)
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
         var halted = false

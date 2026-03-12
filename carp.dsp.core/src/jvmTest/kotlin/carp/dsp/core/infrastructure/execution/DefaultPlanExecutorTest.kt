@@ -1,6 +1,10 @@
 package carp.dsp.core.infrastructure.execution
 
+import dk.cachet.carp.analytics.application.execution.ArtefactMetadata
+import dk.cachet.carp.analytics.application.execution.ArtefactStore
 import dk.cachet.carp.analytics.application.execution.ExecutionStatus
+import dk.cachet.carp.analytics.application.execution.ProducedOutputRef
+import dk.cachet.carp.analytics.application.execution.ResourceRef
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
@@ -53,6 +57,27 @@ class DefaultPlanExecutorTest {
         )
     }
 
+    /** Stub ArtefactStore that does nothing and returns stub values. */
+    private class StubArtefactStore : ArtefactStore {
+        override fun recordArtefact(
+            stepId: UUID,
+            outputId: UUID,
+            location: ResourceRef,
+            metadata: ArtefactMetadata
+        ): ProducedOutputRef = ProducedOutputRef(
+            outputId = outputId,
+            location = location,
+            sizeBytes = metadata.sizeBytes,
+            sha256 = metadata.sha256,
+            contentType = metadata.contentType
+        )
+
+        override fun getArtefact(outputId: UUID): ProducedOutputRef? = null
+        override fun getArtefactsByStep(stepId: UUID): List<ProducedOutputRef> = emptyList()
+        override fun getAllArtefacts(): List<ProducedOutputRef> = emptyList()
+        override fun resolvePath(outputId: UUID): String? = null
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -74,9 +99,11 @@ class DefaultPlanExecutorTest {
     private fun executor(
         manager: WorkspaceManager = RecordingWorkspaceManager(),
         runner: CommandRunner = StubCommandRunner(),
+        artefactStore: ArtefactStore = StubArtefactStore(),
         strategy: StepOrderStrategy = SequentialPlanOrder
     ) = DefaultPlanExecutor(
         workspaceManager = manager,
+        artefactStore = artefactStore,
         commandRunner = runner,
         stepOrderStrategy = strategy
     )
