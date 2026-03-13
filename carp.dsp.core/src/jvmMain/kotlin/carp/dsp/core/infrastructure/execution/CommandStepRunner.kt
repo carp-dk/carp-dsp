@@ -8,6 +8,7 @@ import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.InTasksRun
 import dk.cachet.carp.analytics.application.plan.PlannedStep
+import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
@@ -31,6 +32,7 @@ class CommandStepRunner(
     private val commandRunner: CommandRunner,
     private val artefactStore: ArtefactStore,
     private val artefactRecorder: ArtefactRecorder = FileSystemArtefactRecorder(),
+    private val logRecorder: StepLogRecorder = FileSystemStepLogRecorder(),
     private val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
     private val clock: Clock = Clock.System
 ) : StepRunner {
@@ -74,12 +76,12 @@ class CommandStepRunner(
             ?.let { Paths.get(it) }
 
         // Step 1: Execute command
-        val (status, failure, detail) = executeCommand(step, spec, workspace, policy, absWorkingDir)
+        val outcome = executeCommand(step, spec, workspace, policy, absWorkingDir)
 
         // Step 2: Validate outputs (post-execution check)
-        val validation = validateOutputs(step, status, absWorkingDir)
-        val finalStatus = validation?.forcedStatus ?: status
-        val finalFailure = if (validation?.forcedStatus != null) validation.failure else failure
+        val validation = validateOutputs(step, outcome.status, absWorkingDir)
+        val finalStatus = validation?.forcedStatus ?: outcome.status
+        val finalFailure = if (validation?.forcedStatus != null) validation.failure else outcome.failure
 
         // Step 3: Record artefacts (only if succeeded)
         val producedArtifacts = if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
@@ -88,7 +90,14 @@ class CommandStepRunner(
             emptyList()
         }
 
-        // Step 4: Collect issues
+        // Step 4: Record logs (only if we have a result)  ← NEW
+        val logRef: ResourceRef? = if (absWorkingDir != null) {
+            logRecorder.recordLogs(step, outcome.commandResult, workspace)
+        } else {
+            null
+        }
+
+        // Step 5: Collect issues
         val validationIssues = validation?.issues ?: emptyList()
         _pendingIssues[step.stepId] = validationIssues
 
@@ -100,7 +109,10 @@ class CommandStepRunner(
             finishedAt = clock.now(),
             outputs = producedArtifacts,
             failure = finalFailure,
-            detail = detail
+            detail = outcome.detail.copy(
+                stdout = logRef ?: outcome.detail.stdout,
+                stderr = null
+            )
         )
     }
 
@@ -114,7 +126,8 @@ class CommandStepRunner(
     private data class CommandOutcome(
         val status: ExecutionStatus,
         val failure: StepFailure?,
-        val detail: StepRunDetail
+        val detail: StepRunDetail,
+        val commandResult: CommandResult
     )
 
     /**
@@ -163,7 +176,7 @@ class CommandStepRunner(
             stderr = inlineRef(result.stderr)
         )
 
-        return CommandOutcome(status, failure, detail)
+        return CommandOutcome(status, failure, detail, result)
     }
 
     // Output Validation

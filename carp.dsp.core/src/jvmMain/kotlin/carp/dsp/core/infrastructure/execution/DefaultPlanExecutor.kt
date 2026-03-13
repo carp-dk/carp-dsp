@@ -101,6 +101,7 @@ class DefaultPlanExecutor(
             commandRunner,
             artefactStore,
             FileSystemArtefactRecorder(),
+            FileSystemStepLogRecorder(),
             outputValidationPolicy,
             clock
         )

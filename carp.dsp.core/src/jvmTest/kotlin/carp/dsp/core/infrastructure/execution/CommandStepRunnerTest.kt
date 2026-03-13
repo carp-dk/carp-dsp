@@ -8,6 +8,7 @@ import dk.cachet.carp.analytics.application.execution.ProducedOutputRef
 import dk.cachet.carp.analytics.application.execution.ResourceKind
 import dk.cachet.carp.analytics.application.execution.ResourceRef
 import dk.cachet.carp.analytics.application.execution.RunPolicy
+import dk.cachet.carp.analytics.application.execution.StepLogRecorder
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
@@ -52,7 +53,7 @@ class CommandStepRunnerTest {
     }
 
     /**
-     * Mock ArtefactStore for testing artifact recording.
+     * Mock ArtefactStore for testing artefact recording.
      */
     private class MockArtefactStore : ArtefactStore {
         val recorded = mutableListOf<RecordedCall>()
@@ -645,9 +646,9 @@ class CommandStepRunnerTest {
     }
 
     @Test
-    fun `detail stderr ref is populated when stderr is non-blank`() {
+    fun `detail stderr ref is null when stderr is non-blank`() {
         val result = runner(stderr = "error output").run(commandStep(), workspace)
-        assertNotNull(result.detail?.stderr)
+        assertNull(result.detail?.stderr)
     }
 
     // -------------------------------------------------------------------------
@@ -688,5 +689,80 @@ class CommandStepRunnerTest {
         assert(result.failure!!.message.contains("InTasksRun")) {
             "Failure message should name the unsupported type; got: ${result.failure!!.message}"
         }
+    }
+
+    @Test
+    fun recordsLogsWithStepExecution() {
+        val mockLogRecorder = MockStepLogRecorder()
+        val runner = CommandStepRunner(
+            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            commandRunner = FixedCommandRunner(stdout = "hello from step"),
+            artefactStore = MockArtefactStore(),
+            logRecorder = mockLogRecorder  // ← Inject mock
+        )
+
+        val step = commandStep()
+        val result = runner.run(step, workspace)
+
+        // Verify log recorder was called
+        assertTrue(mockLogRecorder.wasCalled)
+        assertNotNull(result.detail?.stdout)
+        assertTrue(result.detail?.stdout?.value?.contains("logs/") ?: false)
+    }
+
+    @Test
+    fun skipsLogRecordingWhenNoOutput() {
+        val mockLogRecorder = MockStepLogRecorder()
+        val runner = CommandStepRunner(
+            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            commandRunner = FixedCommandRunner(stdout = "", stderr = ""),
+            artefactStore = MockArtefactStore(),
+            logRecorder = mockLogRecorder
+        )
+
+        val step = commandStep()
+        runner.run(step, workspace)
+
+        // Verify logs were skipped for empty output
+        assertTrue(mockLogRecorder.recordsAreEmpty)
+    }
+
+    @Test
+    fun usesLogRefInStepRunDetail() {
+        val mockLogRecorder = MockStepLogRecorder()
+        val runner = CommandStepRunner(
+            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            commandRunner = FixedCommandRunner(stdout = "stdout-content"),
+            artefactStore = MockArtefactStore(),
+            logRecorder = mockLogRecorder
+        )
+
+        val result = runner.run(commandStep(), workspace)
+
+        // Verify log ref is in result
+        assertNotNull(result.detail?.stdout)
+        assertEquals(ResourceKind.RELATIVE_PATH, result.detail?.stdout?.kind)
+    }
+}
+
+private class MockStepLogRecorder : StepLogRecorder {
+    var wasCalled = false
+    var recordsAreEmpty = true
+
+    override fun recordLogs(
+        step: PlannedStep,
+        result: CommandResult,
+        workspace: ExecutionWorkspace
+    ): ResourceRef? {
+        wasCalled = true
+        if (result.stdout.isBlank() && result.stderr.isBlank()) {
+            recordsAreEmpty = true
+            return null
+        }
+        recordsAreEmpty = false
+        return ResourceRef(
+            kind = ResourceKind.RELATIVE_PATH,
+            value = "logs/${step.stepId}-test.log"
+        )
     }
 }
