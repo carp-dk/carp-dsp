@@ -9,6 +9,7 @@ import dk.cachet.carp.analytics.application.execution.ExecutionStatus
 import dk.cachet.carp.analytics.application.execution.PlanExecutor
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.execution.StepRunResult
+import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlannedStep
@@ -61,16 +62,10 @@ class DefaultPlanExecutor(
         runId: UUID,
         policy: RunPolicy
     ): ExecutionReport {
-        // 1. Materialize workspace
         val workspace = workspaceManager.create(plan, runId)
-
-        // 2. Determine execution order
         val stepOrder = stepOrderStrategy.order(plan)
         val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.stepId }
-
-        // 3. Run each step, respecting stopOnFailure
-        val stepRunner =
-            CommandStepRunner(workspaceManager, commandRunner, artefactStore, outputValidationPolicy, clock)
+        val stepRunner = createStepRunner()
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
         var halted = false
@@ -78,43 +73,92 @@ class DefaultPlanExecutor(
         for (stepId in stepOrder) {
             val step = stepsById[stepId]
             if (step == null) {
-                runIssues += ExecutionIssue(
-                    stepId = stepId,
-                    kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
-                    message = "Step order strategy referenced unknown step id '$stepId'."
-                )
-                stepResults += StepRunResult(
-                    stepId = stepId,
-                    status = ExecutionStatus.FAILED,
-                    startedAt = null,
-                    finishedAt = null,
-                    outputs = emptyList()
-                )
-                if (policy.stopOnFailure) halted = true
+                halted = handleUnknownStep(stepId, policy, stepResults, runIssues, halted)
                 continue
             }
 
             if (halted) {
-                stepResults += StepRunResult(
-                    stepId = stepId,
-                    status = ExecutionStatus.SKIPPED,
-                    startedAt = null,
-                    finishedAt = null,
-                    outputs = emptyList()
-                )
+                recordSkippedStep(stepId, stepResults)
                 continue
             }
 
-            val result = stepRunner.run(step, workspace, policy)
-            stepResults += result
-            runIssues += stepRunner.drainIssues(stepId)
-
+            val result = runKnownStep(step, stepId, workspace, policy, stepRunner, stepResults, runIssues)
             if (result.status == ExecutionStatus.FAILED && policy.stopOnFailure) {
                 halted = true
             }
         }
 
-        // 4. Derive overall run status
+        return buildExecutionReport(plan, runId, stepResults, runIssues)
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private fun createStepRunner(): CommandStepRunner =
+        CommandStepRunner(
+            workspaceManager,
+            commandRunner,
+            artefactStore,
+            FileSystemArtefactRecorder(),
+            outputValidationPolicy,
+            clock
+        )
+
+    private fun handleUnknownStep(
+        stepId: UUID,
+        policy: RunPolicy,
+        stepResults: MutableList<StepRunResult>,
+        runIssues: MutableList<ExecutionIssue>,
+        halted: Boolean
+    ): Boolean {
+        runIssues += ExecutionIssue(
+            stepId = stepId,
+            kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
+            message = "Step order strategy referenced unknown step id '$stepId'."
+        )
+        stepResults += StepRunResult(
+            stepId = stepId,
+            status = ExecutionStatus.FAILED,
+            startedAt = null,
+            finishedAt = null,
+            outputs = emptyList()
+        )
+
+        return halted || policy.stopOnFailure
+    }
+
+    private fun recordSkippedStep(stepId: UUID, stepResults: MutableList<StepRunResult>) {
+        stepResults += StepRunResult(
+            stepId = stepId,
+            status = ExecutionStatus.SKIPPED,
+            startedAt = null,
+            finishedAt = null,
+            outputs = emptyList()
+        )
+    }
+
+    private fun runKnownStep(
+        step: PlannedStep,
+        stepId: UUID,
+        workspace: ExecutionWorkspace,
+        policy: RunPolicy,
+        stepRunner: CommandStepRunner,
+        stepResults: MutableList<StepRunResult>,
+        runIssues: MutableList<ExecutionIssue>
+    ): StepRunResult {
+        val result = stepRunner.run(step, workspace, policy)
+        stepResults += result
+        runIssues += stepRunner.drainIssues(stepId)
+        return result
+    }
+
+    private fun buildExecutionReport(
+        plan: ExecutionPlan,
+        runId: UUID,
+        stepResults: List<StepRunResult>,
+        runIssues: List<ExecutionIssue>
+    ): ExecutionReport {
         val overallStatus = deriveOverallStatus(stepResults)
 
         return ExecutionReport(
@@ -128,9 +172,6 @@ class DefaultPlanExecutor(
         )
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     private fun deriveOverallStatus(results: List<StepRunResult>): ExecutionStatus =
         when {
