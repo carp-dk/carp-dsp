@@ -1,5 +1,7 @@
 package carp.dsp.demo
 
+import carp.dsp.demo.api.CliDemo
+
 /**
  * Platform hook for registering platform-specific demos (e.g. those requiring JVM filesystem APIs).
  * Called before the demo dispatcher runs.
@@ -39,7 +41,12 @@ fun runDemo(args: Array<String>) {
                 return
             }
             println("== ${demo.title} (${demo.id}) ==")
-            demo.run()
+            val trailingArgs = args.drop(2)
+            if (demo is CliDemo && trailingArgs.isNotEmpty()) {
+                demo.run(trailingArgs)
+            } else {
+                demo.run()
+            }
         }
         else -> {
             println("Unknown command: ${args[0]}\n")

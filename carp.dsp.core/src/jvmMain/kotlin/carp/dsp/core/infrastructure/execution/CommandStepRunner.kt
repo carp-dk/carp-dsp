@@ -1,18 +1,17 @@
 package carp.dsp.core.infrastructure.execution
 
-import carp.dsp.core.application.execution.CommandPolicy
+import carp.dsp.core.application.execution.StepRunner
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.execution.*
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
-import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.InTasksRun
 import dk.cachet.carp.analytics.application.plan.PlannedStep
+import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import java.nio.file.Paths
 
 /**
@@ -24,15 +23,24 @@ import java.nio.file.Paths
  *
  * @param workspaceManager    Prepares per-step directories and resolves absolute paths.
  * @param commandRunner       The underlying OS-process driver.
- * @param outputValidationPolicy Controls post-execution output checks.
- * @param clock               Source of wall-clock [Instant]s; defaults to [Clock.System].
+ * @param options             Optional collaborators and policies.
  */
 class CommandStepRunner(
     private val workspaceManager: WorkspaceManager,
     private val commandRunner: CommandRunner,
-    private val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
-    private val clock: Clock = Clock.System
-) {
+    private val artefactStore: ArtefactStore,
+    private val options: Options = Options()
+) : StepRunner {
+
+    /**
+     * Optional collaborators and policies used by [CommandStepRunner].
+     */
+    data class Options(
+        val artefactRecorder: ArtefactRecorder = FileSystemArtefactRecorder(),
+        val logRecorder: StepLogRecorder = FileSystemStepLogRecorder(),
+        val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
+        val clock: Clock = Clock.System
+    )
 
     /**
      * Runs [step] inside [workspace] according to [policy] and returns a complete [StepRunResult].
@@ -40,10 +48,10 @@ class CommandStepRunner(
      * Steps whose [PlannedStep.process] is not a [CommandSpec] are immediately failed with
      * [FailureKind.INFRASTRUCTURE] — they cannot be handled by this runner.
      */
-    fun run(
+    override fun run(
         step: PlannedStep,
         workspace: ExecutionWorkspace,
-        policy: RunPolicy = CommandPolicy()
+        policy: RunPolicy
     ): StepRunResult {
         // Ensure the step's input/output/log directories exist on disk.
         workspaceManager.prepareStepDirectories(workspace, step.stepId)
@@ -55,47 +63,81 @@ class CommandStepRunner(
         }
     }
 
-    // -------------------------------------------------------------------------
-    // CommandSpec execution
-    // -------------------------------------------------------------------------
+    // CommandSpec Execution (Template Method Pattern)
 
+    /**
+     * Template method for CommandSpec execution.
+     *
+     * Orchestrates: prepare → execute → validate → record
+     */
     private fun runCommand(
         step: PlannedStep,
         spec: CommandSpec,
         workspace: ExecutionWorkspace,
         policy: RunPolicy
     ): StepRunResult {
-        val startedAt: Instant = clock.now()
+        val startedAt = options.clock.now()
         val absWorkingDir = workspaceManager.resolveStepWorkingDir(workspace, step.stepId)
             ?.let { Paths.get(it) }
 
-        val (status, failure, detail) = executeCommand(step, spec, workspace, policy, absWorkingDir)
-        val finishedAt: Instant = clock.now()
+        // Step 1: Execute command
+        val outcome = executeCommand(step, spec, workspace, policy, absWorkingDir)
 
-        val validation = validateOutputs(step, status, absWorkingDir)
-        val outputs = validation?.producedOutputRefs ?: emptyList()
+        // Step 2: Validate outputs (post-execution check)
+        val validation = validateOutputs(step, outcome.status, absWorkingDir)
+        val finalStatus = validation?.forcedStatus ?: outcome.status
+        val finalFailure = if (validation?.forcedStatus != null) validation.failure else outcome.failure
+
+        // Step 3: Record artefacts (only if succeeded)
+        val producedArtifacts = if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
+            options.artefactRecorder.recordArtefacts(step, absWorkingDir, artefactStore)
+        } else {
+            emptyList()
+        }
+
+        // Step 4: Record logs (only if we have a result)  ← NEW
+        val logRef: ResourceRef? = if (absWorkingDir != null) {
+            options.logRecorder.recordLogs(step, outcome.commandResult, workspace)
+        } else {
+            null
+        }
+
+        // Step 5: Collect issues
         val validationIssues = validation?.issues ?: emptyList()
-        val finalStatus = validation?.forcedStatus ?: status
-        val finalFailure = if (validation?.forcedStatus != null) validation.failure else failure
+        _pendingIssues[step.stepId] = validationIssues
 
+        // Return final result
         return StepRunResult(
             stepId = step.stepId,
             status = finalStatus,
             startedAt = startedAt,
-            finishedAt = finishedAt,
-            outputs = outputs,
+            finishedAt = options.clock.now(),
+            outputs = producedArtifacts,
             failure = finalFailure,
-            detail = detail.copy(metrics = null)
-        ).also { _pendingIssues[step.stepId] = validationIssues }
+            detail = outcome.detail.copy(
+                stdout = logRef ?: outcome.detail.stdout,
+                stderr = null
+            )
+        )
     }
 
-    /** Runs the command and maps the raw result to status, failure, and run detail. */
+    // Command Execution
+
+    /**
+     * Internal result of command execution.
+     *
+     * Contains everything needed to create StepRunResult.
+     */
     private data class CommandOutcome(
         val status: ExecutionStatus,
         val failure: StepFailure?,
-        val detail: StepRunDetail
+        val detail: StepRunDetail,
+        val commandResult: CommandResult
     )
 
+    /**
+     * Execute the command and map result to status/failure/detail.
+     */
     private fun executeCommand(
         step: PlannedStep,
         spec: CommandSpec,
@@ -103,15 +145,21 @@ class CommandStepRunner(
         policy: RunPolicy,
         absWorkingDir: java.nio.file.Path?
     ): CommandOutcome {
+        // Run the command (with working directory if available)
         val result = if (absWorkingDir != null && commandRunner is JvmCommandRunner) {
             commandRunner.run(spec, policy, absWorkingDir)
         } else {
             commandRunner.run(spec, policy)
         }
 
-        val status = if (result.timedOut || result.exitCode != 0) ExecutionStatus.FAILED
-                     else ExecutionStatus.SUCCEEDED
+        // Map exit code to status
+        val status = if (result.timedOut || result.exitCode != 0) {
+            ExecutionStatus.FAILED
+        } else {
+            ExecutionStatus.SUCCEEDED
+        }
 
+        // Create failure if needed
         val failure: StepFailure? = when {
             result.timedOut -> StepFailure(
                 FailureKind.TIMEOUT,
@@ -124,44 +172,62 @@ class CommandStepRunner(
             else -> null
         }
 
+        // Create run detail with human-readable output
         val detail = StepRunDetail(
-            command = listOf(spec.executable) + spec.args.map { it.toDisplayString() },
+            command = listOf(spec.executable) + spec.args.toResolvedStrings(),
             workingDirectory = workspace.stepDir(step.stepId),
             exitCode = result.exitCode,
             stdout = inlineRef(result.stdout),
             stderr = inlineRef(result.stderr)
         )
 
-        return CommandOutcome(status, failure, detail)
+        return CommandOutcome(status, failure, detail, result)
     }
 
-    /** Runs post-step output validation; returns null when skipped. */
+    // Output Validation
+
+    /**
+     * Validate declared outputs against actual files on disk.
+     *
+     * Returns null if validation is skipped (not succeeded or no working dir).
+     */
     private fun validateOutputs(
         step: PlannedStep,
         status: ExecutionStatus,
         absWorkingDir: java.nio.file.Path?
     ): ValidationResult? {
-        if (status != ExecutionStatus.SUCCEEDED || absWorkingDir == null) return null
+        if (status != ExecutionStatus.SUCCEEDED || absWorkingDir == null) {
+            return null
+        }
         return StepOutputValidator.validate(
             stepId = step.stepId,
             outputsDir = absWorkingDir.resolve("outputs"),
             bindings = step.bindings,
-            policy = outputValidationPolicy
+            policy = options.outputValidationPolicy
         )
     }
 
+    // Issue Tracking
+
     private val _pendingIssues = mutableMapOf<UUID, List<ExecutionIssue>>()
 
-    /** Drains and returns any [ExecutionIssue]s recorded during the last run of [stepId]. */
+    /**
+     * Drain issues recorded during last execution of [stepId].
+     *
+     * Used by orchestrators to collect all issues from a run.
+     */
     fun drainIssues(stepId: UUID): List<ExecutionIssue> =
         _pendingIssues.remove(stepId) ?: emptyList()
 
-    // -------------------------------------------------------------------------
-    // Unsupported process types
-    // -------------------------------------------------------------------------
+    // Unsupported Process Types
 
+    /**
+     * Called when step process type is not CommandSpec.
+     *
+     * Returns FAILED with clear INFRASTRUCTURE error.
+     */
     private fun unsupportedProcess(step: PlannedStep, process: Any): StepRunResult {
-        val startedAt = clock.now()
+        val startedAt = options.clock.now()
         return StepRunResult(
             stepId = step.stepId,
             status = ExecutionStatus.FAILED,
@@ -171,26 +237,24 @@ class CommandStepRunner(
             failure = StepFailure(
                 kind = FailureKind.INFRASTRUCTURE,
                 message = "CommandStepRunner cannot handle process type " +
-                    "'${process::class.simpleName}' for step '${step.name}'"
+                        "'${process::class.simpleName}' for step '${step.name}'"
             )
         )
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
+    /**
+     * Create ResourceRef for inline stdout/stderr.
+     *
+     * For empty output, returns null (no log to record).
+     * For non-empty, uses data: URI for inline storage.
+     */
     private fun inlineRef(text: String): ResourceRef? =
         if (text.isBlank()) null
-        else ResourceRef(kind = ResourceKind.URI, value = "data:text/plain,${text.trim()}")
-}
-
-/**
- * Converts an [ExpandedArg] to a string for display/logging purposes.
- */
-private fun ExpandedArg.toDisplayString(): String = when (this) {
-    is ExpandedArg.Literal -> value
-    is ExpandedArg.DataReference -> dataRefId.toString()
-    is ExpandedArg.PathSubstitution -> template.replace("$()", dataRefId.toString())
+        else ResourceRef(
+            kind = ResourceKind.URI,
+            value = "data:text/plain,${text.trim()}"
+        )
 }
 
