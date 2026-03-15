@@ -68,6 +68,13 @@ class DefaultPlanExecutor(
         val stepRunner = createStepRunner()
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
+        val knownStepContext = KnownStepExecutionContext(
+            workspace = workspace,
+            policy = policy,
+            stepRunner = stepRunner,
+            stepResults = stepResults,
+            runIssues = runIssues
+        )
         var halted = false
 
         for (stepId in stepOrder) {
@@ -82,7 +89,7 @@ class DefaultPlanExecutor(
                 continue
             }
 
-            val result = runKnownStep(step, stepId, workspace, policy, stepRunner, stepResults, runIssues)
+            val result = runKnownStep(step, knownStepContext)
             if (result.status == ExecutionStatus.FAILED && policy.stopOnFailure) {
                 halted = true
             }
@@ -91,20 +98,28 @@ class DefaultPlanExecutor(
         return buildExecutionReport(plan, runId, stepResults, runIssues)
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     private fun createStepRunner(): CommandStepRunner =
         CommandStepRunner(
-            workspaceManager,
-            commandRunner,
-            artefactStore,
-            FileSystemArtefactRecorder(),
-            FileSystemStepLogRecorder(),
-            outputValidationPolicy,
-            clock
+            workspaceManager = workspaceManager,
+            commandRunner = commandRunner,
+            artefactStore = artefactStore,
+            options = CommandStepRunner.Options(
+                artefactRecorder = FileSystemArtefactRecorder(),
+                logRecorder = FileSystemStepLogRecorder(),
+                outputValidationPolicy = outputValidationPolicy,
+                clock = clock
+            )
         )
+
+    private data class KnownStepExecutionContext(
+        val workspace: ExecutionWorkspace,
+        val policy: RunPolicy,
+        val stepRunner: CommandStepRunner,
+        val stepResults: MutableList<StepRunResult>,
+        val runIssues: MutableList<ExecutionIssue>
+    )
 
     private fun handleUnknownStep(
         stepId: UUID,
@@ -141,16 +156,11 @@ class DefaultPlanExecutor(
 
     private fun runKnownStep(
         step: PlannedStep,
-        stepId: UUID,
-        workspace: ExecutionWorkspace,
-        policy: RunPolicy,
-        stepRunner: CommandStepRunner,
-        stepResults: MutableList<StepRunResult>,
-        runIssues: MutableList<ExecutionIssue>
+        context: KnownStepExecutionContext
     ): StepRunResult {
-        val result = stepRunner.run(step, workspace, policy)
-        stepResults += result
-        runIssues += stepRunner.drainIssues(stepId)
+        val result = context.stepRunner.run(step, context.workspace, context.policy)
+        context.stepResults += result
+        context.runIssues += context.stepRunner.drainIssues(step.stepId)
         return result
     }
 

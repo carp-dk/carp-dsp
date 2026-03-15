@@ -12,7 +12,6 @@ import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import java.nio.file.Paths
 
 /**
@@ -24,18 +23,24 @@ import java.nio.file.Paths
  *
  * @param workspaceManager    Prepares per-step directories and resolves absolute paths.
  * @param commandRunner       The underlying OS-process driver.
- * @param outputValidationPolicy Controls post-execution output checks.
- * @param clock               Source of wall-clock [Instant]s; defaults to [Clock.System].
+ * @param options             Optional collaborators and policies.
  */
 class CommandStepRunner(
     private val workspaceManager: WorkspaceManager,
     private val commandRunner: CommandRunner,
     private val artefactStore: ArtefactStore,
-    private val artefactRecorder: ArtefactRecorder = FileSystemArtefactRecorder(),
-    private val logRecorder: StepLogRecorder = FileSystemStepLogRecorder(),
-    private val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
-    private val clock: Clock = Clock.System
+    private val options: Options = Options()
 ) : StepRunner {
+
+    /**
+     * Optional collaborators and policies used by [CommandStepRunner].
+     */
+    data class Options(
+        val artefactRecorder: ArtefactRecorder = FileSystemArtefactRecorder(),
+        val logRecorder: StepLogRecorder = FileSystemStepLogRecorder(),
+        val outputValidationPolicy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT,
+        val clock: Clock = Clock.System
+    )
 
     /**
      * Runs [step] inside [workspace] according to [policy] and returns a complete [StepRunResult].
@@ -71,7 +76,7 @@ class CommandStepRunner(
         workspace: ExecutionWorkspace,
         policy: RunPolicy
     ): StepRunResult {
-        val startedAt = clock.now()
+        val startedAt = options.clock.now()
         val absWorkingDir = workspaceManager.resolveStepWorkingDir(workspace, step.stepId)
             ?.let { Paths.get(it) }
 
@@ -85,14 +90,14 @@ class CommandStepRunner(
 
         // Step 3: Record artefacts (only if succeeded)
         val producedArtifacts = if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
-            artefactRecorder.recordArtefacts(step, absWorkingDir, artefactStore)
+            options.artefactRecorder.recordArtefacts(step, absWorkingDir, artefactStore)
         } else {
             emptyList()
         }
 
         // Step 4: Record logs (only if we have a result)  ← NEW
         val logRef: ResourceRef? = if (absWorkingDir != null) {
-            logRecorder.recordLogs(step, outcome.commandResult, workspace)
+            options.logRecorder.recordLogs(step, outcome.commandResult, workspace)
         } else {
             null
         }
@@ -106,7 +111,7 @@ class CommandStepRunner(
             stepId = step.stepId,
             status = finalStatus,
             startedAt = startedAt,
-            finishedAt = clock.now(),
+            finishedAt = options.clock.now(),
             outputs = producedArtifacts,
             failure = finalFailure,
             detail = outcome.detail.copy(
@@ -198,7 +203,7 @@ class CommandStepRunner(
             stepId = step.stepId,
             outputsDir = absWorkingDir.resolve("outputs"),
             bindings = step.bindings,
-            policy = outputValidationPolicy
+            policy = options.outputValidationPolicy
         )
     }
 
@@ -222,7 +227,7 @@ class CommandStepRunner(
      * Returns FAILED with clear INFRASTRUCTURE error.
      */
     private fun unsupportedProcess(step: PlannedStep, process: Any): StepRunResult {
-        val startedAt = clock.now()
+        val startedAt = options.clock.now()
         return StepRunResult(
             stepId = step.stepId,
             status = ExecutionStatus.FAILED,

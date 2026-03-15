@@ -698,7 +698,7 @@ class CommandStepRunnerTest {
             workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "hello from step"),
             artefactStore = MockArtefactStore(),
-            logRecorder = mockLogRecorder  // ← Inject mock
+            options = CommandStepRunner.Options(logRecorder = mockLogRecorder) // ← Inject mock
         )
 
         val step = commandStep()
@@ -717,7 +717,7 @@ class CommandStepRunnerTest {
             workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "", stderr = ""),
             artefactStore = MockArtefactStore(),
-            logRecorder = mockLogRecorder
+            options = CommandStepRunner.Options(logRecorder = mockLogRecorder)
         )
 
         val step = commandStep()
@@ -734,7 +734,7 @@ class CommandStepRunnerTest {
             workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "stdout-content"),
             artefactStore = MockArtefactStore(),
-            logRecorder = mockLogRecorder
+            options = CommandStepRunner.Options(logRecorder = mockLogRecorder)
         )
 
         val result = runner.run(commandStep(), workspace)

@@ -116,7 +116,7 @@ class FileSystemStepLogRecorderTest {
 
         val ref = recorder.recordLogs(step, result, workspace)
 
-        assertNull(ref)  // No logs = no recording
+        assertNull(ref) // No logs = no recording
     }
 
     @Test

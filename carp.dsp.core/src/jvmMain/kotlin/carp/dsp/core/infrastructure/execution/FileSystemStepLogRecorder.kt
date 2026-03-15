@@ -19,7 +19,7 @@ import kotlin.time.ExperimentalTime
  * File system based step log recording.
  *
  * Records combined stdout/stderr to timestamped log files.
- * 
+ *
  * Layout:
  * ```
  * workspace/
@@ -77,9 +77,9 @@ class FileSystemStepLogRecorder(
         }
     }
 
-    
+
     // Private Helpers
-    
+
 
     private val _records = mutableMapOf<UUID, LogRecord>()
 
@@ -97,8 +97,8 @@ class FileSystemStepLogRecorder(
         logsDir.createDirectories()
 
         val timestamp = clock.now().toString()
-            .replace(":", "-")   // Replace time separators
-            .replace(".", "-")   // Replace decimal point
+            .replace(":", "-") // Replace time separators
+            .replace(".", "-") // Replace decimal point
 
         val fileName = "$stepId-$timestamp.log"
         return logsDir.resolve(fileName)
@@ -121,7 +121,7 @@ class FileSystemStepLogRecorder(
             }
             if (result.stderr.isNotBlank()) {
                 if (result.stdout.isNotBlank()) {
-                    appendLine()  // Blank line separator
+                    appendLine() // Blank line separator
                 }
                 appendLine("=== STDERR ===")
                 appendLine(result.stderr)
