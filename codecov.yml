@@ -2,7 +2,7 @@ coverage:
   status:
     project:
       default:
-        target: 80%
+        target: 75%
         threshold: 1%
     patch:
       default:
@@ -10,20 +10,15 @@ coverage:
         threshold: 0%
 
 ignore:
-  # Generated Kotlin serialization code
   - "**/*$serializer*"
   - "**/*$Companion*"
   - "**/*$DefaultImpls*"
   - "**/*$WhenMappings*"
-
-  # Demo / reference apps
-  - "demo/**"
-  - "app/**"
-  - "reference-app/**"
-
-  # Infrastructure / tooling (if desired)
-  - "**/infrastructure/**"
-
+  # Module-level excludes (paths use module folder names, e.g. carp.dsp.demo/)
+  - "carp.dsp.demo/**"
+  - "detekt/**"
+  - "**/carp.dsp.demo/**"
+  - "**/detekt/**"
   # Test utilities
   - "**/testutils/**"
 

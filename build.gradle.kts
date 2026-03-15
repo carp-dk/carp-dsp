@@ -104,13 +104,7 @@ kover {
                     packages(
                         // Demo module — never include in core coverage
                         "carp.dsp.demo",
-                        "carp.dsp.demo.api",
-                        "carp.dsp.demo.demos",
-                        "carp.dsp.demo.utils",
-                        "carp.dsp.demo.workflows",
 
-                        // Infrastructure — covered separately
-                        "carp.dsp.core.infrastructure"
                     )
                     annotatedBy(
                         "carp.dsp.core.common.ExcludeFromCoverage"
