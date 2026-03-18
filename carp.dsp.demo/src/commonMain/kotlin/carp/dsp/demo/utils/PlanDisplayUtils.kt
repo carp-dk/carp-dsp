@@ -6,6 +6,7 @@ import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
+import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 
@@ -29,6 +30,7 @@ object PlanDisplayUtils {
     fun getEnvironmentType(envRef: EnvironmentRef): String = when (envRef) {
         is CondaEnvironmentRef -> "conda"
         is PixiEnvironmentRef -> "pixi"
+        is REnvironmentRef -> "R"
         is SystemEnvironmentRef -> "system"
     }
 
