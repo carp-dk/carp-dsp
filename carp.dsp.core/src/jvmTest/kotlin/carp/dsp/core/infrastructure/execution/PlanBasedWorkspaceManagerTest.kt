@@ -7,6 +7,7 @@ import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.common.application.UUID
+import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -391,6 +392,128 @@ class PlanBasedWorkspaceManagerTest {
         assertTrue(executionRoot1.exists(), "Workspace 1 should exist")
         assertTrue(executionRoot2.exists(), "Workspace 2 should exist")
         assertNotEquals(executionRoot1, executionRoot2, "Workspaces should be in different directories")
+    }
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        prettyPrint = false
+    }
+
+    // ── SimplifiedStepHashContent ─────────────────────────────────────────────
+
+    @Test
+    fun `SimplifiedStepHashContent round-trips through JSON`() {
+        val original = SimplifiedStepHashContent(
+            stepId = "step-uuid-001",
+            name = "Preprocess EEG",
+            environmentDefinitionId = "env-uuid-001",
+            inputBindings = listOf("input-uuid-001", "input-uuid-002"),
+            outputBindings = listOf("output-uuid-001")
+        )
+
+        val json = json.encodeToString(SimplifiedStepHashContent.serializer(), original)
+        val decoded = this.json.decodeFromString(SimplifiedStepHashContent.serializer(), json)
+
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `SimplifiedStepHashContent round-trips with empty binding lists`() {
+        val original = SimplifiedStepHashContent(
+            stepId = "step-uuid-002",
+            name = "Validate Input",
+            environmentDefinitionId = "env-uuid-002",
+            inputBindings = emptyList(),
+            outputBindings = emptyList()
+        )
+
+        val serialized = json.encodeToString(SimplifiedStepHashContent.serializer(), original)
+        val decoded = json.decodeFromString(SimplifiedStepHashContent.serializer(), serialized)
+
+        assertEquals(original, decoded)
+    }
+
+    // ── SimplifiedPlanHashContent ─────────────────────────────────────────────
+
+    @Test
+    fun `SimplifiedPlanHashContent round-trips through JSON`() {
+        val original = SimplifiedPlanHashContent(
+            workflowId = "workflow-uuid-001",
+            steps = listOf(
+                SimplifiedStepHashContent(
+                    stepId = "step-uuid-001",
+                    name = "Validate Input",
+                    environmentDefinitionId = "env-uuid-001",
+                    inputBindings = emptyList(),
+                    outputBindings = listOf("output-uuid-001")
+                ),
+                SimplifiedStepHashContent(
+                    stepId = "step-uuid-002",
+                    name = "Preprocess EEG",
+                    environmentDefinitionId = "env-uuid-001",
+                    inputBindings = listOf("input-uuid-001"),
+                    outputBindings = listOf("output-uuid-002")
+                )
+            ),
+            requiredEnvironmentHandles = listOf("env-uuid-001")
+        )
+
+        val serialized = json.encodeToString(SimplifiedPlanHashContent.serializer(), original)
+        val decoded = json.decodeFromString(SimplifiedPlanHashContent.serializer(), serialized)
+
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `SimplifiedPlanHashContent round-trips with no steps`() {
+        val original = SimplifiedPlanHashContent(
+            workflowId = "workflow-uuid-empty",
+            steps = emptyList(),
+            requiredEnvironmentHandles = emptyList()
+        )
+
+        val serialized = json.encodeToString(SimplifiedPlanHashContent.serializer(), original)
+        val decoded = json.decodeFromString(SimplifiedPlanHashContent.serializer(), serialized)
+
+        assertEquals(original, decoded)
+    }
+
+    // ── JSON field name stability ─────────────────────────────────────────────
+    // Guards against accidental field renames breaking the on-disk hash format.
+
+    @Test
+    fun `SimplifiedStepHashContent serializes to expected field names`() {
+        val step = SimplifiedStepHashContent(
+            stepId = "s1",
+            name = "my-step",
+            environmentDefinitionId = "e1",
+            inputBindings = listOf("i1"),
+            outputBindings = listOf("o1")
+        )
+
+        val serialized = json.encodeToString(SimplifiedStepHashContent.serializer(), step)
+
+        assert(serialized.contains("\"stepId\"")) { "stepId field missing" }
+        assert(serialized.contains("\"name\"")) { "name field missing" }
+        assert(serialized.contains("\"environmentDefinitionId\"")) { "environmentDefinitionId field missing" }
+        assert(serialized.contains("\"inputBindings\"")) { "inputBindings field missing" }
+        assert(serialized.contains("\"outputBindings\"")) { "outputBindings field missing" }
+    }
+
+    @Test
+    fun `SimplifiedPlanHashContent serializes to expected field names`() {
+        val content = SimplifiedPlanHashContent(
+            workflowId = "w1",
+            steps = emptyList(),
+            requiredEnvironmentHandles = listOf("e1")
+        )
+
+        val serialized = json.encodeToString(SimplifiedPlanHashContent.serializer(), content)
+
+        assert(serialized.contains("\"workflowId\"")) { "workflowId field missing" }
+        assert(serialized.contains("\"steps\"")) { "steps field missing" }
+        assert(serialized.contains("\"requiredEnvironmentHandles\"")) { "requiredEnvironmentHandles field missing" }
     }
 
     // Helper methods
