@@ -304,4 +304,31 @@ class CommandPolicyTest {
         )
         assertEquals(original, roundTrip)
     }
+
+    @Test
+    fun `deserializes from minimal json using defaults`() {
+        val json = Json { encodeDefaults = false }
+
+        val decoded = json.decodeFromString(CommandPolicy.serializer(), "{}")
+
+        assertEquals(null, decoded.timeoutMs)
+        assertEquals(null, decoded.workingDirectory)
+        assertTrue(decoded.stopOnFailure)
+        assertEquals(false, decoded.failOnWarnings)
+        assertEquals(1, decoded.maxAttempts)
+    }
+
+    @Test
+    fun `deserializes with non-default booleans and maxAttempts`() {
+        val json = Json { encodeDefaults = false }
+        val payload = """
+            {"stopOnFailure":false,"failOnWarnings":true,"maxAttempts":3}
+        """.trimIndent()
+
+        val decoded = json.decodeFromString(CommandPolicy.serializer(), payload)
+
+        assertEquals(false, decoded.stopOnFailure)
+        assertEquals(true, decoded.failOnWarnings)
+        assertEquals(3, decoded.maxAttempts)
+    }
 }

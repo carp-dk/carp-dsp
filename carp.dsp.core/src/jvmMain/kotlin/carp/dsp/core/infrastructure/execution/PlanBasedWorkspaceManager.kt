@@ -214,7 +214,7 @@ class PlanBasedWorkspaceManager(
  * The planId is deliberately excluded as it may be a random UUID that changes between planning runs.
  */
 @Serializable
-private data class SimplifiedPlanHashContent(
+internal data class SimplifiedPlanHashContent(
     val workflowId: String,
     val steps: List<SimplifiedStepHashContent>,
     val requiredEnvironmentHandles: List<String>
@@ -226,7 +226,7 @@ private data class SimplifiedPlanHashContent(
  * This excludes the polymorphic TasksRun field to avoid serialization complexity.
  */
 @Serializable
-private data class SimplifiedStepHashContent(
+internal data class SimplifiedStepHashContent(
     val stepId: String,
     val name: String,
     val environmentDefinitionId: String,

@@ -79,7 +79,7 @@ kover {
                 excludes {
                     classes(
                         // Kotlin serialization generated classes (JVM binary name patterns)
-                        "**\$\$serializer",
+                        "**$\$serializer",
                         "**\$serializer",
                         "**Companion\$serializer",
 
@@ -91,7 +91,7 @@ kover {
                         "**\$DefaultImpls",
                         "**\$WhenMappings",
                         "**\$inlined*",
-                        "**\$sam\$*",
+                        "**\$sam$*",
 
                         // data class copy$default bridge methods (JVM only)
                         "**\$copy\$default*",
