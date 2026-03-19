@@ -58,7 +58,7 @@ object PlanningDemo : Demo {
         println("-".repeat(40))
 
         // Basic plan info
-        println("Workflow ID: ${plan.workflowId}")
+        println("Workflow ID: ${plan.workflowName}")
         println("Plan ID:     ${plan.planId}")
         println("Runnable:    ${plan.isRunnable()}")
         println("Has Errors:  ${plan.hasErrors()}")
@@ -74,7 +74,7 @@ object PlanningDemo : Demo {
                     step.process.toString().contains("InTasksRun") -> "Internal"
                     else -> "Unknown"
                 }
-                println("   ${index + 1}. ${step.stepId} :: ${step.name} :: $processType")
+                println("   ${index + 1}. ${step.metadata.id} :: ${step.metadata.id} :: $processType")
             }
         }
 

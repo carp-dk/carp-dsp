@@ -77,7 +77,7 @@ class REnvironmentDefinitionTest {
     }
 
     @Test
-    fun rejectsMissingPackagesAndLockFile() {
+    fun acceptsBaseRWithNoPackages() {
         val definition = REnvironmentDefinition(
             id = UUID.randomUUID(),
             name = "env",
@@ -88,6 +88,20 @@ class REnvironmentDefinitionTest {
 
         val errors = definition.validate()
 
-        assertTrue(errors.any { it.contains("renvLockFile or rPackages") })
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun acceptsMajorOnlyVersion() {
+        val definition = REnvironmentDefinition(
+            id = UUID.randomUUID(),
+            name = "env",
+            rVersion = "4",
+            rPackages = emptyList()
+        )
+
+        val errors = definition.validate()
+
+        assertTrue(errors.isEmpty())
     }
 }

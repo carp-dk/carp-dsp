@@ -4,6 +4,7 @@ import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.serialization.descriptorYaml
 import com.charleskorn.kaml.MalformedYamlException
 import com.charleskorn.kaml.YamlException
+import dk.cachet.carp.analytics.application.exceptions.YamlCodecException
 import kotlinx.serialization.SerializationException
 
 // ── Codec result type ─────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ class WorkflowYamlCodec
         when ( val result = decode( yaml ) )
         {
             is DecodeResult.Success -> result.descriptor
-            is DecodeResult.MalformedYaml -> throw YamlCodecException( result.message, result.cause )
+            is DecodeResult.MalformedYaml -> throw YamlCodecException(result.message, result.cause)
             is DecodeResult.SchemaError -> throw YamlCodecException( result.message, result.cause )
             is DecodeResult.PolicyViolation -> throw YamlCodecException( result.message )
         }
@@ -174,14 +175,3 @@ class WorkflowYamlCodec
         const val DEFAULT_SCHEMA_VERSION: String = "1.0"
     }
 }
-
-// ── Exception ─────────────────────────────────────────────────────────────────
-
-/**
- * Thrown by [WorkflowYamlCodec.decodeOrThrow] and [WorkflowYamlCodec.encode] when the
- * YAML operation fails.
- *
- * Wraps the underlying [com.charleskorn.kaml.YamlException] or parse error as [cause].
- */
-class YamlCodecException( message: String, cause: Throwable? = null ) :
-    RuntimeException( message, cause )

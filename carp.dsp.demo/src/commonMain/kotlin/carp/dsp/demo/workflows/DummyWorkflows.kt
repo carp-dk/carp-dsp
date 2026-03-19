@@ -3,11 +3,10 @@ package carp.dsp.demo.workflows
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
 import dk.cachet.carp.analytics.application.authoring.WorkflowDefinitionBuilder
-import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.InMemoryLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
-import dk.cachet.carp.analytics.domain.data.RegistryDestination
-import dk.cachet.carp.analytics.domain.data.StepOutputSource
+
 import dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.Literal
@@ -135,14 +134,14 @@ object DummyWorkflows {
                     InputDataSpec(
                         id = UUID.randomUUID(),
                         name = "Input Data $index",
-                        source = InMemorySource(registryKey = "analysis_env")
+                        location = InMemoryLocation(registryKey = "analysis_env")
                     )
                 ),
                 outputs = listOf(
                     OutputDataSpec(
                         id = UUID.randomUUID(),
                         name = "Output Data $index",
-                        destination = RegistryDestination(key = "output_$index")
+                        location = InMemoryLocation(registryKey = "output_$index")
                     )
                 ),
                 environmentId = if (index % 2 == 0) condaEnv.id else pixiEnv.id,
@@ -223,7 +222,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id = UUID.randomUUID(),
                             name = "Bad Input",
-                            source = InMemorySource(registryKey = "non_existent_step") // References non-existent step
+                            location = InMemoryLocation(registryKey = "non_existent_step") // References non-existent step
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -245,7 +244,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Self Reference",
-                            source = InMemorySource(
+                            location = InMemoryLocation(
                                 registryKey = "step_self_cycle"
                             ) // Depends on itself - INVALID cycle
                         )
@@ -269,7 +268,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Data from Step B",
-                            source = InMemorySource(registryKey = "step_cycle_b")
+                            location = InMemoryLocation(registryKey = "step_cycle_b")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -286,7 +285,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Data from Step A",
-                            source = InMemorySource(registryKey = "step_cycle_a")
+                            location = InMemoryLocation(registryKey = "step_cycle_a")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -309,7 +308,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Data from S3",
-                            source = InMemorySource(registryKey = "step_s3")
+                            location = InMemoryLocation(registryKey = "step_s3")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -326,7 +325,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Data from S1",
-                            source = InMemorySource(registryKey = "step_s1")
+                            location = InMemoryLocation(registryKey = "step_s1")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -343,7 +342,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Data from S2",
-                            source = InMemorySource(registryKey = "step_s2")
+                            location = InMemoryLocation(registryKey = "step_s2")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -374,7 +373,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Missing Input",
-                            source = InMemorySource(registryKey = "non_existent")
+                            location = InMemoryLocation(registryKey = "non_existent")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -391,7 +390,7 @@ object DummyWorkflows {
                         InputDataSpec(
                             id =  UUID.randomUUID(),
                             name = "Another Missing Input",
-                            source = InMemorySource(registryKey = "also_non_existent")
+                            location = InMemoryLocation(registryKey = "also_non_existent")
                         )
                     ),
                     environmentId = defaultEnv.id,
@@ -504,8 +503,7 @@ object DummyWorkflows {
             id = outputAId,
             name = "step_a_result",
             description = "Output from Step A",
-            schema = null,
-            destination = RegistryDestination(key = "step-a-output")
+            location = InMemoryLocation(registryKey = "step-a-output")
         )
 
         val stepA = Step(
@@ -531,11 +529,7 @@ object DummyWorkflows {
             name = "input_from_a",
             description = "Input from Step A",
             schema = null,
-            source = StepOutputSource(
-                stepId = stepAId,
-                outputId = outputAId,
-                metadata = emptyMap()
-            ),
+            location = InMemoryLocation(registryKey = "step-a-output"),
             required = true
         )
 
@@ -543,8 +537,7 @@ object DummyWorkflows {
             id = outputBId,
             name = "step_b_result",
             description = "Output from Step B",
-            schema = null,
-            destination = RegistryDestination(key = "step-b-output")
+            location = InMemoryLocation(registryKey = "step-b-output")
         )
 
         val stepB = Step(

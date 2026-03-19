@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * any `init` validations across every descriptor type.
  *
  * These tests exist purely to satisfy Kover line/method coverage for the descriptor package.
- * They also serve as regression guards against accidental field additions or reordering.
+ * And serve as regression guards against accidental field additions or reordering.
  *
  * The "null-branch coverage" tests compare an instance with a nullable field set against one
  * with it null. This hits both arms of the generated `equals()` null-check branches, which is
@@ -54,6 +54,22 @@ class DescriptorDataClassTest
         assertTrue(a.toString().contains("pkg.cli"))
 
         assertEquals(c, a.copy(moduleName = "pkg.other"))
+        assertNotEquals<Any>(a, "not-a-descriptor")
+    }
+
+    @Test
+    fun `RScriptEntryPointDescriptor equality hashCode toString copy`()
+    {
+        val a = RScriptEntryPointDescriptor("analyze.R")
+        val b = RScriptEntryPointDescriptor("analyze.R")
+        val c = RScriptEntryPointDescriptor("other.R")
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertNotEquals(a, c)
+        assertTrue(a.toString().contains("analyze.R"))
+
+        assertEquals(c, a.copy(scriptPath = "other.R"))
         assertNotEquals<Any>(a, "not-a-descriptor")
     }
 
@@ -119,6 +135,40 @@ class DescriptorDataClassTest
         val withoutId = PythonTaskDescriptor(id = null, name = "t", entryPoint = ep)
         val withDesc = PythonTaskDescriptor(name = "t", entryPoint = ep, description = "d")
         val withoutDesc = PythonTaskDescriptor(name = "t", entryPoint = ep, description = null)
+
+        assertNotEquals(withId, withoutId)
+        assertNotEquals(withoutId, withId)
+        assertNotEquals(withDesc, withoutDesc)
+        assertNotEquals(withoutDesc, withDesc)
+        assertNotEquals<Any>(withId, "string")
+    }
+
+    @Test
+    fun `RTaskDescriptor equality hashCode toString copy`()
+    {
+        val ep = RScriptEntryPointDescriptor("analyze.R")
+        val a = RTaskDescriptor(
+            id = "tid-r", name = "r-script", entryPoint = ep,
+            args = listOf("--verbose"),
+        )
+        val b = a.copy()
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertTrue(a.toString().contains("r-script"))
+
+        val withDiffScript = a.copy(entryPoint = RScriptEntryPointDescriptor("other.R"))
+        assertNotEquals(a, withDiffScript)
+    }
+
+    @Test
+    fun `RTaskDescriptor equals null-branch coverage`()
+    {
+        val ep = RScriptEntryPointDescriptor("analyze.R")
+        val withId = RTaskDescriptor(id = "x", name = "t", entryPoint = ep)
+        val withoutId = RTaskDescriptor(id = null, name = "t", entryPoint = ep)
+        val withDesc = RTaskDescriptor(name = "t", entryPoint = ep, description = "d")
+        val withoutDesc = RTaskDescriptor(name = "t", entryPoint = ep, description = null)
 
         assertNotEquals(withId, withoutId)
         assertNotEquals(withoutId, withId)

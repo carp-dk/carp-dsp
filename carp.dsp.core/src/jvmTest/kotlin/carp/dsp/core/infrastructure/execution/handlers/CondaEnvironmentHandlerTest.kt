@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.execution.handlers
 
 import carp.dsp.core.testing.MockCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
 import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
 import java.io.IOException
@@ -35,7 +36,7 @@ class CondaEnvironmentHandlerTest {
     @Test fun `cannot handle PixiEnvironmentRef`() =
         assertFalse(
             CondaEnvironmentHandler().canHandle(
-            PixiEnvironmentRef(id = "p", dependencies = emptyList())
+            PixiEnvironmentRef(id = "p", name = "p-env", dependencies = emptyList())
         )
         )
 
@@ -96,32 +97,32 @@ class CondaEnvironmentHandlerTest {
 
     // ── setup ─────────────────────────────────────────────────────────────────
 
-    @Test fun `setup throws EnvironmentProvisioningException when conda is not installed`() {
+    @Test fun `setup throws EnvironmentSetupException when conda is not installed`() {
         val mock = MockCommandRunner().apply { on("conda --version", exitCode = 1) }
-        val ex = assertFailsWith<EnvironmentProvisioningException> {
+        val ex = assertFailsWith<EnvironmentSetupException> {
             CondaEnvironmentHandler(mock).setup(ref())
         }
         assertTrue(ex.message!!.contains("Conda not found"))
     }
 
-    @Test fun `setup throws EnvironmentProvisioningException when conda create fails`() {
+    @Test fun `setup throws EnvironmentSetupException when conda create fails`() {
         val mock = MockCommandRunner().apply {
             on("conda --version")
             on("conda create", exitCode = 1, stderr = "SolverError: package not found")
         }
-        val ex = assertFailsWith<EnvironmentProvisioningException> {
+        val ex = assertFailsWith<EnvironmentSetupException> {
             CondaEnvironmentHandler(mock).setup(ref())
         }
         assertTrue(ex.message!!.contains("Failed to create conda environment"))
     }
 
-    @Test fun `setup throws EnvironmentProvisioningException when validation fails after create`() {
+    @Test fun `setup throws EnvironmentSetupException when validation fails after create`() {
         val mock = MockCommandRunner().apply {
             on("conda --version")
             on("conda create")
             on("conda env list", stdout = "base  *  /opt/conda") // env absent from list
         }
-        val ex = assertFailsWith<EnvironmentProvisioningException> {
+        val ex = assertFailsWith<EnvironmentSetupException> {
             CondaEnvironmentHandler(mock).setup(ref(name = "my-env"))
         }
         assertTrue(ex.message!!.contains("validation failed"))
@@ -180,7 +181,7 @@ class CondaEnvironmentHandlerTest {
             on("conda create")
             on("conda run -n my-env pip install", exitCode = 1, stderr = "pip error")
         }
-        assertFailsWith<EnvironmentProvisioningException> {
+        assertFailsWith<EnvironmentSetupException> {
             CondaEnvironmentHandler(mock).setup(ref(name = "my-env", dependencies = listOf("pip:black")))
         }
     }
@@ -211,7 +212,7 @@ class CondaEnvironmentHandlerTest {
         val mock = MockCommandRunner().apply {
             onThrow("conda --version", IOException("conda not on PATH"))
         }
-        val ex = assertFailsWith<EnvironmentProvisioningException> {
+        val ex = assertFailsWith<EnvironmentSetupException> {
             CondaEnvironmentHandler(mock).setup(ref())
         }
         assertTrue(ex.message!!.contains("Conda not found"))
@@ -343,12 +344,5 @@ class CondaEnvironmentHandlerTest {
         )
             )
         )
-    }
-
-    // ── CondaCommandExecutionException ────────────────────────────────────────
-
-    @Test fun `CondaCommandExecutionException preserves message`() {
-        val msg = "conda create failed:\nERROR: environment already exists"
-        assertEquals(msg, CondaCommandExecutionException(msg).message)
     }
 }

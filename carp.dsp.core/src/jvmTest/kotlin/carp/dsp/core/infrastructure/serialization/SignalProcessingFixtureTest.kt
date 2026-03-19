@@ -1,7 +1,6 @@
 package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
 import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
@@ -37,7 +36,7 @@ class SignalProcessingFixtureTest
     private val importer = WorkflowDescriptorImporter()
 
     private fun loadSignalProcessingFixture(): String =
-        File("src/jvmTest/resources/fixtures/signal-processing.yaml").readText()
+        File("src/jvmTest/resources/integration-fixtures/signal-processing.yaml").readText()
 
     // ── Test: Parse ──────────────────────────────────────────────────────────
 
@@ -62,14 +61,13 @@ class SignalProcessingFixtureTest
         assertEquals("EEG Signal Processing Pipeline", descriptor.metadata.name)
 
         // Check environments
-        assertEquals(2, descriptor.environments.size)
-        assertTrue(descriptor.environments.containsKey("conda-eeg"))
-        assertTrue(descriptor.environments.containsKey("report-env"))
+        assertEquals(1, descriptor.environments.size)
+        assertTrue(descriptor.environments.containsKey("env-system"))
 
         // Check steps
         assertEquals(4, descriptor.steps.size)
-        assertEquals("validate-input", descriptor.steps[0].id)
-        assertEquals("preprocess-eeg", descriptor.steps[1].id)
+        assertEquals("validate-signal", descriptor.steps[0].id)
+        assertEquals("preprocess-signal", descriptor.steps[1].id)
         assertEquals("extract-features", descriptor.steps[2].id)
         assertEquals("generate-report", descriptor.steps[3].id)
     }
@@ -83,9 +81,9 @@ class SignalProcessingFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        assertIs<CommandTaskDescriptor>( descriptor.steps[0].task ) // validate-input
-        assertIs<PythonTaskDescriptor>( descriptor.steps[1].task ) // preprocess-eeg
-        assertIs<PythonTaskDescriptor>( descriptor.steps[2].task ) // extract-features
+        assertIs<CommandTaskDescriptor>( descriptor.steps[0].task ) // validate-signal
+        assertIs<CommandTaskDescriptor>( descriptor.steps[1].task ) // preprocess-signal
+        assertIs<CommandTaskDescriptor>( descriptor.steps[2].task ) // extract-features
         assertIs<CommandTaskDescriptor>( descriptor.steps[3].task ) // generate-report
     }
 
@@ -103,11 +101,11 @@ class SignalProcessingFixtureTest
 
         // Step 2: depends on step 1
         assertEquals(1, descriptor.steps[1].dependsOn.size)
-        assertEquals("validate-input", descriptor.steps[1].dependsOn[0])
+        assertEquals("validate-signal", descriptor.steps[1].dependsOn[0])
 
         // Step 3: depends on step 2
         assertEquals(1, descriptor.steps[2].dependsOn.size)
-        assertEquals("preprocess-eeg", descriptor.steps[2].dependsOn[0])
+        assertEquals("preprocess-signal", descriptor.steps[2].dependsOn[0])
 
         // Step 4: depends on step 3
         assertEquals(1, descriptor.steps[3].dependsOn.size)
@@ -154,11 +152,11 @@ class SignalProcessingFixtureTest
         assertTrue(step1Args.isNotEmpty(), "Step 1 should have arguments")
 
         // Step 2: args with input-ref, output-ref, and literals
-        val step2Args = assertIs<PythonTaskDescriptor>( descriptor.steps[1].task ).args
+        val step2Args = assertIs<CommandTaskDescriptor>( descriptor.steps[1].task ).args
         assertTrue(step2Args.isNotEmpty(), "Step 2 should have arguments")
 
         // Step 3: args with input-ref and output-ref
-        val step3Args = assertIs<PythonTaskDescriptor>( descriptor.steps[2].task ).args
+        val step3Args = assertIs<CommandTaskDescriptor>( descriptor.steps[2].task ).args
         assertTrue(step3Args.isNotEmpty(), "Step 3 should have arguments")
 
         // Step 4: args with literals and references
@@ -231,7 +229,7 @@ class SignalProcessingFixtureTest
         val descriptor = codec.decodeOrThrow(yaml)
         val definition = importer.import(descriptor)
 
-        assertEquals(2, definition.environments.size, "Domain model should have 2 environments")
+        assertEquals(1, definition.environments.size, "Domain model should have 1 environment")
     }
 
     // ── Test: End-to-End Validation ──────────────────────────────────────────
@@ -259,6 +257,6 @@ class SignalProcessingFixtureTest
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
         assertEquals(4, steps.size)
-        assertEquals(2, definition.environments.size)
+        assertEquals(1, definition.environments.size)
     }
 }

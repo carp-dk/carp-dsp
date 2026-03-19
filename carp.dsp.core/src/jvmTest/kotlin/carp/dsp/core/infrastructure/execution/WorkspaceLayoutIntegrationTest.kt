@@ -1,11 +1,13 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.analytics.infrastructure.serialization.CoreAnalyticsSerializer
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
@@ -29,7 +31,7 @@ class WorkspaceLayoutIntegrationTest {
 
     private lateinit var tempDir: Path
     private lateinit var baseWorkspaceRoot: Path
-    private lateinit var workspaceManager: PlanBasedWorkspaceManager
+    private lateinit var workspaceManager: DefaultWorkspaceManager
 
     // Fixed UUIDs for deterministic testing
     private val fixedStepId1 = UUID.parse("550e8400-e29b-41d4-a716-446655440001")
@@ -44,7 +46,7 @@ class WorkspaceLayoutIntegrationTest {
     fun setup() {
         tempDir = Files.createTempDirectory("workspace-integration-test")
         baseWorkspaceRoot = tempDir.resolve("workspaces")
-        workspaceManager = PlanBasedWorkspaceManager(baseWorkspaceRoot)
+        workspaceManager = DefaultWorkspaceManager(baseWorkspaceRoot)
     }
 
     @OptIn(ExperimentalPathApi::class)
@@ -63,8 +65,8 @@ class WorkspaceLayoutIntegrationTest {
         val ws2 = workspaceManager.create(plan, fixedRunId2)
 
         // Assert: Plan hash portion should be identical
-        val planHash1 = ws1.executionRoot.substringBefore("_")
-        val planHash2 = ws2.executionRoot.substringBefore("_")
+        val planHash1 = Path.of(ws1.executionRoot).fileName.toString().substringBefore("_")
+        val planHash2 = Path.of(ws2.executionRoot).fileName.toString().substringBefore("_")
         assertEquals(planHash1, planHash2, "Same plan should produce identical plan hash")
 
         // Assert: Relative step layout should be identical
@@ -72,19 +74,19 @@ class WorkspaceLayoutIntegrationTest {
         for (stepId in stepIds) {
             assertEquals(
                 ws1.stepDir(stepId), ws2.stepDir(stepId),
-                "Step directory path should be identical for stepId $stepId"
+                "Step directory path should be identical for stepMetadata $stepId"
             )
             assertEquals(
                 ws1.stepInputsDir(stepId), ws2.stepInputsDir(stepId),
-                "Step inputs directory path should be identical for stepId $stepId"
+                "Step inputs directory path should be identical for stepMetadata $stepId"
             )
             assertEquals(
                 ws1.stepOutputsDir(stepId), ws2.stepOutputsDir(stepId),
-                "Step outputs directory path should be identical for stepId $stepId"
+                "Step outputs directory path should be identical for stepMetadata $stepId"
             )
             assertEquals(
                 ws1.stepLogsDir(stepId), ws2.stepLogsDir(stepId),
-                "Step logs directory path should be identical for stepId $stepId"
+                "Step logs directory path should be identical for stepMetadata $stepId"
             )
         }
     }
@@ -97,30 +99,33 @@ class WorkspaceLayoutIntegrationTest {
         // Act
         val workspace = workspaceManager.create(plan, fixedRunId1)
 
+
+
         // Assert: Execution root directory exists
-        val executionRoot = baseWorkspaceRoot.resolve(workspace.executionRoot)
+        val executionRoot = Path.of(workspace.executionRoot)
         assertTrue(executionRoot.exists(), "Execution root directory should exist")
         assertTrue(executionRoot.isDirectory(), "Execution root should be a directory")
 
         // Assert: Step directories and subdirectories exist for all steps
         val stepIds = listOf(fixedStepId1, fixedStepId2, fixedStepId3)
         for (stepId in stepIds) {
+            workspaceManager.prepareStepDirectories(workspace, stepId)
             val stepDir = executionRoot.resolve(workspace.stepDir(stepId))
             val inputsDir = executionRoot.resolve(workspace.stepInputsDir(stepId))
             val outputsDir = executionRoot.resolve(workspace.stepOutputsDir(stepId))
             val logsDir = executionRoot.resolve(workspace.stepLogsDir(stepId))
 
-            assertTrue(stepDir.exists(), "Step directory should exist for stepId $stepId")
-            assertTrue(stepDir.isDirectory(), "Step directory should be a directory for stepId $stepId")
+            assertTrue(stepDir.exists(), "Step directory should exist for stepMetadata $stepId")
+            assertTrue(stepDir.isDirectory(), "Step directory should be a directory for stepMetadata $stepId")
 
-            assertTrue(inputsDir.exists(), "Inputs directory should exist for stepId $stepId")
-            assertTrue(inputsDir.isDirectory(), "Inputs directory should be a directory for stepId $stepId")
+            assertTrue(inputsDir.exists(), "Inputs directory should exist for stepMetadata $stepId")
+            assertTrue(inputsDir.isDirectory(), "Inputs directory should be a directory for stepMetadata $stepId")
 
-            assertTrue(outputsDir.exists(), "Outputs directory should exist for stepId $stepId")
-            assertTrue(outputsDir.isDirectory(), "Outputs directory should be a directory for stepId $stepId")
+            assertTrue(outputsDir.exists(), "Outputs directory should exist for stepMetadata $stepId")
+            assertTrue(outputsDir.isDirectory(), "Outputs directory should be a directory for stepMetadata $stepId")
 
-            assertTrue(logsDir.exists(), "Logs directory should exist for stepId $stepId")
-            assertTrue(logsDir.isDirectory(), "Logs directory should be a directory for stepId $stepId")
+            assertTrue(logsDir.exists(), "Logs directory should exist for stepMetadata $stepId")
+            assertTrue(logsDir.isDirectory(), "Logs directory should be a directory for stepMetadata $stepId")
         }
     }
 
@@ -138,8 +143,8 @@ class WorkspaceLayoutIntegrationTest {
         val ws2 = workspaceManager.create(plan2, fixedRunId2)
 
         // Assert: Plan hash should be identical despite serialization roundtrip
-        val planHash1 = ws1.executionRoot.substringBefore("_")
-        val planHash2 = ws2.executionRoot.substringBefore("_")
+        val planHash1 = Path.of(ws1.executionRoot).fileName.toString().substringBefore("_")
+        val planHash2 = Path.of(ws2.executionRoot).fileName.toString().substringBefore("_")
         assertEquals(
             planHash1, planHash2,
             "Plan hash should be stable across serialization/deserialization"
@@ -168,8 +173,8 @@ class WorkspaceLayoutIntegrationTest {
         )
 
         // Assert: Plan hash portion should be identical
-        val planHash1 = ws1.executionRoot.substringBefore("_")
-        val planHash2 = ws2.executionRoot.substringBefore("_")
+        val planHash1 = Path.of(ws1.executionRoot).fileName.toString().substringBefore("_")
+        val planHash2 = Path.of(ws2.executionRoot).fileName.toString().substringBefore("_")
         assertEquals(
             planHash1, planHash2,
             "Plan hash should be identical regardless of runId"
@@ -205,14 +210,16 @@ class WorkspaceLayoutIntegrationTest {
 
         // Act
         val wsA = workspaceManager.create(planA, fixedRunId1)
-        val wsB = workspaceManager.create(planB, fixedRunId1)
+        val wsB = workspaceManager.create(planB, fixedRunId2)
 
         // Assert: Plan hashes should be different
-        val planHashA = wsA.executionRoot.substringBefore("_")
-        val planHashB = wsB.executionRoot.substringBefore("_")
+        val planHashA = Path.of(wsA.executionRoot).fileName.toString().substringAfter("_")
+        val planHashB = Path.of(wsB.executionRoot).fileName.toString().substringAfter("_")
+
         assertNotEquals(
             planHashA, planHashB,
-            "Different plans should produce different plan hashes"
+            "Different plans should produce different plan hashes, " +
+                    "Plan A hash: $planHashA, Plan B hash: $planHashB"
         )
     }
 
@@ -224,26 +231,29 @@ class WorkspaceLayoutIntegrationTest {
      */
     private fun createPlanA(): ExecutionPlan {
         return ExecutionPlan(
-            workflowId = "test-workflow-a",
+            workflowName = "test-workflow-a",
             planId = "plan-a-fixed",
             steps = listOf(
                 PlannedStep(
-                    stepId = fixedStepId1,
-                    name = "data-ingestion",
+                    StepMetadata(
+                        id = fixedStepId1, name = "data-ingestion"
+                    ),
                     process = CommandSpec("python", listOf("ingest.py", "--source", "sensor").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
                     environmentRef = fixedEnvId1
                 ),
                 PlannedStep(
-                    stepId = fixedStepId2,
-                    name = "data-transform",
+                    StepMetadata(
+                        id = fixedStepId2, name = "data-transform"
+                    ),
                     process = CommandSpec("python", listOf("transform.py", "--algorithm", "fft").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
                     environmentRef = fixedEnvId1
                 ),
                 PlannedStep(
-                    stepId = fixedStepId3,
-                    name = "analysis-output",
+                    StepMetadata(
+                        id = fixedStepId3, name = "analysis-output"
+                    ),
                     process = CommandSpec("python", listOf("analyze.py", "--format", "json").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
                     environmentRef = fixedEnvId2
@@ -261,19 +271,21 @@ class WorkspaceLayoutIntegrationTest {
      */
     private fun createPlanB(): ExecutionPlan {
         return ExecutionPlan(
-            workflowId = "test-workflow-b",
+            workflowName = "test-workflow-b",
             planId = "plan-b-fixed",
             steps = listOf(
                 PlannedStep(
-                    stepId = fixedStepId1,
-                    name = "data-processing",
+                    StepMetadata(
+                        id = fixedStepId1, name = "data-processing"
+                    ),
                     process = CommandSpec("R", listOf("process.R", "--method", "linear").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
                     environmentRef = fixedEnvId2
                 ),
                 PlannedStep(
-                    stepId = fixedStepId2,
-                    name = "visualization",
+                    StepMetadata(
+                        id = fixedStepId2, name = "visualization"
+                    ),
                     process = CommandSpec("python", listOf("plot.py", "--type", "scatter").map { ExpandedArg.Literal(it) }),
                     bindings = ResolvedBindings(emptyMap(), emptyMap()),
                     environmentRef = fixedEnvId1

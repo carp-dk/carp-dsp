@@ -1,0 +1,54 @@
+schemaVersion: "1.0"
+metadata:
+  id: "single-step-r-001"
+  name: "Single Step - R Script"
+  description: "Minimal one-step workflow: R script with system environment"
+  version: "1.0"
+  tags:
+    - "r"
+    - "system"
+    - "single-step"
+    - "fixture"
+
+environments:
+  r-env:
+    name: "r-processing"
+    kind: "r"
+    spec:
+      rVersion:
+        - "4.5.3"
+
+steps:
+  - id: "process-data"
+    metadata:
+      name: "Process Data with R"
+      description: "Simple R script that reads CSV and processes it"
+      version: "1.0"
+    environmentId: "r-env"
+    dependsOn: []
+    task:
+      type: "r"
+      id: "r-task"
+      name: "process-data"
+      description: "Process input CSV and write output using R"
+      entryPoint:
+        type: "r-script"
+        scriptPath: "scripts/process_data.R"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Input data CSV file"
+        source:
+          type: "file"
+          path: "inputs/input.csv"
+    outputs:
+      - id: "output-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Processed data CSV file"

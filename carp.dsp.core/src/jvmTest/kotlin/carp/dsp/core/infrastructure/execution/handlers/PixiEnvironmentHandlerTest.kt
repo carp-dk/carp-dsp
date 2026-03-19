@@ -1,7 +1,10 @@
 package carp.dsp.core.infrastructure.execution.handlers
 
+import carp.dsp.core.testing.MockCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
 import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
+import java.nio.file.FileSystems
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempDirectory
@@ -18,6 +21,7 @@ class PixiEnvironmentHandlerTest {
     fun `can handle PixiEnvironmentRef`() {
         val ref = PixiEnvironmentRef(
             id = "test-001",
+            name = "test-pixi",
             dependencies = emptyList()
         )
 
@@ -39,12 +43,19 @@ class PixiEnvironmentHandlerTest {
     fun `generates execution command`() {
         val ref = PixiEnvironmentRef(
             id = "test-001",
+            name = "test-pixi",
             dependencies = emptyList()
         )
 
         val command = handler.generateExecutionCommand(ref, "python script.py")
 
-        val expected = "pixi run python script.py"
+        val expected = "pixi run --manifest-path \"${System.getProperty("user.home")}${
+            FileSystems.getDefault().separator
+        }.carp-dsp${FileSystems.getDefault().separator}envs${FileSystems.getDefault().separator}pixi${
+            FileSystems.getDefault().separator
+        }test-001${
+            FileSystems.getDefault().separator
+        }pixi.toml\" python script.py"
         kotlin.test.assertEquals(expected, command)
     }
 
@@ -52,6 +63,7 @@ class PixiEnvironmentHandlerTest {
     fun `generates execution command with args`() {
         val ref = PixiEnvironmentRef(
             id = "test-001",
+            name = "test-pixi-args",
             dependencies = listOf("numpy", "pandas")
         )
 
@@ -68,6 +80,7 @@ class PixiEnvironmentHandlerTest {
     fun `validate returns false for nonexistent project`() {
         val ref = PixiEnvironmentRef(
             id = "definitely-does-not-exist",
+            name = "nonexistent-pixi",
             dependencies = emptyList()
         )
 
@@ -79,6 +92,7 @@ class PixiEnvironmentHandlerTest {
     fun `teardown returns true for nonexistent project`() {
         val ref = PixiEnvironmentRef(
             id = "missing-pixi-project",
+            name = "missing-pixi",
             dependencies = emptyList()
         )
 
@@ -89,14 +103,19 @@ class PixiEnvironmentHandlerTest {
 
     @Test
     fun `setup fails when pixi not installed`() {
+        val mock = MockCommandRunner().apply {
+            on("pixi --version", exitCode = 1) // simulate pixi not found
+        }
+        val handlerWithMock = PixiEnvironmentHandler(runner = mock)
         val ref = PixiEnvironmentRef(
             id = "pixi-missing",
+            name = "missing-pixi-setup",
             dependencies = emptyList()
         )
 
-        val exception = kotlin.runCatching { handler.setup(ref) }.exceptionOrNull()
+        val exception = kotlin.runCatching { handlerWithMock.setup(ref) }.exceptionOrNull()
 
-        assertTrue(exception is EnvironmentProvisioningException)
+        assertTrue(exception is EnvironmentSetupException)
     }
 
     @Test
@@ -108,7 +127,11 @@ class PixiEnvironmentHandlerTest {
             System.setProperty("user.home", tempHome.toString())
             projectDir(envId, tempHome).createDirectories()
 
-            val ref = PixiEnvironmentRef(id = envId, dependencies = emptyList())
+            val ref = PixiEnvironmentRef(
+                id = envId,
+                name = "no-python-pixi",
+                dependencies = emptyList()
+            )
             val result = handler.validate(ref)
 
             assertFalse(result)
@@ -130,7 +153,11 @@ class PixiEnvironmentHandlerTest {
             pythonPath.parent.createDirectories()
             pythonPath.writeText("echo not a real python")
 
-            val ref = PixiEnvironmentRef(id = envId, dependencies = emptyList())
+            val ref = PixiEnvironmentRef(
+                id = envId,
+                name = "bad-python-pixi",
+                dependencies = emptyList()
+            )
             val result = handler.validate(ref)
 
             assertFalse(result)

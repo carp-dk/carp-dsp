@@ -10,6 +10,8 @@ import dk.cachet.carp.analytics.application.plan.TasksRun
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.Module
 import dk.cachet.carp.analytics.domain.tasks.PythonTaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.RScript
+import dk.cachet.carp.analytics.domain.tasks.RTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.Script
 import dk.cachet.carp.analytics.domain.tasks.TaskDefinition
 import dk.cachet.carp.analytics.domain.workflow.Step
@@ -53,8 +55,7 @@ class StepCompiler {
 
         // Create PlannedStep
         return PlannedStep(
-            stepId = stepId,
-            name = step.metadata.name,
+            metadata = step.metadata,
             process = tasksRun,
             bindings = bindings,
             environmentRef = step.environmentId
@@ -73,13 +74,14 @@ class StepCompiler {
         return when (task) {
             is CommandTaskDefinition -> compileCommand(task, bindings, stepId, issues)
             is PythonTaskDefinition -> compilePython(task, bindings, stepId, issues)
+            is RTaskDefinition -> compileR(task, bindings, stepId, issues)
             else -> {
                 issues.add(
                     PlanIssue(
                         severity = PlanIssueSeverity.ERROR,
                         code = "UNSUPPORTED_TASK_TYPE",
                         message = "Task type '${task::class.simpleName}' is not supported. " +
-                                "Only CommandTaskDefinition and PythonTaskDefinition are supported.",
+                                "Only CommandTaskDefinition, PythonTaskDefinition, and RTaskDefinition are supported.",
                         stepId = stepId
                     )
                 )
@@ -133,6 +135,29 @@ class StepCompiler {
 
         return CommandSpec(
             executable = "python",
+            args = entryPointArgs + expandedArgs
+        )
+    }
+
+    private fun compileR(
+        task: RTaskDefinition,
+        bindings: ResolvedBindings,
+        stepId: UUID,
+        issues: MutableList<PlanIssue>
+    ): CommandSpec {
+        // Convert entry point to ExpandedArg.Literal objects
+        val entryPointArgs = when (val ep = task.entryPoint) {
+            else -> {
+                // RScript: just the script path
+                listOf(ExpandedArg.Literal(ep.scriptPath))
+            }
+        }
+
+        // Expand user-supplied ArgTokens
+        val expandedArgs = argTokenExpander.expand(task.args, bindings, issues, stepId)
+
+        return CommandSpec(
+            executable = "Rscript",
             args = entryPointArgs + expandedArgs
         )
     }

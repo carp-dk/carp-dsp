@@ -1,14 +1,18 @@
+@file:Suppress( "LargeClass" )
+
 package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.RScriptEntryPointDescriptor
+import carp.dsp.core.application.authoring.descriptor.RTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
-import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedTaskTypeException
+import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
-import dk.cachet.carp.analytics.domain.data.RegistryDestination
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.InputRef
 import dk.cachet.carp.analytics.domain.tasks.Literal
@@ -16,6 +20,8 @@ import dk.cachet.carp.analytics.domain.tasks.Module
 import dk.cachet.carp.analytics.domain.tasks.OutputRef
 import dk.cachet.carp.analytics.domain.tasks.ParamRef
 import dk.cachet.carp.analytics.domain.tasks.PythonTaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.RScript
+import dk.cachet.carp.analytics.domain.tasks.RTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.Script
 import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
@@ -133,7 +139,7 @@ class TaskImporterTest
     fun `importCommandTask maps input-ref by index`()
     {
         val inputId = UUID.randomUUID()
-        val input = InputDataSpec(id = inputId, name = "port", source = InMemorySource("k"))
+        val input = InputDataSpec(id = inputId, name = "port", location = FileLocation("/data/input.csv"))
         val d = CommandTaskDescriptor(
             name = "t", executable = "tool",
             args = listOf("input.0")
@@ -147,7 +153,7 @@ class TaskImporterTest
     fun `importCommandTask maps output-ref by index`()
     {
         val outputId = UUID.randomUUID()
-        val output = OutputDataSpec(id = outputId, name = "port", destination = RegistryDestination("k"))
+        val output = OutputDataSpec(id = outputId, name = "port", location = FileLocation("/data/output.csv"))
         val d = CommandTaskDescriptor(
             name = "t", executable = "tool",
             args = listOf("output.0")
@@ -174,8 +180,8 @@ class TaskImporterTest
     {
         val inputId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
-        val input = InputDataSpec(id = inputId, name = "port", source = InMemorySource("k"))
-        val output = OutputDataSpec(id = outputId, name = "port", destination = RegistryDestination("k"))
+        val input = InputDataSpec(id = inputId, name = "port", location = FileLocation("/data/input.csv"))
+        val output = OutputDataSpec(id = outputId, name = "port", location = FileLocation("/data/output.csv"))
         val d = CommandTaskDescriptor(
             name = "t", executable = "tool",
             args = listOf("--flag", "input.0", "output.0", "param:myParam")
@@ -303,6 +309,125 @@ class TaskImporterTest
         )
     }
 
+    // ── RTask: basic properties
+
+    @Test
+    fun `importRTask preserves explicit UUID id`()
+    {
+        val taskId = UUID.randomUUID()
+        val d = RTaskDescriptor(
+            id = taskId.toString(), name = "run",
+            entryPoint = RScriptEntryPointDescriptor("run.R"),
+        )
+
+        val result = TaskImporter.importRTask( d, namespace )
+        assertEquals(taskId, result.id)
+    }
+
+    @Test
+    fun `importRTask maps script entrypoint`()
+    {
+        val d = RTaskDescriptor(
+            name = "r-script",
+            entryPoint = RScriptEntryPointDescriptor("analysis/run.R"),
+        )
+
+        val result = assertIs<RTaskDefinition>(TaskImporter.importTask(d, namespace))
+        assertEquals(RScript("analysis/run.R"), result.entryPoint)
+    }
+
+    @Test
+    fun `importRTask preserves name description and maps literal args`()
+    {
+        val d = RTaskDescriptor(
+            name = "analyse",
+            description = "Runs R analysis",
+            entryPoint = RScriptEntryPointDescriptor("analyse.R"),
+            args = listOf("--verbose"),
+        )
+
+        val result = TaskImporter.importRTask( d, namespace )
+        assertEquals("analyse", result.name)
+        assertEquals("Runs R analysis", result.description)
+        assertEquals(listOf(Literal("--verbose")), result.args)
+    }
+
+    // ── RTask: id generation
+
+    @Test
+    fun `importRTask generates deterministic id when id is null`()
+    {
+        val d = RTaskDescriptor(
+            id = null, name = "analyse",
+            entryPoint = RScriptEntryPointDescriptor("analyse.R"),
+        )
+
+        val first = TaskImporter.importRTask( d, namespace )
+        val second = TaskImporter.importRTask( d, namespace )
+        assertEquals(first.id, second.id)
+    }
+
+    @Test
+    fun `importRTask generated id is distinct from python task with same name`()
+    {
+        val py = PythonTaskDescriptor(
+            id = null, name = "task",
+            entryPoint = ScriptEntryPointDescriptor("task.py"),
+        )
+        val r = RTaskDescriptor(
+            id = null, name = "task",
+            entryPoint = RScriptEntryPointDescriptor("task.R"),
+        )
+
+        // Prefix differs ("task:py:" vs "task:r:") so IDs must differ
+        assertNotEquals(
+            TaskImporter.importPythonTask(py, namespace).id,
+            TaskImporter.importRTask(r, namespace).id,
+        )
+    }
+
+    // ── RTask: arg inference
+
+    @Test
+    fun `importRTask maps all arg inference variants`()
+    {
+        val inputId = UUID.randomUUID()
+        val outputId = UUID.randomUUID()
+        val input = InputDataSpec(id = inputId, name = "port", location = FileLocation("/data/input.csv"))
+        val output = OutputDataSpec(id = outputId, name = "port", location = FileLocation("/data/output.csv"))
+        val d = RTaskDescriptor(
+            name = "t", entryPoint = RScriptEntryPointDescriptor("script.R"),
+            args = listOf("--flag", "input.0", "output.0", "param:myParam")
+        )
+
+        val result = TaskImporter.importRTask(
+            d, namespace,
+            inputs = listOf(input),
+            outputs = listOf(output)
+        )
+        assertEquals(4, result.args.size)
+        assertEquals(Literal("--flag"), result.args[0])
+        assertEquals(InputRef(inputId), result.args[1])
+        assertEquals(OutputRef(outputId), result.args[2])
+        assertEquals(ParamRef("myParam"), result.args[3])
+    }
+
+    @Test
+    fun `r task applies same arg inference rules as python task`()
+    {
+        val inputId = UUID.randomUUID()
+        val inputs = listOf(makeInput(inputId))
+        val d = RTaskDescriptor(
+            name = "r", entryPoint = RScriptEntryPointDescriptor("run.R"),
+            args = listOf("input.0", "--verbose", "param:debug")
+        )
+
+        val args = TaskImporter.importRTask(d, namespace, inputs = inputs).args
+        assertEquals(InputRef(inputId), args[0])
+        assertEquals(Literal("--verbose"), args[1])
+        assertEquals(ParamRef("debug"), args[2])
+    }
+
     // ── importTask dispatch
 
     @Test
@@ -322,6 +447,15 @@ class TaskImporterTest
     }
 
     @Test
+    fun `importTask dispatches RTaskDescriptor to RTaskDefinition`()
+    {
+        val d = RTaskDescriptor(
+            name = "r", entryPoint = RScriptEntryPointDescriptor("x.R")
+        )
+        assertIs<RTaskDefinition>(TaskImporter.importTask(d, namespace))
+    }
+
+    @Test
     fun `importTask throws UnsupportedTaskTypeException for InProcessTaskDescriptor`()
     {
         val d = InProcessTaskDescriptor(name = "inproc", operationId = "op-1")
@@ -333,10 +467,10 @@ class TaskImporterTest
     // ── Arg inference helpers
 
     private fun makeInput(id: UUID = UUID.randomUUID()) =
-        InputDataSpec(id = id, name = "port", source = InMemorySource("k"))
+        InputDataSpec(id = id, name = "port", location = FileLocation("/data/input.csv"))
 
     private fun makeOutput(id: UUID = UUID.randomUUID()) =
-        OutputDataSpec(id = id, name = "port", destination = RegistryDestination("k"))
+        OutputDataSpec(id = id, name = "port", location = FileLocation("/data/output.csv"))
 
     private fun infer(arg: String, inputs: List<InputDataSpec> = emptyList(), outputs: List<OutputDataSpec> = emptyList()) =
         TaskImporter.importCommandTask(
@@ -671,8 +805,13 @@ class TaskImporterTest
             id = null, name = "p",
             entryPoint = ScriptEntryPointDescriptor("p.py")
         )
+        val r = RTaskDescriptor(
+            id = null, name = "r",
+            entryPoint = RScriptEntryPointDescriptor("r.R")
+        )
 
         assertNotNull(TaskImporter.importCommandTask(cmd, namespace).id)
         assertNotNull(TaskImporter.importPythonTask(py, namespace).id)
+        assertNotNull(TaskImporter.importRTask(r, namespace).id)
     }
 }

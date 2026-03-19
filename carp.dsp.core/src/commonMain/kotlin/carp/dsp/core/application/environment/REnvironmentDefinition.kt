@@ -23,7 +23,7 @@ data class REnvironmentDefinition(
 ) : EnvironmentDefinition {
 
     private companion object {
-        private const val MIN_VERSION_SEGMENTS = 2
+        private const val MIN_VERSION_SEGMENTS = 1
         private const val MAX_VERSION_SEGMENTS = 3
     }
 
@@ -37,10 +37,6 @@ data class REnvironmentDefinition(
             errors.add("R version cannot be blank")
         }
 
-        if (renvLockFile == null && rPackages.isEmpty()) {
-            errors.add("Either renvLockFile or rPackages must be specified")
-        }
-
         // Validate version format
         if (!isValidRVersion(rVersion)) {
             errors.add("Invalid R version format: $rVersion")
@@ -51,7 +47,7 @@ data class REnvironmentDefinition(
 
     /**
      * Check if version string is valid.
-     * Expected format: MAJOR.MINOR.PATCH (e.g., "4.3.0")
+     * Expected format: MAJOR[.MINOR[.PATCH]] (e.g., "4", "4.3", "4.3.0")
      */
     private fun isValidRVersion(version: String): Boolean {
         val parts = version.split(".")

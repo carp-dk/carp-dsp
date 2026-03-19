@@ -1,0 +1,40 @@
+schemaVersion: "1.0"
+metadata:
+  id: "timeout"
+  name: "Timeout Workflow"
+  description: "Single step that sleeps for 30 seconds — used to test timeout handling"
+  version: "1.0"
+  tags:
+    - "failure"
+    - "timeout"
+    - "system"
+
+environments:
+  "env-system":
+    name: "system"
+    kind: "system"
+    spec: {}
+
+steps:
+  - id: "sleep-step"
+    metadata:
+      name: "Sleep Step"
+      description: "Sleeps for 30 seconds to trigger a timeout"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-sleep"
+      name: "sleep"
+      executable: "python"
+      args:
+        - "scripts/sleep_long.py"
+        - "30"
+    inputs: []
+    outputs:
+      - id: "output-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Output that will never be produced"

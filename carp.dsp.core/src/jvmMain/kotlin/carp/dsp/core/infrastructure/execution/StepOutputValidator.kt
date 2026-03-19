@@ -1,24 +1,13 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.application.execution.workspace.WorkspaceRefFactory
-import dk.cachet.carp.analytics.application.execution.ExecutionIssue
-import dk.cachet.carp.analytics.application.execution.ExecutionIssueKind
-import dk.cachet.carp.analytics.application.execution.ExecutionStatus
-import dk.cachet.carp.analytics.application.execution.FailureKind
-import dk.cachet.carp.analytics.application.execution.ProducedOutputRef
-import dk.cachet.carp.analytics.application.execution.StepFailure
+import dk.cachet.carp.analytics.application.execution.*
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
-import dk.cachet.carp.common.application.UUID
+import dk.cachet.carp.analytics.domain.data.FileLocation
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import java.nio.file.Path
 import java.security.MessageDigest
-import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.exists
-import kotlin.io.path.fileSize
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.readBytes
-import kotlin.io.path.relativeTo
-import kotlin.io.path.walk
+import kotlin.io.path.*
 
 /**
  * Validates the output directory of a completed step against its declared outputs.
@@ -44,13 +33,17 @@ object StepOutputValidator {
     /**
      * Validates outputs for a completed step and returns a [ValidationResult].
      *
-     * @param stepId       The step whose outputs are being validated.
-     * @param outputsDir   Absolute path to `{executionRoot}/steps/{stepId}/outputs/`.
-     * @param bindings     The step's [ResolvedBindings]; `outputs` keys are the declared output IDs.
-     * @param policy       Controls warning/failure behaviour.
+     * @param stepMetadata  The step whose outputs are being validated.
+     * @param executionRoot Absolute path to the execution root (process working directory).
+     *                      Declared output paths from bindings are resolved relative to this.
+     * @param outputsDir    Absolute path to `{executionRoot}/steps/{stepMetadata}/outputs/` per
+     *                      the workspace layout — used for unexpected-output scanning only.
+     * @param bindings      The step's [ResolvedBindings]; `outputs` keys are the declared output IDs.
+     * @param policy        Controls warning/failure behaviour.
      */
     fun validate(
-        stepId: UUID,
+        stepMetadata: StepMetadata,
+        executionRoot: Path,
         outputsDir: Path,
         bindings: ResolvedBindings,
         policy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT
@@ -58,9 +51,9 @@ object StepOutputValidator {
         val issues = mutableListOf<ExecutionIssue>()
 
         val (producedRefs, failDueToMissing) =
-            checkDeclaredOutputs(stepId, outputsDir, bindings, policy, issues)
+            checkDeclaredOutputs(stepMetadata, executionRoot, bindings, policy, issues)
 
-        checkUnexpectedOutputs(stepId, outputsDir, bindings, policy, issues)
+        checkUnexpectedOutputs(stepMetadata, outputsDir, bindings, policy, issues)
 
         val failure = deriveFailure(failDueToMissing, outputsDir, bindings)
         val forcedStatus = if (failDueToMissing) ExecutionStatus.FAILED else null
@@ -73,6 +66,17 @@ object StepOutputValidator {
         )
     }
 
+    /**
+     * Overload for tests and callers where files are placed directly under [outputsDir].
+     * Uses [outputsDir] as both the execution root and outputs directory.
+     */
+    fun validate(
+        stepMetadata: StepMetadata,
+        outputsDir: Path,
+        bindings: ResolvedBindings,
+        policy: OutputValidationPolicy = OutputValidationPolicy.DEFAULT
+    ): ValidationResult = validate(stepMetadata, outputsDir, outputsDir, bindings, policy)
+
     // ── A: Declared outputs ──────────────────────────────────────────────────
 
     private data class DeclaredOutputsResult(
@@ -81,8 +85,8 @@ object StepOutputValidator {
     )
 
     private fun checkDeclaredOutputs(
-        stepId: UUID,
-        outputsDir: Path,
+        stepMetadata: StepMetadata,
+        executionRoot: Path,
         bindings: ResolvedBindings,
         policy: OutputValidationPolicy,
         issues: MutableList<ExecutionIssue>
@@ -90,10 +94,15 @@ object StepOutputValidator {
         val producedRefs = mutableListOf<ProducedOutputRef>()
         var failDueToMissing = false
 
-        for ((outputId, _) in bindings.outputs) {
-            val fileName = outputId.toString()
-            val expectedFile: Path = outputsDir.resolve(fileName)
-            val location = WorkspaceRefFactory.stepOutputRef(stepId, fileName)
+        for ((outputId, output) in bindings.outputs) {
+            // Use the full resolved path from the binding — this matches what was passed to the
+            // script as a command argument, so the file will be exactly here regardless of how
+            // the workspace step-directory formatter names the folder.
+            val resolvedPath = (output.location as FileLocation).path
+            val fileName = Path(resolvedPath).fileName.toString()
+            val expectedFile: Path = executionRoot.resolve(resolvedPath)
+            val location = WorkspaceRefFactory.stepOutputRef(stepMetadata.id, fileName)
+
 
             if (expectedFile.exists() && expectedFile.isRegularFile()) {
                 producedRefs += ProducedOutputRef(
@@ -108,9 +117,10 @@ object StepOutputValidator {
 
                 if (policy.warnOnMissingDeclaredOutputs) {
                     issues += ExecutionIssue(
-                        stepId = stepId,
+                        stepMetadata = stepMetadata,
                         kind = ExecutionIssueKind.OUTPUT_MISSING,
-                        message = "Declared output missing: $fileName (outputId=$outputId)"
+                        message = "Declared output missing: $fileName " +
+                                "(outputId=$outputId), for step ${stepMetadata.name}"
                     )
                 }
                 if (policy.strictOutputs) failDueToMissing = true
@@ -124,7 +134,7 @@ object StepOutputValidator {
 
     @OptIn(ExperimentalPathApi::class)
     private fun checkUnexpectedOutputs(
-        stepId: UUID,
+        stepMetadata: StepMetadata,
         outputsDir: Path,
         bindings: ResolvedBindings,
         policy: OutputValidationPolicy,
@@ -132,7 +142,11 @@ object StepOutputValidator {
     ) {
         if (!policy.warnOnUnexpectedOutputs || !outputsDir.exists() || !outputsDir.isDirectory()) return
 
-        val declaredFileNames = bindings.outputs.keys.map { it.toString() }.toSet()
+        // Extract actual filenames from resolved locations (e.g., "output-txt.txt" instead of output ID)
+        val declaredFileNames = bindings.outputs.values.map { output ->
+            Path((output.location as FileLocation).path).fileName.toString()
+        }.toSet()
+
         val unexpectedFiles = outputsDir.walk()
             .filter { it.isRegularFile() }
             .map { it.relativeTo(outputsDir).toString().replace("\\", "/") }
@@ -147,7 +161,7 @@ object StepOutputValidator {
             if (total > listed.size) " (+${total - listed.size} more)" else ""
         }
         issues += ExecutionIssue(
-            stepId = stepId,
+            stepMetadata = stepMetadata,
             kind = ExecutionIssueKind.UNEXPECTED_OUTPUT,
             message = "Unexpected output(s) found: ${listed.joinToString(", ")}$suffix"
         )
@@ -170,9 +184,7 @@ object StepOutputValidator {
         )
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     private fun sha256Hex(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")

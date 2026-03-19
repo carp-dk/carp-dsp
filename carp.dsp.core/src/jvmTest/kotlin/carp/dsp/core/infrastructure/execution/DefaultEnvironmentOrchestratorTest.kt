@@ -46,7 +46,7 @@ class DefaultEnvironmentOrchestratorTest {
 
     @Test
     fun generateExecutionCommandForPixi() {
-        val ref = PixiEnvironmentRef(id = "test-001", dependencies = emptyList())
+        val ref = PixiEnvironmentRef(id = "test-001", dependencies = emptyList(), name = "my-env")
 
         val command = orchestrator.generateExecutionCommand(ref, "python script.py")
 

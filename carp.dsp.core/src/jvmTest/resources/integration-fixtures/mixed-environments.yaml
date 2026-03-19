@@ -1,0 +1,146 @@
+schemaVersion: "1.0"
+metadata:
+  id: "mixed-environments-001"
+  name: "Mixed Environments Pipeline"
+  description: "Three-step workflow combining Python-Conda, Python-Pixi, and R"
+  version: "1.0"
+  tags:
+    - "python"
+    - "r"
+    - "conda"
+    - "pixi"
+    - "mixed-environments"
+    - "fixture"
+
+environments:
+  python-conda:
+    name: "python-conda-env"
+    kind: "conda"
+    spec:
+      dependencies:
+        - "pandas"
+      pythonVersion:
+        - "3.11"
+      channels:
+        - "conda-forge"
+        - "defaults"
+
+  python-pixi:
+    name: "python-pixi-env"
+    kind: "pixi"
+    spec:
+      dependencies:
+        - "pandas"
+      pythonVersion:
+        - "3.11"
+      channels:
+        - "conda-forge"
+
+  system-r:
+    name: "r-env"
+    kind: "system"
+    spec: {}
+
+steps:
+  # Step 1: Load with Python-Conda
+  - id: "load-with-conda"
+    metadata:
+      name: "Load Data (Python-Conda)"
+      description: "Load input data using Python with Conda"
+      version: "1.0"
+    environmentId: "python-conda"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "load-task"
+      name: "load-data"
+      description: "Load CSV with Conda environment"
+      entryPoint:
+        type: "script"
+        scriptPath: "load_data.py"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Raw input data"
+    outputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Loaded data from Conda step"
+
+  # Step 2: Process with Python-Pixi
+  - id: "process-with-pixi"
+    metadata:
+      name: "Process Data (Python-Pixi)"
+      description: "Process loaded data using Python with Pixi"
+      version: "1.0"
+    environmentId: "python-pixi"
+    dependsOn:
+      - "load-with-conda"
+    task:
+      type: "python"
+      id: "process-task"
+      name: "process-data"
+      description: "Process CSV with Pixi environment"
+      entryPoint:
+        type: "script"
+        scriptPath: "process_data.py"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "load-with-conda"
+          outputId: "loaded-csv"
+    outputs:
+      - id: "processed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Processed data from Pixi step"
+
+  # Step 3: Analyze with R
+  - id: "analyze-with-r"
+    metadata:
+      name: "Analyze Data (R)"
+      description: "Analyze processed data using R"
+      version: "1.0"
+    environmentId: "system-r"
+    dependsOn:
+      - "process-with-pixi"
+    task:
+      type: "command"
+      id: "analyze-task"
+      name: "analyze-data"
+      description: "Analyze CSV with R"
+      executable: "Rscript"
+      args:
+        - "analyze_data.R"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "processed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "process-with-pixi"
+          outputId: "processed-csv"
+    outputs:
+      - id: "analysis-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Analysis results from R step"

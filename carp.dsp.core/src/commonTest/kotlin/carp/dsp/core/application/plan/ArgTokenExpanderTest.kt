@@ -1,343 +1,454 @@
 package carp.dsp.core.application.plan
 
-import dk.cachet.carp.analytics.application.plan.DataRef
-import dk.cachet.carp.analytics.application.plan.ExpandedArg
-import dk.cachet.carp.analytics.application.plan.PlanIssue
-import dk.cachet.carp.analytics.application.plan.ResolvedBindings
-import dk.cachet.carp.analytics.domain.tasks.InputPathSubstitutionRef
-import dk.cachet.carp.analytics.domain.tasks.InputRef
-import dk.cachet.carp.analytics.domain.tasks.Literal
-import dk.cachet.carp.analytics.domain.tasks.OutputPathSubstitutionRef
-import dk.cachet.carp.analytics.domain.tasks.OutputRef
-import dk.cachet.carp.analytics.domain.tasks.ParamRef
+import dk.cachet.carp.analytics.application.plan.*
+import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.data.FileLocation
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
+import dk.cachet.carp.analytics.domain.tasks.*
 import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
  * Test suite for ArgTokenExpander.
+ *
+ * Tests that argument tokens are correctly expanded to semantic ExpandedArg objects
+ * with proper error/warning collection for missing bindings and unimplemented features.
  */
-class ArgTokenExpanderTest {
-
+class ArgTokenExpanderTest
+{
     private val expander = ArgTokenExpander()
 
+    // Test data
+    private val inputId = UUID.randomUUID()
+    private val outputId = UUID.randomUUID()
+    private val stepId = UUID.randomUUID()
+
+    // ── Literal Token Tests ───────────────────────────────────────────────────
+
     @Test
-    fun `expand handles Literal tokens correctly`() {
-        val tokens = listOf(
-            Literal("--input"),
-            Literal("file.txt"),
-            Literal("--verbose")
+    fun `expand Literal token passes through unchanged`()
+    {
+        val tokens = listOf<ArgToken>(
+            Literal( "preprocess.py" )
         )
-        val bindings = ResolvedBindings()
+        val bindings = emptyResolvedBindings()
         val issues = mutableListOf<PlanIssue>()
 
-        val result = expander.expand(tokens, bindings, issues, UUID.randomUUID())
+        val result = expander.expand( tokens, bindings, issues )
 
-        assertEquals(3, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("--input", (result[0] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.Literal>(result[1])
-        assertEquals("file.txt", (result[1] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.Literal>(result[2])
-        assertEquals("--verbose", (result[2] as ExpandedArg.Literal).value)
-        assertTrue(issues.isEmpty())
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.Literal>( result[0] )
+        assertEquals( "preprocess.py", ( result[0] as ExpandedArg.Literal ).value )
+        assertEquals( 0, issues.size )
     }
 
     @Test
-    fun `expand handles InputRef tokens with valid bindings`() {
-        val inputId = UUID.randomUUID()
-        val dataRefId = UUID.randomUUID()
-        val stepId = UUID.randomUUID()
-        val tokens = listOf(InputRef(inputId))
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(dataRefId, "text/plain"))
+    fun `expand multiple Literal tokens in sequence`()
+    {
+        val tokens = listOf<ArgToken>(
+            Literal( "python" ),
+            Literal( "script.py" ),
+            Literal( "--verbose" ),
+            Literal( "--output-format=json" )
         )
+        val bindings = emptyResolvedBindings()
         val issues = mutableListOf<PlanIssue>()
 
-        val result = expander.expand(tokens, bindings, issues, stepId)
+        val result = expander.expand( tokens, bindings, issues )
 
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.DataReference>(result[0])
-        assertEquals(dataRefId, (result[0] as ExpandedArg.DataReference).dataRefId)
-        assertTrue(issues.isEmpty())
+        assertEquals( 4, result.size )
+        result.forEachIndexed { _, arg ->
+            assertIs<ExpandedArg.Literal>( arg )
+        }
+        assertEquals( 0, issues.size )
     }
 
+    // ── InputRef Token Tests ──────────────────────────────────────────────────
+
     @Test
-    fun `expand handles OutputRef tokens with valid bindings`() {
-        val outputId = UUID.randomUUID()
-        val dataRefId = UUID.randomUUID()
-        val stepId = UUID.randomUUID()
-        val tokens = listOf(OutputRef(outputId))
-        val bindings = ResolvedBindings(
-            outputs = mapOf(outputId to DataRef(dataRefId, "application/json"))
+    fun `expand InputRef with valid binding resolves to DataReference`()
+    {
+        val tokens = listOf<ArgToken>(
+            InputRef( inputId )
         )
+        val bindings = resolvedBindingsWithInput( inputId )
         val issues = mutableListOf<PlanIssue>()
 
-        val result = expander.expand(tokens, bindings, issues, stepId)
+        val result = expander.expand( tokens, bindings, issues )
 
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.DataReference>(result[0])
-        assertEquals(dataRefId, (result[0] as ExpandedArg.DataReference).dataRefId)
-        assertTrue(issues.isEmpty())
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.DataReference>( result[0] )
+        assertEquals( 0, issues.size )
     }
 
     @Test
-    fun `expand handles missing InputRef bindings`() {
-        val inputId = UUID.randomUUID()
-        val stepId = UUID.randomUUID()
-        val tokens = listOf(InputRef(inputId))
-        val bindings = ResolvedBindings() // Empty bindings
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, stepId)
-
-        assertTrue(result.isEmpty()) // mapNotNull filters out null results
-        assertEquals(1, issues.size)
-        assertEquals("MISSING_INPUT_BINDING", issues[0].code)
-        assertEquals(stepId, issues[0].stepId)
-        assertTrue(issues[0].message.contains(inputId.toString()))
-    }
-
-    @Test
-    fun `expand handles missing OutputRef bindings`() {
-        val outputId = UUID.randomUUID()
-        val stepId = UUID.randomUUID()
-        val tokens = listOf(OutputRef(outputId))
-        val bindings = ResolvedBindings() // Empty bindings
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, stepId)
-
-        assertTrue(result.isEmpty()) // mapNotNull filters out null results
-        assertEquals(1, issues.size)
-        assertEquals("MISSING_OUTPUT_BINDING", issues[0].code)
-        assertEquals(stepId, issues[0].stepId)
-        assertTrue(issues[0].message.contains(outputId.toString()))
-    }
-
-    @Test
-    fun `expand handles ParamRef tokens as placeholders`() {
-        val stepId = UUID.randomUUID()
-        val tokens = listOf(ParamRef("batch-size"))
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, stepId)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("\${batch-size}", (result[0] as ExpandedArg.Literal).value)
-        assertEquals(1, issues.size)
-        assertEquals("PARAM_REF_NOT_IMPLEMENTED", issues[0].code)
-        assertEquals(stepId, issues[0].stepId)
-        assertTrue(issues[0].message.contains("batch-size"))
-    }
-
-    @Test
-    fun `expand handles mixed token types`() {
-        val inputId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
-        val dataRefId = UUID.randomUUID()
-        val outputDataRefId = UUID.randomUUID()
-        val stepId = UUID.randomUUID()
-
-        val tokens = listOf(
-            Literal("python"),
-            Literal("--input"),
-            InputRef(inputId),
-            Literal("--output"),
-            OutputRef(outputId),
-            Literal("--batch-size"),
-            ParamRef("batch_size")
-        )
-
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(dataRefId, "text/plain")),
-            outputs = mapOf(outputId to DataRef(outputDataRefId, "application/json"))
-        )
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, stepId)
-
-        assertEquals(7, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("python", (result[0] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.Literal>(result[1])
-        assertEquals("--input", (result[1] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.DataReference>(result[2])
-        assertEquals(dataRefId, (result[2] as ExpandedArg.DataReference).dataRefId)
-        assertIs<ExpandedArg.Literal>(result[3])
-        assertEquals("--output", (result[3] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.DataReference>(result[4])
-        assertEquals(outputDataRefId, (result[4] as ExpandedArg.DataReference).dataRefId)
-        assertIs<ExpandedArg.Literal>(result[5])
-        assertEquals("--batch-size", (result[5] as ExpandedArg.Literal).value)
-        assertIs<ExpandedArg.Literal>(result[6])
-        assertEquals("\${batch_size}", (result[6] as ExpandedArg.Literal).value)
-
-        // Should have one warning for ParamRef
-        assertEquals(1, issues.size)
-        assertEquals("PARAM_REF_NOT_IMPLEMENTED", issues[0].code)
-        assertEquals(stepId, issues[0].stepId)
-    }
-
-    @Test
-    fun `expand handles empty token list`() {
-        val stepId = UUID.randomUUID()
-        val tokens = emptyList<dk.cachet.carp.analytics.domain.tasks.ArgToken>()
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, stepId)
-
-        assertTrue(result.isEmpty())
-        assertTrue(issues.isEmpty())
-    }
-
-    @Test
-    fun `expand works with null stepId`() {
-        val tokens = listOf(ParamRef("test-param"))
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues, null)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("\${test-param}", (result[0] as ExpandedArg.Literal).value)
-        assertEquals(1, issues.size)
-        assertEquals(null, issues[0].stepId)
-    }
-
-    @Test
-    fun `expand works when stepId parameter is omitted (default value)`() {
-        val tokens = listOf(ParamRef("test-param"))
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues) // No stepId provided
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("\${test-param}", (result[0] as ExpandedArg.Literal).value)
-        assertEquals(1, issues.size)
-        assertEquals(null, issues[0].stepId)
-    }
-
-    @Test
-    fun literal_expanded_to_literal() {
-        val tokens = listOf(Literal("--output-file"))
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("--output-file", (result[0] as ExpandedArg.Literal).value)
-        assertTrue(issues.isEmpty())
-    }
-
-    @Test
-    fun direct_input_reference_expanded_to_data_reference() {
-        val inputId = UUID.randomUUID()
-        val expectedUuid = UUID.randomUUID()
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(expectedUuid, "csv"))
-        )
-        val tokens = listOf(InputRef(inputId))
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.DataReference>(result[0])
-        val dataRef = result[0] as ExpandedArg.DataReference
-        assertEquals(expectedUuid, dataRef.dataRefId)
-        assertTrue(issues.isEmpty())
-    }
-
-    @Test
-    fun input_path_substitution_expanded_to_path_substitution() {
-        val inputId = UUID.randomUUID()
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(UUID.randomUUID(), "csv"))
-        )
-        val tokens = listOf(InputPathSubstitutionRef(inputId, "--input=$()"))
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.PathSubstitution>(result[0])
-        val pathSubst = result[0] as ExpandedArg.PathSubstitution
-        assertEquals(inputId, pathSubst.dataRefId)
-        assertEquals("--input=$()", pathSubst.template)
-        assertTrue(issues.isEmpty())
-    }
-
-    @Test
-    fun environment_variable_expanded_to_literal() {
-        val tokens = listOf(Literal("--model=$(env.MODEL_PATH)"))
-        val bindings = ResolvedBindings()
-        val issues = mutableListOf<PlanIssue>()
-
-        val result = expander.expand(tokens, bindings, issues)
-
-        assertEquals(1, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertEquals("--model=$(env.MODEL_PATH)", (result[0] as ExpandedArg.Literal).value)
-        assertTrue(issues.isEmpty())
-    }
-
-    @Test
-    fun missing_input_binding_produces_error() {
+    fun `expand InputRef with missing binding collects error`()
+    {
         val missingInputId = UUID.randomUUID()
-        val bindings = ResolvedBindings(inputs = emptyMap())
-        val tokens = listOf(InputRef(missingInputId))
+        val tokens = listOf<ArgToken>(
+            InputRef( missingInputId )
+        )
+        val bindings = emptyResolvedBindings()
         val issues = mutableListOf<PlanIssue>()
 
-        val result = expander.expand(tokens, bindings, issues)
+        val result = expander.expand( tokens, bindings, issues )
 
-        assertTrue(result.isEmpty())
-        assertNotNull(issues.find { it.code == "MISSING_INPUT_BINDING" })
+        assertEquals( 0, result.size ) // Token is filtered out
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( PlanIssueSeverity.ERROR, issue.severity )
+        assertEquals( "MISSING_INPUT_BINDING", issue.code )
+        assertTrue( issue.message.contains( missingInputId.toString() ) )
     }
 
     @Test
-    fun mixed_tokens_expanded_correctly() {
-        val inputId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
-        val inputUuid = UUID.randomUUID()
-        val outputUuid = UUID.randomUUID()
-
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(inputUuid, "csv")),
-            outputs = mapOf(outputId to DataRef(outputUuid, "json"))
+    fun `expand InputRef with optional stepId in error`()
+    {
+        val missingInputId = UUID.randomUUID()
+        val tokens = listOf<ArgToken>(
+            InputRef( missingInputId )
         )
-
-        val tokens = listOf(
-            Literal("analyze.py"),
-            InputRef(inputId),
-            InputPathSubstitutionRef(inputId, "--input=$()"),
-            Literal("--model=$(env.MODEL_PATH)"),
-            OutputPathSubstitutionRef(outputId, "--output=$()"),
-            Literal("--format=csv")
-        )
-
+        val bindings = emptyResolvedBindings()
         val issues = mutableListOf<PlanIssue>()
 
-        val result = expander.expand(tokens, bindings, issues)
+        expander.expand( tokens, bindings, issues, stepId )
 
-        assertEquals(6, result.size)
-        assertIs<ExpandedArg.Literal>(result[0])
-        assertIs<ExpandedArg.DataReference>(result[1])
-        assertIs<ExpandedArg.PathSubstitution>(result[2])
-        assertIs<ExpandedArg.Literal>(result[3])
-        assertIs<ExpandedArg.PathSubstitution>(result[4])
-        assertIs<ExpandedArg.Literal>(result[5])
-        assertTrue(issues.isEmpty())
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( stepId, issue.stepId )
+    }
+
+    // ── OutputRef Token Tests ─────────────────────────────────────────────────
+
+    @Test
+    fun `expand OutputRef with valid binding resolves to DataReference`()
+    {
+        val tokens = listOf<ArgToken>(
+            OutputRef( outputId )
+        )
+        val bindings = resolvedBindingsWithOutput( outputId )
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.DataReference>( result[0] )
+        assertEquals( 0, issues.size )
+    }
+
+    @Test
+    fun `expand OutputRef with missing binding collects error`()
+    {
+        val missingOutputId = UUID.randomUUID()
+        val tokens = listOf<ArgToken>(
+            OutputRef( missingOutputId )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 0, result.size ) // Token is filtered out
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( PlanIssueSeverity.ERROR, issue.severity )
+        assertEquals( "MISSING_OUTPUT_BINDING", issue.code )
+        assertTrue( issue.message.contains( missingOutputId.toString() ) )
+    }
+
+    // ── Path Substitution Token Tests ─────────────────────────────────────────
+
+    @Test
+    fun `expand InputPathSubstitutionRef creates PathSubstitution`()
+    {
+        val template = "--input=$()"
+        val tokens = listOf<ArgToken>(
+            InputPathSubstitutionRef( inputId, template )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.PathSubstitution>( result[0] )
+        assertEquals( inputId, ( result[0] as ExpandedArg.PathSubstitution ).id )
+        assertEquals( template, ( result[0] as ExpandedArg.PathSubstitution ).template )
+        assertEquals( 0, issues.size )
+    }
+
+    @Test
+    fun `expand OutputPathSubstitutionRef creates PathSubstitution`()
+    {
+        val template = "--output=$()"
+        val tokens = listOf<ArgToken>(
+            OutputPathSubstitutionRef( outputId, template )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.PathSubstitution>( result[0] )
+        assertEquals( outputId, ( result[0] as ExpandedArg.PathSubstitution ).id )
+        assertEquals( template, ( result[0] as ExpandedArg.PathSubstitution ).template )
+        assertEquals( 0, issues.size )
+    }
+
+    // ── ParamRef Token Tests ──────────────────────────────────────────────────
+
+    @Test
+    fun `expand ParamRef collects warning and returns placeholder Literal`()
+    {
+        val paramName = "MODEL_VERSION"
+        val tokens = listOf<ArgToken>(
+            ParamRef( paramName )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 1, result.size )
+        assertIs<ExpandedArg.Literal>( result[0] )
+        assertEquals( "\${$paramName}", ( result[0] as ExpandedArg.Literal ).value )
+
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( PlanIssueSeverity.WARNING, issue.severity )
+        assertEquals( "PARAM_REF_NOT_IMPLEMENTED", issue.code )
+        assertTrue( issue.message.contains( paramName ) )
+    }
+
+    // ── Mixed Token Tests ─────────────────────────────────────────────────────
+
+    @Test
+    fun `expand mixed tokens with valid bindings`()
+    {
+        val tokens = listOf(
+            Literal( "analyze.py" ),
+            InputRef( inputId ),
+            OutputRef( outputId ),
+            Literal( "--format=json" )
+        )
+        val bindings = resolvedBindingsWithInputAndOutput( inputId, outputId )
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 4, result.size )
+        assertIs<ExpandedArg.Literal>( result[0] )
+        assertIs<ExpandedArg.DataReference>( result[1] )
+        assertIs<ExpandedArg.DataReference>( result[2] )
+        assertIs<ExpandedArg.Literal>( result[3] )
+        assertEquals( 0, issues.size )
+    }
+
+    @Test
+    fun `expand mixed tokens with some missing bindings`()
+    {
+        val missingInputId = UUID.randomUUID()
+        val tokens = listOf(
+            Literal( "analyze.py" ),
+            InputRef( inputId ),
+            InputRef( missingInputId ),
+            OutputRef( outputId ),
+            Literal( "--format=json" )
+        )
+        val bindings = resolvedBindingsWithInputAndOutput( inputId, outputId )
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        // Missing token is filtered out
+        assertEquals( 4, result.size )
+        assertIs<ExpandedArg.Literal>( result[0] )
+        assertIs<ExpandedArg.DataReference>( result[1] )
+        assertIs<ExpandedArg.DataReference>( result[2] )
+        assertIs<ExpandedArg.Literal>( result[3] )
+
+        // Error is collected
+        assertEquals( 1, issues.size )
+        assertEquals( PlanIssueSeverity.ERROR, issues[0].severity )
+    }
+
+    @Test
+    fun `expand tokens with complex combinations`()
+    {
+        val tokens = listOf(
+            Literal( "python" ),
+            Literal( "pipeline.py" ),
+            InputRef( inputId ),
+            InputPathSubstitutionRef( inputId, "--input=$()"),
+            OutputRef( outputId ),
+            OutputPathSubstitutionRef( outputId, "--output=$()"),
+            ParamRef( "BATCH_SIZE" ),
+            Literal( "--verbose" )
+        )
+        val bindings = resolvedBindingsWithInputAndOutput( inputId, outputId )
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 8, result.size )
+        assertEquals( 1, issues.size ) // ParamRef warning
+    }
+
+    // ── Empty and Edge Cases ──────────────────────────────────────────────────
+
+    @Test
+    fun `expand empty token list returns empty result`()
+    {
+        val tokens = emptyList<ArgToken>()
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 0, result.size )
+        assertEquals( 0, issues.size )
+    }
+
+    @Test
+    fun `expand with no stepId in error reporting`()
+    {
+        val missingInputId = UUID.randomUUID()
+        val tokens = listOf<ArgToken>(
+            InputRef( missingInputId )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        expander.expand( tokens, bindings, issues ) // No stepId parameter
+
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( null, issue.stepId )
+    }
+
+    @Test
+    fun `expand collects multiple errors from different missing bindings`()
+    {
+        val missingInputId1 = UUID.randomUUID()
+        val missingInputId2 = UUID.randomUUID()
+        val tokens = listOf<ArgToken>(
+            InputRef( missingInputId1 ),
+            InputRef( missingInputId2 )
+        )
+        val bindings = emptyResolvedBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        val result = expander.expand( tokens, bindings, issues )
+
+        assertEquals( 0, result.size )
+        assertEquals( 2, issues.size )
+        assertTrue( issues.all { it.severity == PlanIssueSeverity.ERROR } )
+    }
+
+    // ── Helper Methods ────────────────────────────────────────────────────────
+
+    private fun emptyResolvedBindings(): ResolvedBindings =
+        ResolvedBindings( inputs = emptyMap(), outputs = emptyMap() )
+
+    private fun resolvedBindingsWithInput( id: UUID ): ResolvedBindings
+    {
+        // ✅ Use FileLocation directly (unified model)
+        val location = FileLocation(
+            path = "/input.csv",
+            format = FileFormat.CSV
+        )
+
+        val spec = InputDataSpec(
+            id = id,
+            name = "test-input",
+            location = location,
+            stepRef = null
+        )
+
+        val resolvedInput = ResolvedInput( spec = spec, location = location )
+
+        return ResolvedBindings(
+            inputs = mapOf( id to resolvedInput ),
+            outputs = emptyMap()
+        )
+    }
+
+    private fun resolvedBindingsWithOutput( id: UUID ): ResolvedBindings
+    {
+        // ✅ Use FileLocation directly (unified model)
+        val location = FileLocation(
+            path = "/output.csv",
+            format = FileFormat.CSV
+        )
+
+        val spec = OutputDataSpec(
+            id = id,
+            name = "test-output",
+            location = location
+        )
+
+        val loc = FileLocation(
+            path = "/output.csv",
+            format = FileFormat.CSV,
+            metadata = emptyMap()
+        )
+
+        val resolvedOutput = ResolvedOutput( spec = spec, location = loc )
+
+        return ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf( id to resolvedOutput )
+        )
+    }
+
+    private fun resolvedBindingsWithInputAndOutput(
+        inputId: UUID,
+        outputId: UUID
+    ): ResolvedBindings
+    {
+        // ✅ Input with FileLocation (unified model)
+        val inputLocation = FileLocation(
+            path = "/input.csv",
+            format = FileFormat.CSV
+        )
+
+        val inputSpec = InputDataSpec(
+            id = inputId,
+            name = "test-input",
+            location = inputLocation,
+            stepRef = null
+        )
+
+        val resolvedInput = ResolvedInput( spec = inputSpec, location = inputLocation )
+
+        // ✅ Output with FileLocation (unified model)
+        val outputLocation = FileLocation(
+            path = "/output.csv",
+            format = FileFormat.CSV
+        )
+
+        val outputSpec = OutputDataSpec(
+            id = outputId,
+            name = "test-output",
+            location = outputLocation
+        )
+
+        val loc = FileLocation(
+            path = "/output.csv",
+            format = FileFormat.CSV,
+            metadata = emptyMap()
+        )
+
+        val resolvedOutput = ResolvedOutput( spec = outputSpec, location = loc )
+
+        return ResolvedBindings(
+            inputs = mapOf( inputId to resolvedInput ),
+            outputs = mapOf( outputId to resolvedOutput )
+        )
     }
 }

@@ -1,7 +1,14 @@
 package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.*
+import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.data.FileLocation
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
+import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.tasks.*
+import dk.cachet.carp.analytics.domain.tasks.InputRef
+import dk.cachet.carp.analytics.domain.tasks.Literal
+import dk.cachet.carp.analytics.domain.tasks.OutputRef
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.analytics.domain.workflow.Version
@@ -58,9 +65,46 @@ class StepCompilerTest {
     }
 
     private fun createBindingsWithInputsOutputs(): ResolvedBindings {
+        val inputId = UUID.randomUUID()
+        val outputId = UUID.randomUUID()
+
+        val inputDataSource = FileLocation(
+            path = "/data/input.csv",
+            format = FileFormat.CSV,
+        )
+        val outputDataSource = FileLocation(
+            path = "/data/output.json",
+            format = FileFormat.JSON,
+            metadata = mapOf("overwrite" to "true"),
+        )
+
+        val inputSpec = InputDataSpec(
+            id = inputId,
+            name = "input-data",
+            description = "Test input data",
+            location = inputDataSource,
+        )
+        val outputSpec = OutputDataSpec(
+            id = outputId,
+            name = "output-data",
+            description = "Test output data",
+            location = outputDataSource,
+        )
+
+        val resolvedInputDataSource = FileLocation(
+            path = "/workspace/inputs/$inputId.txt",
+        )
+
+        val resolvedOutputDataSource = FileLocation(
+            path = "/workspace/outputs/$outputId.txt"
+        )
+
+        val resolvedInput = ResolvedInput(inputSpec, resolvedInputDataSource)
+        val resolvedOutput = ResolvedOutput(outputSpec, resolvedOutputDataSource)
+
         return ResolvedBindings(
-            inputs = mapOf(UUID.randomUUID() to DataRef(UUID.randomUUID(), "text/plain")),
-            outputs = mapOf(UUID.randomUUID() to DataRef(UUID.randomUUID(), "application/json"))
+            inputs = mapOf(UUID.randomUUID() to resolvedInput),
+            outputs = mapOf(UUID.randomUUID() to resolvedOutput)
         )
     }
 
@@ -84,8 +128,8 @@ class StepCompilerTest {
         assertNotNull(result)
         assertTrue(issues.isEmpty())
 
-        assertEquals("Test Step", result.name)
-        assertEquals(step.metadata.id, result.stepId)
+        assertEquals("Test Step", result.metadata.name)
+        assertEquals(step.metadata.id, result.metadata.id)
         assertEquals(step.environmentId, result.environmentRef)
         assertEquals(bindings, result.bindings)
         assertTrue(result.process is CommandSpec)
@@ -113,7 +157,7 @@ class StepCompilerTest {
         assertNotNull(errorIssue)
         assertEquals(PlanIssueSeverity.ERROR, errorIssue.severity)
         assertTrue(errorIssue.message.contains("MockTaskDefinition"))
-        assertTrue(errorIssue.message.contains("Only CommandTaskDefinition and PythonTaskDefinition are supported"))
+        assertTrue(errorIssue.message.contains("Only CommandTaskDefinition, PythonTaskDefinition, and RTaskDefinition are supported"))
         assertEquals(step.metadata.id, errorIssue.stepId)
     }
 
@@ -186,12 +230,7 @@ class StepCompilerTest {
             args = listOf(Literal("--test"))
         )
         val step = createTestStep("Bindings Test", "test-task", task = commandTask)
-        val inputId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
-        val bindings = ResolvedBindings(
-            inputs = mapOf(inputId to DataRef(UUID.randomUUID(), "text/plain")),
-            outputs = mapOf(outputId to DataRef(UUID.randomUUID(), "application/json"))
-        )
+        val bindings = createBindingsWithInputsOutputs()
         val issues = mutableListOf<PlanIssue>()
 
         // Act
@@ -263,5 +302,88 @@ class StepCompilerTest {
             ),
             commandSpec.args
         )
+    }
+
+    @Test
+    fun `compile produces CommandSpec for RTaskDefinition with RScript entry point`() {
+        // Arrange
+        val rTask = RTaskDefinition(
+            id = UUID.randomUUID(),
+            name = "r-script-task",
+            entryPoint = RScript("analysis/run.R"),
+            args = listOf(Literal("--verbose"))
+        )
+        val step = createTestStep("R Script Step", "r-task", task = rTask)
+        val bindings = createEmptyBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val result = compiler.compile(step, bindings, issues)
+
+        // Assert
+        assertNotNull(result)
+        assertTrue(issues.isEmpty())
+        assertTrue(result.process is CommandSpec)
+
+        val commandSpec = result.process as CommandSpec
+        assertEquals("Rscript", commandSpec.executable)
+        assertEquals(listOf(ExpandedArg.Literal("analysis/run.R"), ExpandedArg.Literal("--verbose")), commandSpec.args)
+    }
+
+    @Test
+    fun `compile produces CommandSpec for RTaskDefinition with multiple args and bindings`() {
+        // Arrange
+        val inputRefId = UUID.randomUUID()
+        val outputRefId = UUID.randomUUID()
+        val rTask = RTaskDefinition(
+            id = UUID.randomUUID(),
+            name = "r-analysis-task",
+            entryPoint = RScript("scripts/analysis.R"),
+            args = listOf(
+                InputRef(inputRefId),
+                OutputRef(outputRefId),
+                Literal("--mode=analysis")
+            )
+        )
+        val step = createTestStep("R Analysis Step", "r-task", task = rTask)
+        val bindings = createBindingsWithInputsOutputs()
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val result = compiler.compile(step, bindings, issues)
+
+        // Assert
+        assertNotNull(result)
+        assertTrue(result.process is CommandSpec)
+
+        val commandSpec = result.process as CommandSpec
+        assertEquals("Rscript", commandSpec.executable)
+        // First arg is always the script path
+        assertEquals(ExpandedArg.Literal("scripts/analysis.R"), commandSpec.args[0])
+        // Should have at least script path + literal arg
+        assertTrue(commandSpec.args.size >= 2)
+    }
+
+    @Test
+    fun `compile handles RTaskDefinition with description`() {
+        // Arrange
+        val rTask = RTaskDefinition(
+            id = UUID.randomUUID(),
+            name = "r-task-with-desc",
+            description = "R analysis task with description",
+            entryPoint = RScript("process.R"),
+            args = emptyList()
+        )
+        val step = createTestStep("R Process Step", "r-task", task = rTask)
+        val bindings = createEmptyBindings()
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val result = compiler.compile(step, bindings, issues)
+
+        // Assert
+        assertNotNull(result)
+        assertTrue(issues.isEmpty())
+        assertEquals("R Process Step", result.metadata.name)
     }
 }

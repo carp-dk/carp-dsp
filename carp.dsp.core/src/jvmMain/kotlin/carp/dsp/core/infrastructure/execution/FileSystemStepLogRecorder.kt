@@ -24,7 +24,7 @@ import kotlin.time.ExperimentalTime
  * ```
  * workspace/
  *   logs/
- *     {stepId}-{timestamp}.log
+ *     {stepMetadata}-{timestamp}.log
  * ```
  *
  * Log format:
@@ -53,7 +53,7 @@ class FileSystemStepLogRecorder(
         }
 
         return try {
-            val logFile = createLogFile(workspace, step.stepId)
+            val logFile = createLogFile(workspace, step.metadata.id)
             writeLogContent(logFile, result)
 
             val location = ResourceRef(
@@ -62,8 +62,8 @@ class FileSystemStepLogRecorder(
             )
 
             // Track internally (for future extensions like indexing)
-            _records[step.stepId] = LogRecord(
-                stepId = step.stepId,
+            _records[step.metadata.id] = LogRecord(
+                stepMetadata = step.metadata,
                 location = location,
                 hasStdout = result.stdout.isNotBlank(),
                 hasStderr = result.stderr.isNotBlank(),
@@ -86,7 +86,7 @@ class FileSystemStepLogRecorder(
     /**
      * Create log file with timestamped name.
      *
-     * Format: {stepId}-{timestamp}.log
+     * Format: {stepMetadata}-{timestamp}.log
      * Example: 550e8400-e29b-41d4-a716-446655440000-2026-03-16T14-32-45.123456Z.log
      */
     private fun createLogFile(

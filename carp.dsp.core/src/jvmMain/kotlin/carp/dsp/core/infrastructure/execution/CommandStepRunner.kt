@@ -2,6 +2,8 @@ package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.application.execution.StepRunner
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.ArtefactCollectionException
+import dk.cachet.carp.analytics.application.exceptions.ExecutionIOException
 import dk.cachet.carp.analytics.application.execution.*
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
@@ -12,7 +14,7 @@ import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
-import java.nio.file.Paths
+import java.nio.file.Path
 
 /**
  * Runs a single [PlannedStep] against a live [ExecutionWorkspace].
@@ -54,7 +56,7 @@ class CommandStepRunner(
         policy: RunPolicy
     ): StepRunResult {
         // Ensure the step's input/output/log directories exist on disk.
-        workspaceManager.prepareStepDirectories(workspace, step.stepId)
+        workspaceManager.prepareStepDirectories(workspace, step.metadata.id)
 
         return when (val process = step.process) {
             is CommandSpec -> runCommand(step, process, workspace, policy)
@@ -77,21 +79,42 @@ class CommandStepRunner(
         policy: RunPolicy
     ): StepRunResult {
         val startedAt = options.clock.now()
-        val absWorkingDir = workspaceManager.resolveStepWorkingDir(workspace, step.stepId)
-            ?.let { Paths.get(it) }
+        val absWorkingDir = Path.of(workspace.executionRoot)
 
         // Step 1: Execute command
         val outcome = executeCommand(step, spec, workspace, policy, absWorkingDir)
 
         // Step 2: Validate outputs (post-execution check)
-        val validation = validateOutputs(step, outcome.status, absWorkingDir)
+        val validation = validateOutputs(step, outcome.status, workspace)
         val finalStatus = validation?.forcedStatus ?: outcome.status
         val finalFailure = if (validation?.forcedStatus != null) validation.failure else outcome.failure
 
         // Step 3: Record artefacts (only if succeeded)
-        val producedArtifacts = if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
-            options.artefactRecorder.recordArtefacts(step, absWorkingDir, artefactStore)
-        } else {
+        val producedArtifacts = try {
+            if (finalStatus == ExecutionStatus.SUCCEEDED && absWorkingDir != null) {
+                options.artefactRecorder.recordArtefacts(step, absWorkingDir, artefactStore)
+            } else {
+                emptyList()
+            }
+        } catch (e: ExecutionIOException) {
+            // Log issue but don't fail the step
+            _pendingIssues[step.metadata.id] = listOf(
+                ExecutionIssue(
+                    stepMetadata = step.metadata,
+                    kind = ExecutionIssueKind.ARTIFACT_COLLECTION_FAILED,
+                    message = "Failed to record artifact: ${e.message}"
+                )
+            )
+            emptyList()
+        } catch (e: ArtefactCollectionException) {
+            // Log issue but don't fail the step
+            _pendingIssues[step.metadata.id] = listOf(
+                ExecutionIssue(
+                    stepMetadata = step.metadata,
+                    kind = ExecutionIssueKind.ARTIFACT_COLLECTION_FAILED,
+                    message = "Artifact metadata invalid: ${e.message}"
+                )
+            )
             emptyList()
         }
 
@@ -104,11 +127,11 @@ class CommandStepRunner(
 
         // Step 5: Collect issues
         val validationIssues = validation?.issues ?: emptyList()
-        _pendingIssues[step.stepId] = validationIssues
+        _pendingIssues[step.metadata.id] = validationIssues
 
         // Return final result
         return StepRunResult(
-            stepId = step.stepId,
+            stepMetadata = step.metadata,
             status = finalStatus,
             startedAt = startedAt,
             finishedAt = options.clock.now(),
@@ -143,7 +166,7 @@ class CommandStepRunner(
         spec: CommandSpec,
         workspace: ExecutionWorkspace,
         policy: RunPolicy,
-        absWorkingDir: java.nio.file.Path?
+        absWorkingDir: Path?
     ): CommandOutcome {
         // Run the command (with working directory if available)
         val result = if (absWorkingDir != null && commandRunner is JvmCommandRunner) {
@@ -163,11 +186,14 @@ class CommandStepRunner(
         val failure: StepFailure? = when {
             result.timedOut -> StepFailure(
                 FailureKind.TIMEOUT,
-                "Step '${step.name}' timed out after ${policy.timeoutMs} ms"
+                "Step '${step.metadata.name}' timed out after ${policy.timeoutMs} ms"
             )
             result.exitCode != 0 -> StepFailure(
                 FailureKind.COMMAND_FAILED,
-                "Step '${step.name}' exited with code ${result.exitCode}"
+                "Step '${step.metadata.name}' " +
+                        "exited with code ${result.exitCode} and command ${spec.executable} ${spec.args.joinToString(
+                    " "
+                )}"
             )
             else -> null
         }
@@ -175,7 +201,7 @@ class CommandStepRunner(
         // Create run detail with human-readable output
         val detail = StepRunDetail(
             command = listOf(spec.executable) + spec.args.toResolvedStrings(),
-            workingDirectory = workspace.stepDir(step.stepId),
+            workingDirectory = workspace.stepDir(step.metadata.id),
             exitCode = result.exitCode,
             stdout = inlineRef(result.stdout),
             stderr = inlineRef(result.stderr)
@@ -194,14 +220,15 @@ class CommandStepRunner(
     private fun validateOutputs(
         step: PlannedStep,
         status: ExecutionStatus,
-        absWorkingDir: java.nio.file.Path?
+        workspace: ExecutionWorkspace
     ): ValidationResult? {
-        if (status != ExecutionStatus.SUCCEEDED || absWorkingDir == null) {
-            return null
-        }
+        if (status != ExecutionStatus.SUCCEEDED) return null
+        val executionRoot = Path.of( workspace.executionRoot )
+        val outputsDir = executionRoot.resolve( workspace.stepOutputsDir( step.metadata.id ) )
         return StepOutputValidator.validate(
-            stepId = step.stepId,
-            outputsDir = absWorkingDir.resolve("outputs"),
+            stepMetadata = step.metadata,
+            executionRoot = executionRoot,
+            outputsDir = outputsDir,
             bindings = step.bindings,
             policy = options.outputValidationPolicy
         )
@@ -229,7 +256,7 @@ class CommandStepRunner(
     private fun unsupportedProcess(step: PlannedStep, process: Any): StepRunResult {
         val startedAt = options.clock.now()
         return StepRunResult(
-            stepId = step.stepId,
+            stepMetadata = step.metadata,
             status = ExecutionStatus.FAILED,
             startedAt = startedAt,
             finishedAt = startedAt,
@@ -237,7 +264,7 @@ class CommandStepRunner(
             failure = StepFailure(
                 kind = FailureKind.INFRASTRUCTURE,
                 message = "CommandStepRunner cannot handle process type " +
-                        "'${process::class.simpleName}' for step '${step.name}'"
+                        "'${process::class.simpleName}' for step '${step.metadata.name}'"
             )
         )
     }
@@ -257,4 +284,3 @@ class CommandStepRunner(
             value = "data:text/plain,${text.trim()}"
         )
 }
-

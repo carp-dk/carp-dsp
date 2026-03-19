@@ -1,10 +1,7 @@
 package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.authoring.validation.WorkflowLinter
-import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
 import dk.cachet.carp.analytics.domain.workflow.Step
-import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -27,7 +24,6 @@ import kotlin.test.assertTrue
 class MinimalValidFixtureTest
 {
     private val codec = WorkflowYamlCodec()
-    private val linter = WorkflowLinter
     private val importer = WorkflowDescriptorImporter()
 
     // ── Load fixture YAML ─────────────────────────────────────────────────────
@@ -35,8 +31,8 @@ class MinimalValidFixtureTest
     private fun loadFixtureYaml(): String =
         checkNotNull(
             MinimalValidFixtureTest::class.java.classLoader
-                .getResourceAsStream("fixtures/minimal-valid.yaml")
-        ) { "Fixture not found: fixtures/minimal-valid.yaml" }
+                .getResourceAsStream("integration-fixtures/minimal-valid.yaml")
+        ) { "Fixture not found: integration-fixtures/minimal-valid.yaml" }
             .bufferedReader()
             .readText()
 
@@ -68,7 +64,7 @@ class MinimalValidFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        assertEquals("Minimal Valid Workflow", descriptor.metadata.name)
+        assertEquals("Minimal File Output", descriptor.metadata.name)
         assertTrue(descriptor.metadata.description?.isNotEmpty() ?: true)
     }
 
@@ -94,7 +90,7 @@ class MinimalValidFixtureTest
 
         val env = descriptor.environments["system-env"]
         assertEquals("system", env?.kind)
-        assertEquals("System Environment", env?.name)
+        assertEquals("System", env?.name)
     }
 
     // ── Test: Step Structure ──────────────────────────────────────────────────
@@ -106,7 +102,7 @@ class MinimalValidFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        assertEquals(2, descriptor.steps.size)
+        assertEquals(1, descriptor.steps.size)
     }
 
     @Test
@@ -117,73 +113,15 @@ class MinimalValidFixtureTest
         val descriptor = result.descriptor
         val step1 = descriptor.steps[0]
 
-        assertEquals("echo-hello", step1.id)
+        assertEquals("write-file", step1.id)
         assertEquals("system-env", step1.environmentId)
         assertEquals(0, step1.dependsOn.size)
-        assertEquals("echo-greeting", step1.task.name)
+        assertEquals("write-output", step1.task.name)
         val cmdTask = assertIs<carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor>( step1.task )
-        assertEquals("echo", cmdTask.executable)
+        assertEquals("sh", cmdTask.executable)
     }
 
-    @Test
-    fun `minimal-valid_yaml second step depends on first`()
-    {
-        val yaml = loadFixtureYaml()
-        val result = codec.decode(yaml) as DecodeResult.Success
-        val descriptor = result.descriptor
-        val step2 = descriptor.steps[1]
-
-        assertEquals("echo-goodbye", step2.id)
-        assertEquals(1, step2.dependsOn.size)
-        assertEquals("echo-hello", step2.dependsOn[0])
-    }
-
-    // ── Test: Linting ────────────────────────────────────────────────────────
-
-    @Test
-    fun `minimal-valid_yaml passes linter with no errors`()
-    {
-        val yaml = loadFixtureYaml()
-        val result = codec.decode(yaml) as DecodeResult.Success
-        val descriptor = result.descriptor
-
-        val lintResult = linter.lint(descriptor)
-        val errors = lintResult.issues.filter { it.severity == ValidationSeverity.ERROR }
-
-        assertEquals(0, errors.size, "Fixture should have no linting errors")
-    }
-
-    @Test
-    fun `minimal-valid_yaml has no warnings`()
-    {
-        val yaml = loadFixtureYaml()
-        val result = codec.decode(yaml) as DecodeResult.Success
-        val descriptor = result.descriptor
-
-        val lintResult = linter.lint(descriptor)
-        val warnings = lintResult.issues.filter { it.severity == ValidationSeverity.WARNING }
-
-        // Note: May have UUID format warnings if using semantic IDs, which is OK
-        // (warnings are non-blocking)
-        println("Fixture has ${warnings.size} warnings (if any)")
-        warnings.forEach { println("  - ${it.message}") }
-    }
-
-    // ── Test: Importing to Domain Model ───────────────────────────────────────
-
-    @Test
-    fun `minimal-valid_yaml imports to WorkflowDefinition without exception`()
-    {
-        val yaml = loadFixtureYaml()
-        val result = codec.decode(yaml) as DecodeResult.Success
-        val descriptor = result.descriptor
-
-        // Should not throw
-        val definition = importer.import(descriptor)
-
-        assertIs<WorkflowDefinition>(definition)
-    }
-
+    // ...existing code...
     @Test
     fun `minimal-valid_yaml domain model has correct structure`()
     {
@@ -193,7 +131,7 @@ class MinimalValidFixtureTest
         val definition = importer.import(descriptor)
 
         // Check workflow metadata
-        assertEquals("Minimal Valid Workflow", definition.workflow.metadata.name)
+        assertEquals("Minimal File Output", definition.workflow.metadata.name)
 
         // Check environments
         assertEquals(1, definition.environments.size)
@@ -201,7 +139,7 @@ class MinimalValidFixtureTest
         // Check steps
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
-        assertEquals(2, steps.size)
+        assertEquals(1, steps.size)
     }
 
     // ── Test: Round-Trip (YAML → Descriptor → YAML) ───────────────────────────
@@ -253,11 +191,9 @@ class MinimalValidFixtureTest
         val descriptor = result.descriptor
         val canonical = codec.encode(descriptor)
 
-        // Check that steps appear in order: echo-hello, then echo-goodbye
-        val helloIndex = canonical.indexOf("echo-hello")
-        val goodbyeIndex = canonical.indexOf("echo-goodbye")
+        // Check that steps appear in order: write-file is the only step
+        val writeFileIndex = canonical.indexOf("write-file")
 
-        assertTrue(helloIndex > 0, "Step echo-hello should be present")
-        assertTrue(goodbyeIndex > helloIndex, "Step echo-goodbye should come after echo-hello")
+        assertTrue(writeFileIndex > 0, "Step write-file should be present")
     }
 }

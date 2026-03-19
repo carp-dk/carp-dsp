@@ -31,14 +31,14 @@ import kotlin.concurrent.thread
 class JvmCommandRunner(
     private val timeoutExitCode: Int = -1,
     private val charset: Charset = StandardCharsets.UTF_8
-) : CommandRunner {
-
+) : CommandRunner
+{
     /**
      * Runs [command] using the JVM's current working directory as the process root.
      * [CommandPolicy.workingDirectory] is ignored — prefer [run] with an explicit workspaceRoot.
      */
-    override fun run(command: CommandSpec, policy: RunPolicy): CommandResult =
-        execute(command, policy, workspaceRoot = null)
+    override fun run( command: CommandSpec, policy: RunPolicy ): CommandResult =
+        execute( command, policy, workspaceRoot = null )
 
     /**
      * Runs [command] with [CommandPolicy.workingDirectory] resolved against [workspaceRoot].
@@ -46,68 +46,26 @@ class JvmCommandRunner(
      * @param workspaceRoot Absolute path to the execution workspace root. The policy's relative
      *                      working directory is resolved safely under this root.
      */
-    fun run(command: CommandSpec, policy: RunPolicy, workspaceRoot: Path): CommandResult =
-        execute(command, policy, workspaceRoot)
+    fun run( command: CommandSpec, policy: RunPolicy, workspaceRoot: Path ): CommandResult =
+        execute( command, policy, workspaceRoot )
 
-    // -------------------------------------------------------------------------
     // Core implementation
-    // -------------------------------------------------------------------------
 
-    private fun execute(command: CommandSpec, policy: RunPolicy, workspaceRoot: Path?): CommandResult {
-        policy as CommandPolicy
-
-        val resolvedArgs = command.args.map { arg ->
-            when (arg) {
-                is ExpandedArg.Literal -> arg.value
-                is ExpandedArg.DataReference -> arg.dataRefId.toString()
-                is ExpandedArg.PathSubstitution -> arg.template.replace("$()", arg.dataRefId.toString())
-            }
-        }
-
-        val processBuilder = ProcessBuilder(listOf(command.executable) + resolvedArgs)
-
-        if (workspaceRoot != null) {
-            val wd = policy.workingDirectory
-                ?.let { rel -> resolveUnderRoot(workspaceRoot, rel) }
-                ?: workspaceRoot
-            Files.createDirectories(wd)
-            processBuilder.directory(wd.toFile())
-        }
+    private fun execute( command: CommandSpec, policy: RunPolicy, workspaceRoot: Path? ): CommandResult
+    {
+        val cmdPolicy = normalizePolicy( policy )
+        val processBuilder = buildProcess( command, cmdPolicy, workspaceRoot )
 
         val start = System.nanoTime()
         val process = processBuilder.start()
+        val ( stdout, stderr, collectors ) = startStreamCollectors( process )
 
-        val stdout = StringBuilder()
-        val stderr = StringBuilder()
+        val timedOut = waitForProcess( process, cmdPolicy )
+        collectors.first.join()
+        collectors.second.join()
 
-        val stdoutCollector = collectStream(process.inputStream, stdout)
-        val stderrCollector = collectStream(process.errorStream, stderr)
-
-        val timedOut = try {
-            val finished = if (policy.timeoutMs != null) {
-                process.waitFor(policy.timeoutMs, TimeUnit.MILLISECONDS)
-            } else {
-                process.waitFor()
-                true
-            }
-
-            if (!finished) {
-                process.destroy()
-                if (process.isAlive) process.destroyForcibly()
-                process.waitFor(2, TimeUnit.SECONDS)
-            }
-            !finished
-        } catch (ex: InterruptedException) {
-            process.destroyForcibly()
-            Thread.currentThread().interrupt()
-            throw ex
-        }
-
-        stdoutCollector.join()
-        stderrCollector.join()
-
-        val durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
-        val exitCode = if (timedOut) timeoutExitCode else process.exitValue()
+        val durationMs = TimeUnit.NANOSECONDS.toMillis( System.nanoTime() - start )
+        val exitCode = if ( timedOut ) timeoutExitCode else process.exitValue()
 
         return CommandResult(
             exitCode = exitCode,
@@ -118,18 +76,98 @@ class JvmCommandRunner(
         )
     }
 
-    private fun collectStream(stream: InputStream, target: StringBuilder): Thread =
-        thread(name = "JvmCommandRunner-collect-stream", start = true) {
-            stream.bufferedReader(charset).use { reader ->
-                target.append(reader.readText())
+    private fun normalizePolicy( policy: RunPolicy ): CommandPolicy =
+        policy as? CommandPolicy
+            ?: CommandPolicy(
+                timeoutMs = policy.timeoutMs,
+                stopOnFailure = policy.stopOnFailure,
+                failOnWarnings = policy.failOnWarnings,
+                maxAttempts = policy.maxAttempts,
+                workingDirectory = null
+            )
+
+    private fun buildProcess(
+        command: CommandSpec,
+        policy: CommandPolicy,
+        workspaceRoot: Path?
+    ): ProcessBuilder
+    {
+        val resolvedArgs = command.args.map { arg ->
+            when ( arg )
+            {
+                is ExpandedArg.Literal -> arg.value
+                is ExpandedArg.DataReference -> arg.id.toString()
+                is ExpandedArg.PathSubstitution -> arg.template.replace( "()", arg.id.toString() )
+                is ExpandedArg.EnvironmentVariable -> arg.template.replace( "()", System.getenv( arg.name ) ?: "" )
             }
         }
 
-    internal fun resolveUnderRoot(root: Path, rel: RelativePath): Path {
-        val normalizedRoot = root.toAbsolutePath().normalize()
-        val resolved = normalizedRoot.resolve(rel.value).normalize()
+        val builder = ProcessBuilder( listOf( command.executable ) + resolvedArgs )
 
-        require(resolved.startsWith(normalizedRoot)) {
+        if ( workspaceRoot != null )
+        {
+            val wd = policy.workingDirectory
+                ?.let { rel -> resolveUnderRoot( workspaceRoot, rel ) }
+                ?: workspaceRoot
+            Files.createDirectories( wd )
+            builder.directory( wd.toFile() )
+        }
+
+        return builder
+    }
+
+    private fun startStreamCollectors( process: Process ): Triple<StringBuilder, StringBuilder, Pair<Thread, Thread>>
+    {
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+        val stdoutCollector = collectStream( process.inputStream, stdout )
+        val stderrCollector = collectStream( process.errorStream, stderr )
+        return Triple( stdout, stderr, stdoutCollector to stderrCollector )
+    }
+
+    private fun waitForProcess( process: Process, policy: CommandPolicy ): Boolean
+    {
+        return try
+        {
+            val finished = if ( policy.timeoutMs != null )
+            {
+                process.waitFor( policy.timeoutMs, TimeUnit.MILLISECONDS )
+            }
+            else
+            {
+                process.waitFor()
+                true
+            }
+
+            if ( !finished )
+            {
+                process.destroy()
+                if ( process.isAlive ) process.destroyForcibly()
+                process.waitFor( 2, TimeUnit.SECONDS )
+            }
+            !finished
+        }
+        catch ( ex: InterruptedException )
+        {
+            process.destroyForcibly()
+            Thread.currentThread().interrupt()
+            throw ex
+        }
+    }
+
+    private fun collectStream( stream: InputStream, target: StringBuilder ): Thread =
+        thread( name = "JvmCommandRunner-collect-stream", start = true ) {
+            stream.bufferedReader( charset ).use { reader ->
+                target.append( reader.readText() )
+            }
+        }
+
+    internal fun resolveUnderRoot( root: Path, rel: RelativePath ): Path
+    {
+        val normalizedRoot = root.toAbsolutePath().normalize()
+        val resolved = normalizedRoot.resolve( rel.value ).normalize()
+
+        require( resolved.startsWith( normalizedRoot ) ) {
             "Resolved path escapes workspace root. root=$normalizedRoot rel=${rel.value} resolved=$resolved"
         }
         return resolved

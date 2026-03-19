@@ -9,9 +9,9 @@ import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.serialization.descriptorYaml
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
-import dk.cachet.carp.analytics.domain.data.FileDestination
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedTaskTypeException
 import dk.cachet.carp.analytics.domain.data.FileFormat
-import dk.cachet.carp.analytics.domain.data.FileSystemSource
+import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
@@ -262,7 +262,7 @@ class WorkflowDescriptorExporterTest
         val id = UUID.randomUUID()
         val input = InputDataSpec(
             id = id, name = "port",
-            source = FileSystemSource(path = "/in.csv", format = FileFormat.CSV)
+            location = FileLocation(path = "/in.csv", format = FileFormat.CSV)
         )
         assertEquals("input.0", TaskExporter.exportArgTokenToString(InputRef(id), listOf(input), emptyList()))
     }
@@ -273,7 +273,7 @@ class WorkflowDescriptorExporterTest
         val id = UUID.randomUUID()
         val output = OutputDataSpec(
             id = id, name = "port",
-            destination = FileDestination(path = "/out.csv", format = FileFormat.CSV)
+            location = FileLocation(path = "/out.csv", format = FileFormat.CSV)
         )
         assertEquals("output.0", TaskExporter.exportArgTokenToString(OutputRef(id), emptyList(), listOf(output)))
     }
@@ -387,14 +387,14 @@ class WorkflowDescriptorExporterTest
                 InputDataSpec(
                     id = inputId,
                     name = "raw-data",
-                    source = FileSystemSource(path = "/data/in.csv", format = FileFormat.CSV),
+                    location = FileLocation(path = "/data/in.csv", format = FileFormat.CSV),
                 )
             ),
             outputs = listOf(
                 OutputDataSpec(
                     id = outputId,
                     name = "result",
-                    destination = FileDestination(path = "/data/out.json", format = FileFormat.JSON),
+                    location = FileLocation(path = "/data/out.json", format = FileFormat.JSON),
                 )
             ),
         )

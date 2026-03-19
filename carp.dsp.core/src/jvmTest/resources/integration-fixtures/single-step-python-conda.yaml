@@ -1,0 +1,58 @@
+schemaVersion: "1.0"
+metadata:
+  id: "single-step-python-conda-001"
+  name: "Single Step - Python with Conda"
+  description: "Minimal one-step workflow: Python script with Conda environment"
+  version: "1.0"
+  tags:
+    - "python"
+    - "conda"
+    - "single-step"
+    - "fixture"
+
+environments:
+  python-conda:
+    name: "python-processing"
+    kind: "conda"
+    spec:
+      dependencies:
+        - "pandas"
+      pythonVersion:
+        - "3.11"
+      channels:
+        - "conda-forge"
+
+steps:
+  - id: "process-data"
+    metadata:
+      name: "Process Data with Python"
+      description: "Simple Python script that reads CSV and processes it"
+      version: "1.0"
+    environmentId: "python-conda"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "python-task"
+      name: "process-data"
+      description: "Process input CSV and write output"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/process_data.py"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Input data CSV file"
+        source:
+          type: "file"
+          path: "data/input.csv"
+    outputs:
+      - id: "output-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Processed data CSV file"

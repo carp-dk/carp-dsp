@@ -1,17 +1,7 @@
 package carp.dsp.core.application.plan
 
-import dk.cachet.carp.analytics.application.plan.CommandSpec
-import dk.cachet.carp.analytics.application.plan.DataRef
-import dk.cachet.carp.analytics.application.plan.ExpandedArg
-import dk.cachet.carp.analytics.application.plan.PlanIssue
-import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
-import dk.cachet.carp.analytics.application.plan.PlannedStep
-import dk.cachet.carp.analytics.application.plan.ResolvedBindings
-import dk.cachet.carp.analytics.domain.data.InMemorySource
-import dk.cachet.carp.analytics.domain.data.InputDataSpec
-import dk.cachet.carp.analytics.domain.data.OutputDataSpec
-import dk.cachet.carp.analytics.domain.data.RegistryDestination
-import dk.cachet.carp.analytics.domain.data.StepOutputSource
+import dk.cachet.carp.analytics.application.plan.*
+import dk.cachet.carp.analytics.domain.data.*
 import dk.cachet.carp.analytics.domain.tasks.TaskDefinition
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.StepMetadata
@@ -25,16 +15,17 @@ import kotlin.test.assertTrue
 /**
  * Comprehensive test suite for BindingsResolver.
  *
- * Tests cover P0 specifications:
- * - Output resolution to deterministic DataRefs
- * - StepOutputSource input resolution
+ * Tests cover:
+ * - Output resolution using unified DataLocation model
+ * - External input resolution (stepRef == null)
+ * - Cross-step input resolution (stepRef != null)
  * - Error handling for missing producers/outputs
- * - Unsupported input source types
- * - Pure, side-effect free behavior
+ * - Deterministic location resolution
  */
-class BindingsResolverTest {
-
+class BindingsResolverTest
+{
     private val resolver = BindingsResolver()
+    private val executionIndex = 1
 
     // Mock task definition for testing
     private class MockTaskDefinition(
@@ -47,518 +38,628 @@ class BindingsResolverTest {
         name: String,
         inputs: List<InputDataSpec> = emptyList(),
         outputs: List<OutputDataSpec> = emptyList()
-    ): Step {
+    ): Step
+    {
         return Step(
             metadata = StepMetadata(
                 id = UUID.randomUUID(),
                 name = name,
                 description = "Test step: $name",
-                version = Version(1, 0)
+                version = Version( 1, 0 )
             ),
-            task = MockTaskDefinition(name = "task-$name"),
+            task = MockTaskDefinition( name = "task-$name" ),
             environmentId = UUID.randomUUID(),
             inputs = inputs,
             outputs = outputs
         )
     }
 
-    private fun createOutputSpec(name: String): OutputDataSpec {
+    private fun createOutputSpec(
+        name: String,
+        location: DataLocation = InMemoryLocation( registryKey = "output-$name" )
+    ): OutputDataSpec
+    {
         return OutputDataSpec(
             id = UUID.randomUUID(),
             name = name,
             description = "Output $name",
-            schema = null, // P0: Using null for DataSchema
-            destination = RegistryDestination(key = "output-$name")
+            location = location
         )
     }
 
-    private fun createInputSpec(name: String, source: dk.cachet.carp.analytics.domain.data.DataSource): InputDataSpec {
+    private fun createInputSpec(
+        name: String,
+        location: DataLocation = FileLocation( path = "/data/$name", format = FileFormat.CSV ),
+        stepRef: String? = null
+    ): InputDataSpec
+    {
         return InputDataSpec(
             id = UUID.randomUUID(),
             name = name,
             description = "Input $name",
             schema = null,
-            source = source,
+            location = location,
+            stepRef = stepRef,
             required = true,
             constraints = null
         )
     }
 
-
-    private fun createStepOutputSource(stepId: UUID, outputId: UUID): StepOutputSource {
-        return StepOutputSource(
-            stepId = stepId,
-            outputId = outputId,
-            metadata = emptyMap()
-        )
-    }
-
-    private fun createPlannedStep(stepId: UUID, bindings: ResolvedBindings): PlannedStep {
+    private fun createPlannedStep(
+        metadata: StepMetadata,
+        bindings: ResolvedBindings
+    ): PlannedStep
+    {
         return PlannedStep(
-            stepId = stepId,
-            name = "Planned Step",
-            process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
+            metadata = metadata,
+            process = CommandSpec( "echo", listOf( ExpandedArg.Literal( "test" ) ) ),
             bindings = bindings,
             environmentRef = UUID.randomUUID()
         )
     }
 
+    // ── Output Resolution Tests ───────────────────────────────────────────────
+
     @Test
-    fun `resolve creates deterministic output DataRefs`() {
+    fun `resolve creates outputs from step's OutputDataSpecs`()
+    {
         // Arrange
-        val output1 = createOutputSpec("output1")
-        val output2 = createOutputSpec("output2")
-        val step = createStep("test-step", outputs = listOf(output1, output2))
+        val location1 = InMemoryLocation( registryKey = "out1" )
+        val location2 = FileLocation( path = "/outputs/out2.csv", format = FileFormat.CSV )
+        val output1 = createOutputSpec( "output1", location1 )
+        val output2 = createOutputSpec( "output2", location2 )
+        val step = createStep( "test-step", outputs = listOf( output1, output2 ) )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(step, emptyMap(), issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertTrue(issues.isEmpty())
-        assertEquals(2, bindings.outputs.size)
+        assertTrue( issues.isEmpty() )
+        assertEquals( 2, bindings.outputs.size )
 
-        val output1Ref = bindings.outputs[output1.id]
-        assertNotNull(output1Ref)
-        assertEquals(output1.id, output1Ref.id)
-        assertEquals("unknown", output1Ref.type) // Schema is null, so type becomes "unknown"
+        val resolved1 = bindings.outputs[output1.id]
+        assertNotNull( resolved1 )
+        assertEquals( output1.id, resolved1.spec.id )
+        assertEquals( "output1", resolved1.spec.name )
 
-        val output2Ref = bindings.outputs[output2.id]
-        assertNotNull(output2Ref)
-        assertEquals(output2.id, output2Ref.id)
-        assertEquals("unknown", output2Ref.type) // Schema is null, so type becomes "unknown"
+        val resolved2 = bindings.outputs[output2.id]
+        assertNotNull( resolved2 )
+        assertEquals( output2.id, resolved2.spec.id )
+        assertEquals( "output2", resolved2.spec.name )
     }
 
     @Test
-    fun `resolve handles outputs with null schema`() {
+    fun `resolve handles step with no outputs`()
+    {
         // Arrange
-        val output = createOutputSpec("output")
-        val step = createStep("test-step", outputs = listOf(output))
+        val step = createStep( "no-output-step", outputs = emptyList() )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(step, emptyMap(), issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertTrue(issues.isEmpty())
-        val outputRef = bindings.outputs[output.id]
-        assertNotNull(outputRef)
-        assertEquals(output.id, outputRef.id)
-        assertEquals("unknown", outputRef.type)
+        assertTrue( issues.isEmpty() )
+        assertTrue( bindings.outputs.isEmpty() )
     }
 
     @Test
-    fun `resolve handles step with no inputs or outputs`() {
+    fun `resolve handles outputs with InMemoryLocation`()
+    {
         // Arrange
-        val step = createStep("empty-step")
+        val registryLocation = InMemoryLocation( registryKey = "my-registry-key" )
+        val output = createOutputSpec( "in-memory-output", registryLocation )
+        val step = createStep( "test-step", outputs = listOf( output ) )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(step, emptyMap(), issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertTrue(issues.isEmpty())
-        assertTrue(bindings.inputs.isEmpty())
-        assertTrue(bindings.outputs.isEmpty())
+        assertTrue( issues.isEmpty() )
+        val resolved = bindings.outputs[output.id]
+        assertNotNull( resolved )
+        assertTrue( resolved.location is InMemoryLocation )
     }
 
     @Test
-    fun `resolve successfully resolves StepOutputSource input`() {
+    fun `resolve handles outputs with FileLocation`()
+    {
         // Arrange
-        val producerStepId = UUID.randomUUID()
-        val producerOutputId = UUID.randomUUID()
-        val producerOutputRef = DataRef(producerOutputId, "text/plain")
-        val producerBindings = ResolvedBindings(
-            inputs = emptyMap(),
-            outputs = mapOf(producerOutputId to producerOutputRef)
-        )
-        val plannedProducer = createPlannedStep(producerStepId, producerBindings)
-        val plannedSteps = mapOf(producerStepId to plannedProducer)
-
-        val stepOutputSource = createStepOutputSource(producerStepId, producerOutputId)
-        val input = createInputSpec("input1", stepOutputSource)
-        val consumerStep = createStep("consumer", inputs = listOf(input))
+        val fileLocation = FileLocation( path = "/outputs/result.csv", format = FileFormat.CSV )
+        val output = createOutputSpec( "file-output", fileLocation )
+        val step = createStep( "test-step", outputs = listOf( output ) )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(consumerStep, plannedSteps, issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertTrue(issues.isEmpty())
-        assertEquals(1, bindings.inputs.size)
-        assertEquals(producerOutputRef, bindings.inputs[input.id])
+        assertTrue( issues.isEmpty() )
+        val resolved = bindings.outputs[output.id]
+        assertNotNull( resolved )
+        assertTrue( resolved.location is FileLocation )
     }
 
+    // ── External Input Resolution Tests ───────────────────────────────────────
+
     @Test
-    fun `resolve emits error for missing producer step`() {
+    fun `resolve handles external input with stepRef null`()
+    {
         // Arrange
-        val missingStepId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
-        val stepOutputSource = createStepOutputSource(missingStepId, outputId)
-        val input = createInputSpec("input1", stepOutputSource)
-        val consumerStep = createStep("consumer", inputs = listOf(input))
+        val location = FileLocation( path = "/data/input.csv", format = FileFormat.CSV )
+        val input = createInputSpec( "external-input", location, stepRef = null )
+        val step = createStep( "test-step", inputs = listOf( input ) )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(consumerStep, emptyMap(), issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertEquals(1, issues.size)
-        val issue = issues[0]
-        assertEquals(PlanIssueSeverity.ERROR, issue.severity)
-        assertEquals("MISSING_PRODUCER_STEP", issue.code)
-        assertEquals(consumerStep.metadata.id, issue.stepId)
-        assertTrue(issue.message.contains(missingStepId.toString()))
-        assertTrue(issue.message.contains(input.id.toString()))
+        assertTrue( issues.isEmpty() )
+        assertEquals( 1, bindings.inputs.size )
 
-        // Bindings should still be created but without the missing input
-        assertTrue(bindings.inputs.isEmpty())
+        val resolved = bindings.inputs[input.id]
+        assertNotNull( resolved )
+        assertEquals( input.id, resolved.spec.id )
+        assertTrue( resolved.location is FileLocation )
     }
 
     @Test
-    fun `resolve emits error for missing producer output`() {
+    fun `resolve handles multiple external inputs`()
+    {
         // Arrange
-        val producerStepId = UUID.randomUUID()
-        val existingOutputId = UUID.randomUUID()
-        val missingOutputId = UUID.randomUUID()
-
-        val producerBindings = ResolvedBindings(
-            inputs = emptyMap(),
-            outputs = mapOf(existingOutputId to DataRef(existingOutputId, "text/plain"))
-        )
-        val plannedProducer = createPlannedStep(producerStepId, producerBindings)
-        val plannedSteps = mapOf(producerStepId to plannedProducer)
-
-        val stepOutputSource = createStepOutputSource(producerStepId, missingOutputId)
-        val input = createInputSpec("input1", stepOutputSource)
-        val consumerStep = createStep("consumer", inputs = listOf(input))
+        val input1 = createInputSpec( "input1", FileLocation( path = "/data/a.csv" ), stepRef = null )
+        val input2 = createInputSpec( "input2", InMemoryLocation( registryKey = "input2" ), stepRef = null )
+        val step = createStep( "test-step", inputs = listOf( input1, input2 ) )
         val issues = mutableListOf<PlanIssue>()
 
         // Act
-        val bindings = resolver.resolve(consumerStep, plannedSteps, issues)
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
 
         // Assert
-        assertEquals(1, issues.size)
-        val issue = issues[0]
-        assertEquals(PlanIssueSeverity.ERROR, issue.severity)
-        assertEquals("MISSING_PRODUCER_OUTPUT", issue.code)
-        assertEquals(consumerStep.metadata.id, issue.stepId)
-        assertTrue(issue.message.contains(missingOutputId.toString()))
-        assertTrue(issue.message.contains(producerStepId.toString()))
-        assertTrue(issue.message.contains(input.id.toString()))
+        assertTrue( issues.isEmpty() )
+        assertEquals( 2, bindings.inputs.size )
 
-        // Bindings should still be created but without the missing input
-        assertTrue(bindings.inputs.isEmpty())
+        val resolved1 = bindings.inputs[input1.id]
+        assertNotNull( resolved1 )
+        assertEquals( "input1", resolved1.spec.name )
+
+        val resolved2 = bindings.inputs[input2.id]
+        assertNotNull( resolved2 )
+        assertEquals( "input2", resolved2.spec.name )
     }
 
-    @Test
-    fun `resolve emits error for unsupported input source type`() {
-        // Use InMemorySource as a concrete DataSource that's not StepOutputSource
-        val unsupportedSource = InMemorySource(
-            registryKey = "test-registry-key",
-            metadata = emptyMap()
-        )
-
-        val input = createInputSpec("input1", unsupportedSource)
-        val consumerStep = createStep("consumer", inputs = listOf(input))
-        val issues = mutableListOf<PlanIssue>()
-
-        // Act
-        val bindings = resolver.resolve(consumerStep, emptyMap(), issues)
-
-        // Assert
-        assertEquals(1, issues.size)
-        val issue = issues[0]
-        assertEquals(PlanIssueSeverity.ERROR, issue.severity)
-        assertEquals("UNSUPPORTED_INPUT_SOURCE", issue.code)
-        assertEquals(consumerStep.metadata.id, issue.stepId)
-        assertTrue(issue.message.contains("InMemorySource"))
-        assertTrue(issue.message.contains("Only StepOutputSource is supported"))
-
-        // Bindings should still be created but without the unsupported input
-        assertTrue(bindings.inputs.isEmpty())
-    }
+    // ── Cross-Step Input Resolution Tests ─────────────────────────────────────
 
     @Test
-    fun `resolve handles mixed successful and failed input resolution`() {
+    fun `resolve handles cross-step input with stepRef non-null`()
+    {
         // Arrange
-        val producerStepId = UUID.randomUUID()
-        val validOutputId = UUID.randomUUID()
-        val missingOutputId = UUID.randomUUID()
-
-        val producerBindings = ResolvedBindings(
-            inputs = emptyMap(),
-            outputs = mapOf(validOutputId to DataRef(validOutputId, "text/plain"))
-        )
-        val plannedProducer = createPlannedStep(producerStepId, producerBindings)
-        val plannedSteps = mapOf(producerStepId to plannedProducer)
-
-        val validSource = createStepOutputSource(producerStepId, validOutputId)
-        val invalidSource = createStepOutputSource(producerStepId, missingOutputId)
-        val unsupportedSource = InMemorySource(
-            registryKey = "test-unsupported-key",
-            metadata = emptyMap()
-        )
-
-        val validInput = createInputSpec("valid-input", validSource)
-        val invalidInput = createInputSpec("invalid-input", invalidSource)
-        val unsupportedInput = createInputSpec("unsupported-input", unsupportedSource)
-
-        val consumerStep = createStep(
-            "consumer",
-            inputs = listOf(validInput, invalidInput, unsupportedInput)
-        )
-        val issues = mutableListOf<PlanIssue>()
-
-        // Act
-        val bindings = resolver.resolve(consumerStep, plannedSteps, issues)
-
-        // Assert
-        assertEquals(2, issues.size) // One for missing output, one for unsupported source
-        assertTrue(issues.any { it.code == "MISSING_PRODUCER_OUTPUT" })
-        assertTrue(issues.any { it.code == "UNSUPPORTED_INPUT_SOURCE" })
-
-        // Only the valid input should be resolved
-        assertEquals(1, bindings.inputs.size)
-        assertEquals(DataRef(validOutputId, "text/plain"), bindings.inputs[validInput.id])
-    }
-
-    @Test
-    fun `resolve is deterministic across multiple calls`() {
-        // Arrange
-        val output = createOutputSpec("output")
-        val step = createStep("test-step", outputs = listOf(output))
-        val issues1 = mutableListOf<PlanIssue>()
-        val issues2 = mutableListOf<PlanIssue>()
-
-        // Act
-        val bindings1 = resolver.resolve(step, emptyMap(), issues1)
-        val bindings2 = resolver.resolve(step, emptyMap(), issues2)
-
-        // Assert
-        assertEquals(bindings1, bindings2)
-        assertEquals(issues1.size, issues2.size)
-    }
-
-    @Test
-    fun `resolve does not modify input parameters`() {
-        // Arrange
-        val originalPlannedSteps = mapOf<UUID, PlannedStep>()
-        val originalIssues = mutableListOf<PlanIssue>()
-        val step = createStep("test-step")
-
-        // Act
-        resolver.resolve(step, originalPlannedSteps, originalIssues)
-
-        // Assert
-        assertTrue(originalIssues.isEmpty()) // No validation errors for this simple step
-    }
-
-    @Test
-    fun `resolve returns ResolvedBindings even with errors`() {
-        // Arrange - test with a missing producer output error
-        val producerStepId = UUID.randomUUID()
-        val missingOutputId = UUID.randomUUID()
-        val stepOutputSource = createStepOutputSource(producerStepId, missingOutputId)
-        val input = createInputSpec("input1", stepOutputSource)
-        val output = createOutputSpec("output1")
-        val step = createStep("error-step", inputs = listOf(input), outputs = listOf(output))
-        val issues = mutableListOf<PlanIssue>()
-
-        // Act
-        val bindings = resolver.resolve(step, emptyMap(), issues)
-
-        // Assert
-        assertNotNull(bindings)
-        assertTrue(issues.isNotEmpty()) // Has errors
-        assertEquals(1, bindings.outputs.size) // Outputs still created
-        assertTrue(bindings.inputs.isEmpty()) // Input failed to resolve
-    }
-
-    @Test
-    fun `resolve handles complex step with multiple inputs and outputs`() {
-        // Arrange
-        val producer1Id = UUID.randomUUID()
-        val producer2Id = UUID.randomUUID()
-        val output1Id = UUID.randomUUID()
-        val output2Id = UUID.randomUUID()
-
-        val producer1Bindings = ResolvedBindings(
-            inputs = emptyMap(),
-            outputs = mapOf(output1Id to DataRef(output1Id, "text/csv"))
-        )
-        val producer2Bindings = ResolvedBindings(
-            inputs = emptyMap(),
-            outputs = mapOf(output2Id to DataRef(output2Id, "application/json"))
-        )
-
-        val plannedSteps = mapOf(
-            producer1Id to createPlannedStep(producer1Id, producer1Bindings),
-            producer2Id to createPlannedStep(producer2Id, producer2Bindings)
-        )
-
-        val input1 = createInputSpec("csv-input", createStepOutputSource(producer1Id, output1Id))
-        val input2 = createInputSpec("json-input", createStepOutputSource(producer2Id, output2Id))
-        val output1 = createOutputSpec("result1")
-        val output2 = createOutputSpec("result2")
-
-        val consumerStep = createStep(
-            "complex-consumer",
-            inputs = listOf(input1, input2),
-            outputs = listOf(output1, output2)
-        )
-        val issues = mutableListOf<PlanIssue>()
-
-        // Act
-        val bindings = resolver.resolve(consumerStep, plannedSteps, issues)
-
-        // Assert
-        assertTrue(issues.isEmpty())
-        assertEquals(2, bindings.inputs.size)
-        assertEquals(2, bindings.outputs.size)
-
-        assertEquals(DataRef(output1Id, "text/csv"), bindings.inputs[input1.id])
-        assertEquals(DataRef(output2Id, "application/json"), bindings.inputs[input2.id])
-        assertEquals(DataRef(output1.id, "unknown"), bindings.outputs[output1.id]) // Schema is null
-        assertEquals(DataRef(output2.id, "unknown"), bindings.outputs[output2.id]) // Schema is null
-    }
-
-    @Test
-    fun `helper methods create valid objects with all parameters`() {
-        // Test createStepOutputSource with different stepIds and outputIds
-        val stepId1 = UUID.randomUUID()
-        val stepId2 = UUID.randomUUID()
-        val outputId1 = UUID.randomUUID()
-        val outputId2 = UUID.randomUUID()
-
-        val source1 = createStepOutputSource(stepId1, outputId1)
-        val source2 = createStepOutputSource(stepId2, outputId2)
-
-        // Verify sources are created with correct parameters
-        assertEquals(stepId1, source1.stepId)
-        assertEquals(outputId1, source1.outputId)
-        assertTrue(source1.metadata.isEmpty())
-
-        assertEquals(stepId2, source2.stepId)
-        assertEquals(outputId2, source2.outputId)
-        assertTrue(source2.metadata.isEmpty())
-
-        // Test createInputSpec with different sources
-        val input1 = createInputSpec("test-input-1", source1)
-        val input2 = createInputSpec("test-input-2", source2)
-
-        assertEquals("test-input-1", input1.name)
-        assertEquals("Input test-input-1", input1.description)
-        assertEquals(source1, input1.source)
-        assertTrue(input1.required)
-        assertEquals(null, input1.constraints)
-        assertEquals(null, input1.schema)
-
-        assertEquals("test-input-2", input2.name)
-        assertEquals("Input test-input-2", input2.description)
-        assertEquals(source2, input2.source)
-
-        // Test createStep with different configurations
-        val step1 = createStep("step-1")
-        val step2 = createStep("step-2", inputs = listOf(input1), outputs = listOf(createOutputSpec("out1")))
-
-        assertEquals("step-1", step1.metadata.name)
-        assertEquals("Test step: step-1", step1.metadata.description)
-        assertEquals(Version(1, 0), step1.metadata.version)
-        assertTrue(step1.inputs.isEmpty())
-        assertTrue(step1.outputs.isEmpty())
-        assertEquals("task-step-1", step1.task.name)
-
-        assertEquals("step-2", step2.metadata.name)
-        assertEquals("Test step: step-2", step2.metadata.description)
-        assertEquals(1, step2.inputs.size)
-        assertEquals(1, step2.outputs.size)
-        assertEquals("task-step-2", step2.task.name)
-    }
-
-    @Test
-    fun `helper methods handle edge cases and variations`() {
-        // Test createOutputSpec with different names
-        val output1 = createOutputSpec("simple")
-        val output2 = createOutputSpec("complex-output-name-123")
-
-        assertEquals("simple", output1.name)
-        assertEquals("Output simple", output1.description)
-        assertEquals("output-simple", (output1.destination as RegistryDestination).key)
-        assertEquals(null, output1.schema)
-        assertNotNull(output1.id)
-
-        assertEquals("complex-output-name-123", output2.name)
-        assertEquals("Output complex-output-name-123", output2.description)
-        assertEquals("output-complex-output-name-123", (output2.destination as RegistryDestination).key)
-
-        // Test createPlannedStep with different configurations
-        val bindings1 = ResolvedBindings(emptyMap(), emptyMap())
-        val bindings2 = ResolvedBindings(
-            inputs = mapOf(UUID.randomUUID() to DataRef(UUID.randomUUID(), "input-type")),
-            outputs = mapOf(UUID.randomUUID() to DataRef(UUID.randomUUID(), "output-type"))
-        )
-
-        val stepId1 = UUID.randomUUID()
-        val stepId2 = UUID.randomUUID()
-
-        val plannedStep1 = createPlannedStep(stepId1, bindings1)
-        val plannedStep2 = createPlannedStep(stepId2, bindings2)
-
-        assertEquals(stepId1, plannedStep1.stepId)
-        assertEquals("Planned Step", plannedStep1.name)
-        assertEquals(bindings1, plannedStep1.bindings)
-        assertTrue(plannedStep1.process is CommandSpec)
-        assertEquals("echo", (plannedStep1.process as CommandSpec).executable)
-        assertEquals(1, (plannedStep1.process as CommandSpec).args.size)
-        assertEquals(ExpandedArg.Literal("test"), (plannedStep1.process as CommandSpec).args[0])
-
-        assertEquals(stepId2, plannedStep2.stepId)
-        assertEquals(bindings2, plannedStep2.bindings)
-        assertEquals(1, plannedStep2.bindings.inputs.size)
-        assertEquals(1, plannedStep2.bindings.outputs.size)
-    }
-
-    @Test
-    fun `MockTaskDefinition handles different configurations`() {
-        // Test MockTaskDefinition with different parameter combinations
-        val task1 = MockTaskDefinition(name = "basic-task")
-        val task2 = MockTaskDefinition(
+        val producerMetadata = StepMetadata(
             id = UUID.randomUUID(),
-            name = "detailed-task",
-            description = "A task with description"
+            name = "producer",
+            version = Version( 1, 0 )
         )
-        val task3 = MockTaskDefinition(
-            name = "task-with-custom-id",
-            description = null
+        val producerOutput = createOutputSpec( "shared-output", InMemoryLocation( registryKey = "shared" ) )
+        val producerBindings = ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf( producerOutput.id to ResolvedOutput( producerOutput, producerOutput.location ) )
+        )
+        val plannedProducer = createPlannedStep( producerMetadata, producerBindings )
+
+        val consumerInput = createInputSpec( "shared-output", stepRef = "producer" )
+        val consumerStep = createStep( "consumer", inputs = listOf( consumerInput ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val bindings = resolver.resolve(
+            consumerStep,
+            mapOf( producerMetadata.id to plannedProducer ),
+            issues,
+            executionIndex
         )
 
-        assertEquals("basic-task", task1.name)
-        assertEquals(null, task1.description)
-        assertNotNull(task1.id)
+        // Assert
+        assertTrue( issues.isEmpty() )
+        assertEquals( 1, bindings.inputs.size )
 
-        assertEquals("detailed-task", task2.name)
-        assertEquals("A task with description", task2.description)
-        assertNotNull(task2.id)
+        val resolved = bindings.inputs[consumerInput.id]
+        assertNotNull( resolved )
+        assertEquals( consumerInput.id, resolved.spec.id )
+        // Location should come from producer's output
+        assertTrue( resolved.location is InMemoryLocation )
+    }
 
-        assertEquals("task-with-custom-id", task3.name)
-        assertEquals(null, task3.description)
-        assertNotNull(task3.id)
+    @Test
+    fun `resolve emits ERROR for missing producer step`()
+    {
+        // Arrange
+        val consumerInput = createInputSpec(
+            "missing-output",
+            FileLocation( path = "/data/placeholder.csv" ),
+            stepRef = "non-existent-producer"
+        )
+        val consumerStep = createStep( "consumer", inputs = listOf( consumerInput ) )
+        val issues = mutableListOf<PlanIssue>()
 
-        // Test that all IDs are unique
-        assertTrue(task1.id != task2.id)
-        assertTrue(task1.id != task3.id)
-        assertTrue(task2.id != task3.id)
+        // Act
+        val bindings = resolver.resolve( consumerStep, emptyMap(), issues, executionIndex )
 
-        // Test creating steps with these tasks directly
-        val step1 = createStep("step-with-task-1")
-        val step2 = createStep("step-with-task-2")
+        // Assert
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( PlanIssueSeverity.ERROR, issue.severity )
+        assertEquals( "MISSING_PRODUCER_STEP", issue.code )
+        assertEquals( consumerStep.metadata.id, issue.stepId )
+        assertTrue( issue.message.contains( "non-existent-producer" ) )
 
-        // Verify task names are generated from step names
-        assertEquals("task-step-with-task-1", step1.task.name)
-        assertEquals("task-step-with-task-2", step2.task.name)
-        assertNotNull(step1.task.id)
-        assertNotNull(step2.task.id)
-        assertTrue(step1.task.id != step2.task.id)
+        // Input still included in bindings (with fallback location)
+        assertEquals( 1, bindings.inputs.size )
+    }
+
+    @Test
+    fun `resolve emits ERROR for missing producer output`()
+    {
+        // Arrange
+        val producerMetadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = "producer",
+            version = Version( 1, 0 )
+        )
+        val producerOutput = createOutputSpec( "available-output" )
+        val producerBindings = ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf( producerOutput.id to ResolvedOutput( producerOutput, producerOutput.location ) )
+        )
+        val plannedProducer = createPlannedStep( producerMetadata, producerBindings )
+
+        // Consumer wants "missing-output" but producer only has "available-output"
+        val consumerInput = createInputSpec(
+            "missing-output",
+            FileLocation( path = "/data/placeholder.csv" ),
+            stepRef = "producer"
+        )
+        val consumerStep = createStep( "consumer", inputs = listOf( consumerInput ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val bindings = resolver.resolve(
+            consumerStep,
+            mapOf( producerMetadata.id to plannedProducer ),
+            issues,
+            executionIndex
+        )
+
+        // Assert
+        assertEquals( 1, issues.size )
+        val issue = issues[0]
+        assertEquals( PlanIssueSeverity.ERROR, issue.severity )
+        assertEquals( "MISSING_PRODUCER_OUTPUT", issue.code )
+        assertEquals( consumerStep.metadata.id, issue.stepId )
+        assertTrue( issue.message.contains( "missing-output" ) )
+
+        // Input still included in bindings (with fallback location)
+        assertEquals( 1, bindings.inputs.size )
+    }
+
+    @Test
+    fun `resolve handles multiple inputs from same producer`()
+    {
+        // Arrange
+        val producerMetadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = "multi-output-producer",
+            version = Version( 1, 0 )
+        )
+        val output1 = createOutputSpec( "output1", InMemoryLocation( registryKey = "out1" ) )
+        val output2 = createOutputSpec( "output2", FileLocation( path = "/out2.csv" ) )
+        val producerBindings = ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf(
+                output1.id to ResolvedOutput( output1, output1.location ),
+                output2.id to ResolvedOutput( output2, output2.location )
+            )
+        )
+        val plannedProducer = createPlannedStep( producerMetadata, producerBindings )
+
+        val input1 = createInputSpec( "output1", stepRef = "multi-output-producer" )
+        val input2 = createInputSpec( "output2", stepRef = "multi-output-producer" )
+        val consumerStep = createStep( "consumer", inputs = listOf( input1, input2 ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val bindings = resolver.resolve(
+            consumerStep,
+            mapOf( producerMetadata.id to plannedProducer ),
+            issues,
+            executionIndex
+        )
+
+        // Assert
+        assertTrue( issues.isEmpty() )
+        assertEquals( 2, bindings.inputs.size )
+
+        val resolved1 = bindings.inputs[input1.id]
+        assertNotNull( resolved1 )
+        assertTrue( resolved1.location is InMemoryLocation )
+
+        val resolved2 = bindings.inputs[input2.id]
+        assertNotNull( resolved2 )
+        assertTrue( resolved2.location is FileLocation )
+    }
+
+    // ── Mixed Input Resolution Tests ──────────────────────────────────────────
+
+    @Test
+    fun `resolve handles mix of external and cross-step inputs`()
+    {
+        // Arrange
+        val producerMetadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = "producer",
+            version = Version( 1, 0 )
+        )
+        val producerOutput = createOutputSpec( "produced-output" )
+        val producerBindings = ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf( producerOutput.id to ResolvedOutput( producerOutput, producerOutput.location ) )
+        )
+        val plannedProducer = createPlannedStep( producerMetadata, producerBindings )
+
+        val externalInput = createInputSpec( "external-data", stepRef = null )
+        val crossStepInput = createInputSpec( "produced-output", stepRef = "producer" )
+        val consumerStep = createStep( "consumer", inputs = listOf( externalInput, crossStepInput ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val bindings = resolver.resolve(
+            consumerStep,
+            mapOf( producerMetadata.id to plannedProducer ),
+            issues,
+            executionIndex
+        )
+
+        // Assert
+        assertTrue( issues.isEmpty() )
+        assertEquals( 2, bindings.inputs.size )
+
+        val resolvedExternal = bindings.inputs[externalInput.id]
+        assertNotNull( resolvedExternal )
+        assertEquals( "external-data", resolvedExternal.spec.name )
+
+        val resolvedCrossStep = bindings.inputs[crossStepInput.id]
+        assertNotNull( resolvedCrossStep )
+        assertEquals( "produced-output", resolvedCrossStep.spec.name )
+    }
+
+    @Test
+    fun `resolve handles step with no inputs or outputs`()
+    {
+        // Arrange
+        val step = createStep( "empty-step", inputs = emptyList(), outputs = emptyList() )
+        val issues = mutableListOf<PlanIssue>()
+
+        // Act
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex )
+
+        // Assert
+        assertTrue( issues.isEmpty() )
+        assertTrue( bindings.inputs.isEmpty() )
+        assertTrue( bindings.outputs.isEmpty() )
+    }
+
+    // ── Output Location Resolution Tests ───────────────────────────────────────
+
+    @Test
+    fun `resolve generates workspace-relative path for blank FileLocation output`()
+    {
+        val output = createOutputSpec(
+            "features",
+            FileLocation( path = "", format = FileFormat.CSV )
+        )
+        val step = createStep( "Extract Features", outputs = listOf( output ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex = 1 )
+
+        assertTrue( issues.isEmpty() )
+        val location = bindings.outputs[output.id]!!.location as FileLocation
+        assertEquals( "steps/02_extract_features/outputs/features.csv", location.path )
+    }
+
+    @Test
+    fun `resolve places relative FileLocation output under step outputs directory`()
+    {
+        val output = createOutputSpec(
+            "result",
+            FileLocation( path = "processed/result.json", format = FileFormat.JSON )
+        )
+        val step = createStep( "Process Data", outputs = listOf( output ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+        assertTrue( issues.isEmpty() )
+        val location = bindings.outputs[output.id]!!.location as FileLocation
+        assertEquals( "steps/01_process_data/outputs/processed/result.json", location.path )
+    }
+
+    @Test
+    fun `resolve passes through absolute FileLocation output path unchanged`()
+    {
+        val output = createOutputSpec(
+            "archive",
+            FileLocation( path = "/data/archive/result.parquet", format = FileFormat.PARQUET )
+        )
+        val step = createStep( "Archive Step", outputs = listOf( output ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex = 2 )
+
+        assertTrue( issues.isEmpty() )
+        val location = bindings.outputs[output.id]!!.location as FileLocation
+        assertEquals( "/data/archive/result.parquet", location.path )
+    }
+
+    @Test
+    fun `resolve uses executionIndex to determine step directory name`()
+    {
+        val output = createOutputSpec( "out", FileLocation( path = "", format = FileFormat.CSV ) )
+        val step = createStep( "My Step", outputs = listOf( output ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindingsAt0 = resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+        val bindingsAt4 = resolver.resolve( step, emptyMap(), issues, executionIndex = 4 )
+
+        val pathAt0 = (bindingsAt0.outputs[output.id]!!.location as FileLocation).path
+        val pathAt4 = (bindingsAt4.outputs[output.id]!!.location as FileLocation).path
+
+        assertTrue( pathAt0.startsWith( "steps/01_" ) )
+        assertTrue( pathAt4.startsWith( "steps/05_" ) )
+    }
+
+    // ── External and cross-step input passthrough Tests ──────────────────────────────
+
+    @Test
+    fun `resolve passes external input location through with exact path value unchanged`()
+    {
+        val location = FileLocation( path = "/data/raw_eeg.tsv", format = FileFormat.TSV )
+        val input = createInputSpec( "raw-eeg", location, stepRef = null )
+        val step = createStep( "Validate Input", inputs = listOf( input ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindings = resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+        assertTrue( issues.isEmpty() )
+        assertEquals( location, bindings.inputs[input.id]!!.location )
+    }
+
+    @Test
+    fun `resolve copies exact location object from producer output for cross-step input`()
+    {
+        val producerLocation = FileLocation(
+            path = "steps/01_producer/outputs/result.csv",
+            format = FileFormat.CSV
+        )
+        val producerOutput = createOutputSpec( "result", producerLocation )
+        val producerBindings = ResolvedBindings(
+            inputs = emptyMap(),
+            outputs = mapOf( producerOutput.id to ResolvedOutput( producerOutput, producerLocation ) )
+        )
+        val plannedProducer = createPlannedStep(
+            StepMetadata( id = UUID.randomUUID(), name = "producer", version = Version( 1, 0 ) ),
+            producerBindings
+        )
+
+        val consumerInput = createInputSpec( "result", stepRef = "producer" )
+        val consumerStep = createStep( "consumer", inputs = listOf( consumerInput ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        val bindings = resolver.resolve(
+            consumerStep,
+            mapOf( plannedProducer.metadata.id to plannedProducer ),
+            issues,
+            executionIndex = 1
+        )
+
+        assertTrue( issues.isEmpty() )
+        assertEquals( producerLocation, bindings.inputs[consumerInput.id]!!.location )
+    }
+
+    // ── System-specific path warnings ───────────────────────────────────────
+
+    @Test
+    fun `resolve emits WARNING for Windows drive letter path`()
+    {
+        val input = createInputSpec(
+            "windows-data",
+            FileLocation( path = "C:\\Users\\nigel\\data\\raw.csv", format = FileFormat.CSV ),
+            stepRef = null
+        )
+        val step = createStep( "Load Data", inputs = listOf( input ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+        assertEquals( 1, issues.size )
+        assertEquals( PlanIssueSeverity.WARNING, issues[0].severity )
+        assertEquals( "SYSTEM_SPECIFIC_PATH", issues[0].code )
+    }
+
+    @Test
+    fun `resolve emits WARNING for UNC network path`()
+    {
+        val input = createInputSpec(
+            "network-data",
+            FileLocation( path = "\\\\server\\share\\data.csv", format = FileFormat.CSV ),
+            stepRef = null
+        )
+        val step = createStep( "Load Data", inputs = listOf( input ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+        assertEquals( 1, issues.size )
+        assertEquals( PlanIssueSeverity.WARNING, issues[0].severity )
+        assertEquals( "SYSTEM_SPECIFIC_PATH", issues[0].code )
+    }
+
+    @Test
+    fun `resolve emits WARNING for Unix user home directory path`()
+    {
+        listOf( "/home/nigel/data.csv", "/Users/nigel/data.csv" ).forEach { path ->
+            val input = createInputSpec(
+                "home-data",
+                FileLocation( path = path, format = FileFormat.CSV ),
+                stepRef = null
+            )
+            val step = createStep( "Load Data", inputs = listOf( input ) )
+            val issues = mutableListOf<PlanIssue>()
+
+            resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+            assertEquals( 1, issues.size, "Expected warning for path '$path'" )
+            assertEquals( PlanIssueSeverity.WARNING, issues[0].severity )
+            assertEquals( "SYSTEM_SPECIFIC_PATH", issues[0].code )
+        }
+    }
+
+    @Test
+    fun `resolve does not emit warning for generic absolute path`()
+    {
+        val input = createInputSpec(
+            "shared-data",
+            FileLocation( path = "/data/shared/eeg_study.csv", format = FileFormat.CSV ),
+            stepRef = null
+        )
+        val step = createStep( "Load Data", inputs = listOf( input ) )
+        val issues = mutableListOf<PlanIssue>()
+
+        resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+        assertTrue( issues.none { it.code == "SYSTEM_SPECIFIC_PATH" } )
+    }
+
+    @Test
+    fun `resolve does not emit warning for relative or blank paths`()
+    {
+        listOf( "", "data/raw.csv", "./data/raw.csv" ).forEach { path ->
+            val input = createInputSpec(
+                "relative-data",
+                FileLocation( path = path, format = FileFormat.CSV ),
+                stepRef = null
+            )
+            val step = createStep( "Load Data", inputs = listOf( input ) )
+            val issues = mutableListOf<PlanIssue>()
+
+            resolver.resolve( step, emptyMap(), issues, executionIndex = 0 )
+
+            assertTrue(
+                issues.none { it.code == "SYSTEM_SPECIFIC_PATH" },
+                "Path '$path' should not trigger a warning"
+            )
+        }
     }
 }

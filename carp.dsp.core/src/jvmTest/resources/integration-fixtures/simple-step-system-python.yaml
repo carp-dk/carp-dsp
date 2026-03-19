@@ -1,0 +1,49 @@
+schemaVersion: "1.0"
+metadata:
+  id: "simple-step-system-python"
+  name: "Simple Step - System Python"
+  description: "Single step workflow using system Python (no environment setup)"
+  version: "1.0"
+  tags:
+    - "python"
+    - "system"
+    - "minimal"
+
+environments:
+  "env-system":
+    name: "system"
+    kind: "system"
+    spec: {}
+
+steps:
+  - id: "step-001"
+    metadata:
+      name: "Process Data"
+      description: "Simple Python script to process CSV"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-001"
+      name: "process-csv"
+      executable: "python"
+      args:
+        - "scripts/simple_process.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Input data CSV file"
+        source:
+          type: "file"
+          path: "inputs/input.csv"
+    outputs:
+      - id: "output-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Processed data CSV file"
