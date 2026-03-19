@@ -27,6 +27,24 @@ data class ScriptEntryPointDescriptor( val scriptPath: String ) : PythonEntryPoi
 @SerialName("module")
 data class ModuleEntryPointDescriptor( val moduleName: String ) : PythonEntryPointDescriptor
 
+// ── REntryPointDescriptor ──────────────────────────────────────────────────────
+
+/**
+ * Sealed descriptor for an R entry point.
+ *
+ * Mirrors [dk.cachet.carp.analytics.domain.tasks.REntryPoint] using plain strings.
+ *
+ * Variants:
+ * - [RScriptEntryPointDescriptor] — run an `.R` or `.Rmd` file (`Rscript <scriptPath> …`).
+ */
+@Serializable
+sealed interface REntryPointDescriptor
+
+/** Run an R script at [scriptPath]. Maps to [dk.cachet.carp.analytics.domain.tasks.RScript]. */
+@Serializable
+@SerialName("r-script")
+data class RScriptEntryPointDescriptor( val scriptPath: String ) : REntryPointDescriptor
+
 // ── TaskDescriptor ────────────────────────────────────────────────────────────
 
 /**
@@ -39,6 +57,7 @@ data class ModuleEntryPointDescriptor( val moduleName: String ) : PythonEntryPoi
  * Variants:
  * - [CommandTaskDescriptor] — arbitrary external-process invocation.
  * - [PythonTaskDescriptor] — Python script or module execution.
+ * - [RTaskDescriptor] — R script execution.
  * - [InProcessTaskDescriptor] — operation executed inside the CARP-DSP host process.
  */
 @Serializable
@@ -99,6 +118,27 @@ data class PythonTaskDescriptor(
     override val name: String,
     override val description: String? = null,
     val entryPoint: PythonEntryPointDescriptor,
+    val args: List<String> = emptyList(),
+) : TaskDescriptor
+
+// ── RTaskDescriptor ───────────────────────────────────────────────────────────
+
+/**
+ * Descriptor for an R script execution.
+ *
+ * Maps to [dk.cachet.carp.analytics.domain.tasks.RTaskDefinition].
+ *
+ * @property id Optional stable UUID. Omit in authored YAML; the importer generates one.
+ * @property entryPoint How to invoke R — run an [RScriptEntryPointDescriptor].
+ * @property args Structured argument list — each element is a string argument token.
+ */
+@Serializable
+@SerialName("r")
+data class RTaskDescriptor(
+    override val id: String? = null,
+    override val name: String,
+    override val description: String? = null,
+    val entryPoint: RScriptEntryPointDescriptor,
     val args: List<String> = emptyList(),
 ) : TaskDescriptor
 

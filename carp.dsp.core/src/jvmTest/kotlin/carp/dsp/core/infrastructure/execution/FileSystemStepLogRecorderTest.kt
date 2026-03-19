@@ -7,19 +7,14 @@ import dk.cachet.carp.analytics.application.plan.InTasksRun
 import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.runtime.CommandResult
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.readText
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class FileSystemStepLogRecorderTest {
 
@@ -33,7 +28,8 @@ class FileSystemStepLogRecorderTest {
         recorder = FileSystemStepLogRecorder()
         workspace = ExecutionWorkspace(
             runId = UUID.randomUUID(),
-            executionRoot = tmpDir.toString()
+            executionRoot = tmpDir.toString(),
+            workflowName = "test-workflow",
         )
     }
 
@@ -182,8 +178,10 @@ class FileSystemStepLogRecorderTest {
 
     private fun createTestStep(): PlannedStep =
         PlannedStep(
-            stepId = UUID.randomUUID(),
-            name = "test-step",
+            metadata = StepMetadata(
+                id = UUID.randomUUID(),
+                name = "test-step"
+            ),
             process = InTasksRun(operationId = "test.operation"),
             bindings = ResolvedBindings(),
             environmentRef = UUID.randomUUID()

@@ -1,0 +1,143 @@
+schemaVersion: "1.0"
+metadata:
+  id: "mixed-environment-three-step"
+  name: "Mixed Environment Three Step Pipeline"
+  description: "Three-step workflow across system Python, R, and Pixi Python environments"
+  version: "1.0"
+  tags:
+    - "python"
+    - "r"
+    - "pixi"
+    - "system"
+    - "mixed-environments"
+    - "three-step"
+    - "fixture"
+
+environments:
+  env-system:
+    name: "system"
+    kind: "system"
+    spec: {}
+
+  env-r:
+    name: "r-processing"
+    kind: "r"
+    spec:
+      rVersion:
+        - "4.5.3"
+
+  env-pixi:
+    name: "python-pixi-env"
+    kind: "pixi"
+    spec:
+      dependencies: []
+      pythonVersion:
+        - "3.11"
+      channels:
+        - "conda-forge"
+
+steps:
+  # Step 1: Load — system Python, no environment setup
+  - id: "load-data"
+    metadata:
+      name: "Load Data"
+      description: "Read input CSV and add a row_id column"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-load"
+      name: "load-data"
+      executable: "python"
+      args:
+        - "scripts/step1_load.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Raw input data"
+        source:
+          type: "file"
+          path: "inputs/input.csv"
+    outputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Validated data with row_id"
+
+  # Step 2: Transform — R, uppercase string values
+  - id: "transform-data"
+    metadata:
+      name: "Transform Data"
+      description: "Uppercase all string values using R"
+      version: "1.0"
+    environmentId: "env-r"
+    dependsOn:
+      - "load-data"
+    task:
+      type: "r"
+      id: "task-transform"
+      name: "transform-data"
+      description: "Uppercase string columns with R"
+      entryPoint:
+        type: "r-script"
+        scriptPath: "scripts/step2_transform.R"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "load-data"
+          outputId: "loaded-csv"
+    outputs:
+      - id: "transformed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Data with uppercased values"
+
+  # Step 3: Finalize — Pixi Python, append status column
+  - id: "finalize-data"
+    metadata:
+      name: "Finalize Data"
+      description: "Add a status column using Pixi Python"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "transform-data"
+    task:
+      type: "python"
+      id: "task-finalize"
+      name: "finalize-data"
+      description: "Add status column with Pixi Python"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/step3_finalize.py"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "transformed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "transform-data"
+          outputId: "transformed-csv"
+    outputs:
+      - id: "final-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Final output with status column"

@@ -147,7 +147,7 @@ class MetadataImporterTest
         val stepId = UUID.randomUUID()
         val d = StepMetadataDescriptor( name = "Step One" )
 
-        val result = MetadataImporter.importStepMetadata( stepId, d )
+        val result = MetadataImporter.importStepMetadata( stepId, null, d)
         assertEquals( stepId, result.id )
     }
 
@@ -157,7 +157,17 @@ class MetadataImporterTest
         val stepId = UUID.randomUUID()
         val d = StepMetadataDescriptor( name = "Preprocess" )
 
-        assertEquals( "Preprocess", MetadataImporter.importStepMetadata( stepId, d ).name )
+        assertEquals( "Preprocess", MetadataImporter.importStepMetadata( stepId, null, d ).name )
+    }
+
+    @Test
+    fun `importStepMetadata preserves stepDescriptorId`()
+    {
+        val stepId = UUID.randomUUID()
+        val descriptorId = "custom-descriptor-id"
+        val d = StepMetadataDescriptor( name = "Step" )
+
+        assertEquals( descriptorId, MetadataImporter.importStepMetadata( stepId, descriptorId, d ).descriptorId )
     }
 
     @Test
@@ -166,7 +176,7 @@ class MetadataImporterTest
         val stepId = UUID.randomUUID()
         val d = StepMetadataDescriptor( name = "Step", description = "Does stuff" )
 
-        assertEquals( "Does stuff", MetadataImporter.importStepMetadata( stepId, d ).description )
+        assertEquals( "Does stuff", MetadataImporter.importStepMetadata( stepId, null, d ).description )
     }
 
     @Test
@@ -175,7 +185,7 @@ class MetadataImporterTest
         val stepId = UUID.randomUUID()
         val d = StepMetadataDescriptor( name = "Step" )
 
-        assertNull( MetadataImporter.importStepMetadata( stepId, d ).description )
+        assertNull( MetadataImporter.importStepMetadata( stepId, null, d ).description )
     }
 
     @Test
@@ -184,7 +194,7 @@ class MetadataImporterTest
         val stepId = UUID.randomUUID()
         val d = StepMetadataDescriptor( name = "Step", version = "3.2" )
 
-        assertEquals( Version(3, 2), MetadataImporter.importStepMetadata( stepId, d ).version )
+        assertEquals( Version(3, 2), MetadataImporter.importStepMetadata( stepId, null, d ).version )
     }
 
     @Test
@@ -194,7 +204,7 @@ class MetadataImporterTest
         val d = StepMetadataDescriptor( name = "Step" )
 
         // descriptor version defaults to null → parseVersion("1.0") → Version(1, 0)
-        assertEquals( Version(1, 0), MetadataImporter.importStepMetadata( stepId, d ).version )
+        assertEquals( Version(1, 0), MetadataImporter.importStepMetadata( stepId, null, d ).version )
     }
 
     // ── importStepMetadata: null descriptor ───────────────────────────────────
@@ -204,7 +214,7 @@ class MetadataImporterTest
     {
         val stepId = UUID.randomUUID()
 
-        val result = MetadataImporter.importStepMetadata( stepId, null )
+        val result = MetadataImporter.importStepMetadata( stepId, null, null )
         assertEquals( stepId.toString(), result.name )
     }
 
@@ -213,7 +223,7 @@ class MetadataImporterTest
     {
         val stepId = UUID.randomUUID()
 
-        assertNull( MetadataImporter.importStepMetadata( stepId, null ).description )
+        assertNull( MetadataImporter.importStepMetadata( stepId, null, null).description )
     }
 
     @Test
@@ -221,7 +231,7 @@ class MetadataImporterTest
     {
         val stepId = UUID.randomUUID()
 
-        assertEquals( Version(1, 0), MetadataImporter.importStepMetadata( stepId, null ).version )
+        assertEquals( Version(1, 0), MetadataImporter.importStepMetadata( stepId, null, null ).version )
     }
 
     @Test
@@ -229,7 +239,7 @@ class MetadataImporterTest
     {
         val stepId = UUID.randomUUID()
 
-        assertEquals( stepId, MetadataImporter.importStepMetadata( stepId, null ).id )
+        assertEquals( stepId, MetadataImporter.importStepMetadata( stepId, null, null ).id )
     }
 
     // ── tryParseUuid

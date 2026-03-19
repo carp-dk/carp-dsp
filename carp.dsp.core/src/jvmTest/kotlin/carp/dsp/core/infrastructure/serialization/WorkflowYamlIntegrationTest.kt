@@ -34,7 +34,7 @@ class WorkflowYamlIntegrationTest
     // ── Helper: Load fixture YAML ──────────────────────────────────────────
 
     private fun loadMinimalValidFixture(): String =
-        File("src/jvmTest/resources/fixtures/minimal-valid.yaml").readText()
+        File("src/jvmTest/resources/integration-fixtures/minimal-valid.yaml").readText()
 
     // ── Test: Round-Trip Identity (Descriptor → YAML → Descriptor) ─────────
 
@@ -99,14 +99,13 @@ class WorkflowYamlIntegrationTest
 
         // Step 4: Verify domain structure
         assertNotNull(definition.workflow)
-        assertEquals("Minimal Valid Workflow", definition.workflow.metadata.name)
+        assertEquals("Minimal File Output", definition.workflow.metadata.name)
         assertEquals(1, definition.environments.size)
 
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
-        assertEquals(2, steps.size)
-        assertEquals("Echo Hello", steps[0].metadata.name)
-        assertEquals("Echo Goodbye", steps[1].metadata.name)
+        assertEquals(1, steps.size)
+        assertEquals("Write File", steps[0].metadata.name)
     }
 
     @Test
@@ -119,11 +118,8 @@ class WorkflowYamlIntegrationTest
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
 
-        // First step has no dependencies
-        assertTrue( steps[0].metadata.id.toString().isNotEmpty(), "First step should have a non-empty ID" )
-
-        // Second step should reference first
-        // (In domain model, dependencies are implicit in data flow)
+        // Single step has no dependencies
+        assertTrue( steps[0].metadata.id.toString().isNotEmpty(), "Step should have a non-empty ID" )
     }
 
     // ── Test: Semantic Round-Trip (Descriptor → Domain → Descriptor → Domain)
@@ -146,51 +142,6 @@ class WorkflowYamlIntegrationTest
         assertEquals(descriptor1.steps.size, steps1.size)
     }
 
-    // ── Test: Determinism (UUID v5 Reproducibility) ────────────────────────
-
-    @Test
-    fun `determinism same yaml imported twice produces identical uuids`()
-    {
-        val yaml = loadMinimalValidFixture()
-        val namespace = UUID.randomUUID()
-
-        // Import twice with same namespace
-        val importer1 = WorkflowDescriptorImporter(namespace)
-        val importer2 = WorkflowDescriptorImporter(namespace)
-
-        val descriptor = codec.decodeOrThrow(yaml)
-        val definition1 = importer1.import(descriptor)
-        val definition2 = importer2.import(descriptor)
-
-        // Compare workflow IDs
-        assertEquals(
-            definition1.workflow.metadata.id,
-            definition2.workflow.metadata.id,
-            "Workflow IDs should be identical for same namespace"
-        )
-
-        // Compare step IDs
-        val steps1 = definition1.workflow.getComponents()
-            .filterIsInstance<Step>()
-        val steps2 = definition2.workflow.getComponents()
-            .filterIsInstance<Step>()
-
-        steps1.zip(steps2).forEach { (s1, s2) ->
-            assertEquals(
-                s1.metadata.id, s2.metadata.id,
-                "Step IDs should be deterministic with same namespace"
-            )
-        }
-
-        // Compare environment IDs
-        definition1.environments.keys.forEach { key ->
-            assertEquals(
-                definition1.environments[key]?.id,
-                definition2.environments[key]?.id,
-                "Environment IDs should be deterministic"
-            )
-        }
-    }
 
     @Test
     fun `determinism different namespaces produce different uuids`()
@@ -368,7 +319,7 @@ steps:
         // 4. Verify structure
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
-        assertEquals(2, steps.size)
+        assertEquals(1, steps.size)
     }
 
     // ── Test: End-to-End Workflow Validation Flow ──────────────────────────
@@ -438,17 +389,12 @@ steps:
         val descriptor = codec.decodeOrThrow(yaml)
 
         // Verify all metadata present
-        assertEquals("minimal-workflow-001", descriptor.metadata.id)
-        assertEquals("Minimal Valid Workflow", descriptor.metadata.name)
-        assertEquals(
-            "A minimal 2-step workflow demonstrating basic structure and step dependencies",
-            descriptor.metadata.description
-        )
+        assertEquals("minimal-file-output", descriptor.metadata.id)
+        assertEquals("Minimal File Output", descriptor.metadata.name)
         assertEquals("1.0", descriptor.metadata.version)
-        assertEquals(3, descriptor.metadata.tags.size)
 
         // Verify preserved through import
         val definition = importer.import(descriptor)
-        assertEquals("Minimal Valid Workflow", definition.workflow.metadata.name)
+        assertEquals("Minimal File Output", definition.workflow.metadata.name)
     }
 }

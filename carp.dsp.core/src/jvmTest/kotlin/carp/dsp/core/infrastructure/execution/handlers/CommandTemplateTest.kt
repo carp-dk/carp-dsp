@@ -34,6 +34,7 @@ class CommandTemplateTest {
     fun `expands pixi template`() {
         val ref = PixiEnvironmentRef(
             id = "test-001",
+            name = "test-env",
             dependencies = emptyList()
         )
 

@@ -31,7 +31,7 @@ class WorkflowYamlFixtureTest
     private fun loadFixture( name: String ): String =
         checkNotNull(
             WorkflowYamlFixtureTest::class.java.classLoader
-                .getResourceAsStream("fixtures/$name")
+                .getResourceAsStream("integration-fixtures/$name")
         ) { "Fixture not found: fixtures/$name" }
             .bufferedReader()
             .readText()

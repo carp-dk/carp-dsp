@@ -54,8 +54,9 @@ class MockCommandRunner : CommandRunner {
                     spec.args.map { arg ->
                     when (arg) {
                         is ExpandedArg.Literal -> arg.value
-                        is ExpandedArg.DataReference -> arg.dataRefId.toString()
+                        is ExpandedArg.DataReference -> arg.id.toString()
                         is ExpandedArg.PathSubstitution -> arg.template
+                        is ExpandedArg.EnvironmentVariable -> arg.template
                     }
                 }
                 )
@@ -96,8 +97,9 @@ class MockCommandRunner : CommandRunner {
                 command.args.map { arg ->
                 when (arg) {
                     is ExpandedArg.Literal -> arg.value
-                    is ExpandedArg.DataReference -> arg.dataRefId.toString()
+                    is ExpandedArg.DataReference -> arg.id.toString()
                     is ExpandedArg.PathSubstitution -> arg.template
+                    is ExpandedArg.EnvironmentVariable -> arg.template
                 }
             }
             )

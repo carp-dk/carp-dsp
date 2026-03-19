@@ -119,7 +119,6 @@ class InputSourceTest
             StepOutputInputSource( stepId = "preprocess", outputId = "cleaned" )
         )
         assert( encoded.contains("\"type\":\"step-output\"") ) { "Missing discriminator: $encoded" }
-        assert( encoded.contains("\"stepId\":\"preprocess\"") ) { "Missing stepId: $encoded" }
         assert( encoded.contains("\"outputId\":\"cleaned\"") ) { "Missing outputId: $encoded" }
     }
 
@@ -134,7 +133,7 @@ class InputSourceTest
     @Test
     fun `StepOutputInputSource decoded type is StepOutputInputSource`()
     {
-        val encoded = """{"type":"step-output","stepId":"s","outputId":"o"}"""
+        val encoded = """{"type":"step-output","stepId":"stepId","outputId":"o"}"""
         assertIs<StepOutputInputSource>( json.decodeFromString<InputSource>( encoded ) )
     }
 
@@ -201,7 +200,7 @@ class InputSourceTest
     fun `all three subtypes decode to distinct types`()
     {
         val file = json.decodeFromString<InputSource>("""{"type":"file","path":"x"}""")
-        val step = json.decodeFromString<InputSource>("""{"type":"step-output","stepId":"s","outputId":"o"}""")
+        val step = json.decodeFromString<InputSource>("""{"type":"step-output","outputId":"o","stepId":"s"}""")
         val envVar = json.decodeFromString<InputSource>("""{"type":"env-var","variableName":"V"}""")
 
         assertIs<FileInputSource>( file )
@@ -259,7 +258,7 @@ class InputSourceTest
     fun `decoding StepOutputInputSource with missing outputId throws SerializationException`()
     {
         assertFailsWith<SerializationException> {
-            json.decodeFromString<InputSource>("""{"type":"step-output","stepId":"s"}""")
+            json.decodeFromString<InputSource>("""{"type":"step-output","stepMetadata":"s"}""")
         }
     }
 

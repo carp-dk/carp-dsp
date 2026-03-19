@@ -1,6 +1,8 @@
 package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.*
+import dk.cachet.carp.analytics.application.exceptions.ProcessExecutionException
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedTaskTypeException
 import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
@@ -54,13 +56,13 @@ internal object PortExporter
     fun exportOutputPort( spec: OutputDataSpec ): DataPortDescriptor =
         DataPortDescriptor(
             id = spec.id.toString(),
-            descriptor = exportDataSchema( spec.schema ),
+            descriptor = exportDataSchema( spec.schema),
         )
 
     private fun exportDataSchema( schema: DataSchema? ): DataDescriptor? =
         schema?.let {
             DataDescriptor(
-                type = it.format.name.lowercase(),
+                type = it.format.extension,
                 format = it.encoding,
             )
         }
@@ -69,7 +71,7 @@ internal object PortExporter
 // ── TaskExporter ──────────────────────────────────────────────────────────────
 
 /**
- * Maps [TaskDefinition] variants and their [ArgToken] lists to descriptor equivalents.
+ * Maps [TaskDefinition] variants and their [dk.cachet.carp.analytics.domain.tasks.ArgToken] lists to descriptor equivalents.
  */
 internal object TaskExporter
 {
@@ -78,7 +80,10 @@ internal object TaskExporter
         {
             is CommandTaskDefinition -> exportCommandTask( task )
             is PythonTaskDefinition -> exportPythonTask( task )
-            else -> throw UnsupportedTaskTypeException( task::class.simpleName ?: "unknown" )
+            else -> throw UnsupportedTaskTypeException(
+                message = "Unsupported task type: '${task::class.simpleName ?: "unknown"}'",
+                typeName = task::class.simpleName ?: "unknown"
+            )
         }
 
     fun exportCommandTask( task: CommandTaskDefinition ): CommandTaskDescriptor =
@@ -153,14 +158,14 @@ internal object TaskExporter
             is InputPathSubstitutionRef -> {
                 val index = inputs.indexOfFirst { it.id == token.inputId }
                 val refPattern = if (index >= 0) "input.$index" else "input.${token.inputId}"
-                token.template.replace("$()", "\$(input.$refPattern)")
+                token.template.replace("$()", "$(input.$refPattern)")
             }
 
             // Output path substitution: "--flag=$(output.INDEX)" or "--flag=$(output.UUID)"
             is OutputPathSubstitutionRef -> {
                 val index = outputs.indexOfFirst { it.id == token.outputId }
                 val refPattern = if (index >= 0) "output.$index" else "output.${token.outputId}"
-                token.template.replace("$()", "\$(output.$refPattern)")
+                token.template.replace("$()", "P$(output.$refPattern)")
             }
         }
     }
@@ -235,7 +240,7 @@ internal object EnvironmentExporter
  * Supported [TaskDefinition] types:
  * - [CommandTaskDefinition] → [CommandTaskDescriptor]
  * - [PythonTaskDefinition]  → [PythonTaskDescriptor]
- * - Any unknown type        → throws [UnsupportedTaskTypeException]
+ * - Any unknown type        → throws [ProcessExecutionException]
  *
  * Delegates to focused sub-exporters:
  * - [MetadataExporter] — workflow / step metadata
@@ -283,12 +288,3 @@ class WorkflowDescriptorExporter
     internal fun exportEnvironment( env: EnvironmentDefinition ): EnvironmentDescriptor =
         EnvironmentExporter.exportEnvironment( env )
 }
-
-/**
- * Thrown when the exporter encounters a [TaskDefinition] subtype it does not know how to map.
- */
-class UnsupportedTaskTypeException( typeName: String ) :
-    IllegalArgumentException(
-        "Cannot export TaskDefinition of type '$typeName'. " +
-            "Register a handler in TaskExporter.exportTask()."
-    )

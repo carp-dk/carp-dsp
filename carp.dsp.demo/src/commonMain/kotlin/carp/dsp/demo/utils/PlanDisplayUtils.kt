@@ -63,7 +63,7 @@ object PlanDisplayUtils {
             println("${indent}(no steps)")
         } else {
             plan.steps.forEachIndexed { idx, step ->
-                println("${indent}${idx + 1}. ${step.stepId} :: ${step.name}")
+                println("${indent}${idx + 1}. ${step.metadata.id} :: ${step.metadata.name}")
             }
         }
     }

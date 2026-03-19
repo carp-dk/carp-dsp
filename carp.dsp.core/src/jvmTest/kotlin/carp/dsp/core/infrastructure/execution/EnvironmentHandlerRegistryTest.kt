@@ -30,6 +30,7 @@ class EnvironmentHandlerRegistryTest {
     fun `selects Pixi handler for PixiEnvironmentRef`() {
         val ref = PixiEnvironmentRef(
             id = "test-001",
+            name = "test-env",
             dependencies = emptyList()
         )
 
@@ -66,7 +67,7 @@ class EnvironmentHandlerRegistryTest {
     @Test
     fun `registry contains all required handlers`() {
         val conda = CondaEnvironmentRef(id = "test", name = "env", dependencies = emptyList())
-        val pixi = PixiEnvironmentRef(id = "test", dependencies = emptyList())
+        val pixi = PixiEnvironmentRef(id = "test", name = "Pixienv", dependencies = emptyList() )
         val system = SystemEnvironmentRef(id = "test")
 
         val condaHandler = EnvironmentHandlerRegistry.getHandler(conda)
@@ -82,6 +83,7 @@ class EnvironmentHandlerRegistryTest {
     fun `selects R handler for REnvironmentRef`() {
         val ref = REnvironmentRef(
             id = "r-env-001",
+            name = "R Environment",
             rVersion = "4.3.0",
             rPackages = listOf("ggplot2")
         )
@@ -94,9 +96,9 @@ class EnvironmentHandlerRegistryTest {
     @Test
     fun `registry contains all four handlers`() {
         val conda = CondaEnvironmentRef(id = "test", name = "env", dependencies = emptyList())
-        val pixi = PixiEnvironmentRef(id = "test", dependencies = emptyList())
+        val pixi = PixiEnvironmentRef(id = "test", name = "pixi-env", dependencies = emptyList())
         val system = SystemEnvironmentRef(id = "test")
-        val r = REnvironmentRef(id = "test", rVersion = "4.3.0", rPackages = listOf("pkg"))
+        val r = REnvironmentRef(id = "test", name = "R Env", rVersion = "4.3.0", rPackages = listOf("pkg"))
 
         val condaHandler = EnvironmentHandlerRegistry.getHandler(conda)
         val pixiHandler = EnvironmentHandlerRegistry.getHandler(pixi)

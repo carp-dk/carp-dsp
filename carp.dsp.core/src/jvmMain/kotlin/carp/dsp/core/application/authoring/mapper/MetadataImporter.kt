@@ -42,6 +42,7 @@ internal object MetadataImporter
      */
     fun importStepMetadata(
         stepId: UUID,
+        stepDescriptorId: String?,
         stepMetadataDescriptor: StepMetadataDescriptor?
     ): StepMetadata =
         StepMetadata(
@@ -49,6 +50,7 @@ internal object MetadataImporter
             name = stepMetadataDescriptor?.name ?: stepId.toString(),
             description = stepMetadataDescriptor?.description,
             version = parseVersion( stepMetadataDescriptor?.version ?: "1.0" ),
+            descriptorId = stepDescriptorId
         )
 
     /**

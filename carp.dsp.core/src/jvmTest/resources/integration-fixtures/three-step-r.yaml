@@ -1,0 +1,127 @@
+schemaVersion: "1.0"
+metadata:
+  id: "three-step-r"
+  name: "Three Steps - R Pipeline"
+  description: "Three-step R workflow using system R: load, transform, finalize"
+  version: "1.0"
+  tags:
+    - "r"
+    - "system"
+    - "three-step"
+    - "fixture"
+
+environments:
+  r-env:
+    name: "r-processing"
+    kind: "r"
+    spec:
+      rVersion:
+        - "4.5.3"
+
+steps:
+  # Step 1: Load data — validates input and adds row_id
+  - id: "load-data"
+    metadata:
+      name: "Load Data"
+      description: "Read input CSV and add a row_id column"
+      version: "1.0"
+    environmentId: "r-env"
+    dependsOn: []
+    task:
+      type: "r"
+      id: "task-load"
+      name: "load-data"
+      description: "Load CSV and add row_id"
+      entryPoint:
+        type: "r-script"
+        scriptPath: "scripts/step1_load.R"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Raw input data"
+        source:
+          type: "file"
+          path: "inputs/input.csv"
+    outputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Validated data with row_id"
+
+  # Step 2: Transform — uppercases string values
+  - id: "transform-data"
+    metadata:
+      name: "Transform Data"
+      description: "Uppercase all string values"
+      version: "1.0"
+    environmentId: "r-env"
+    dependsOn:
+      - "load-data"
+    task:
+      type: "r"
+      id: "task-transform"
+      name: "transform-data"
+      description: "Uppercase string columns"
+      entryPoint:
+        type: "r-script"
+        scriptPath: "scripts/step2_transform.R"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "loaded-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "load-data"
+          outputId: "loaded-csv"
+    outputs:
+      - id: "transformed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Data with uppercased values"
+
+  # Step 3: Finalize — appends a status column
+  - id: "finalize-data"
+    metadata:
+      name: "Finalize Data"
+      description: "Add a status column to mark processing complete"
+      version: "1.0"
+    environmentId: "r-env"
+    dependsOn:
+      - "transform-data"
+    task:
+      type: "r"
+      id: "task-finalize"
+      name: "finalize-data"
+      description: "Add status column"
+      entryPoint:
+        type: "r-script"
+        scriptPath: "scripts/step3_finalize.R"
+      args:
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "transformed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "transform-data"
+          outputId: "transformed-csv"
+    outputs:
+      - id: "final-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Final output with status column"

@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  *
  * These represent where data comes from for a step's inputs.
  *
- * Maps to domain-level [dk.cachet.carp.analytics.domain.data.DataSource] types during import.
+ * Maps to domain-level [dk.cachet.carp.analytics.domain.data.DataSourceType] types during import.
  */
 @Serializable
 sealed interface InputSource
@@ -43,7 +43,6 @@ data class FileInputSource(val path: String) : InputSource
  * ```yaml
  * source:
  *   type: "step-output"
- *   stepId: "validate-input"
  *   outputId: "validated-eeg"
  * ```
  */

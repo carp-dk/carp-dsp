@@ -3,7 +3,9 @@ package carp.dsp.core.application.authoring.mapper
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import carp.dsp.core.application.environment.REnvironmentDefinition
 import carp.dsp.core.application.environment.SystemEnvironmentDefinition
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedEnvironmentKindException
 import dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition
 import dk.cachet.carp.common.application.UUID
 
@@ -51,7 +53,7 @@ internal object EnvironmentImporter
      * @param id The environment UUID (already resolved or generated)
      * @param environmentDescriptor The environment descriptor
      * @return Domain EnvironmentDefinition (CondaEnvironmentDefinition or PixiEnvironmentDefinition)
-     * @throws UnsupportedEnvironmentKindException if kind is not recognized
+     * @throws dk.cachet.carp.analytics.application.exceptions.UnsupportedEnvironmentKindException if kind is not recognized
      */
     fun importEnvironment(
         id: UUID,
@@ -84,24 +86,27 @@ internal object EnvironmentImporter
                 pythonVersion = version,
                 channels = channels,
             )
+            "r" -> REnvironmentDefinition(
+                id = id,
+                name = environmentDescriptor.name,
+                rVersion = environmentDescriptor.spec["rVersion"]?.firstOrNull() ?: "4.3.0",
+                rPackages = environmentDescriptor.spec["rPackages"] ?: emptyList(),
+                renvLockFile = environmentDescriptor.spec["renvLockFile"]?.firstOrNull(),
+                installationPath = environmentDescriptor.spec["installationPath"]?.firstOrNull(),
+                dependencies = deps,
+                environmentVariables = envVars
+            )
             "system" -> SystemEnvironmentDefinition(
                 id = id,
                 name = environmentDescriptor.name,
                 dependencies = deps,
                 environmentVariables = envVars,
             )
-            else -> throw UnsupportedEnvironmentKindException( environmentDescriptor.kind )
+            else -> throw UnsupportedEnvironmentKindException(
+                message = "Unsupported environment kind: '$environmentDescriptor.kind'",
+                kind = environmentDescriptor.kind
+            )
         }
     }
 }
 
-/**
- * Thrown when the importer encounters an [EnvironmentDescriptor] with a `kind` it
- * does not know how to map to a concrete [EnvironmentDefinition].
- */
-class UnsupportedEnvironmentKindException( kind: String ) :
-    IllegalArgumentException(
-        "Cannot import EnvironmentDescriptor with kind '$kind'. " +
-            "Supported kinds: conda, pixi, system. " +
-            "Register a handler in EnvironmentImporter.importEnvironment()."
-    )

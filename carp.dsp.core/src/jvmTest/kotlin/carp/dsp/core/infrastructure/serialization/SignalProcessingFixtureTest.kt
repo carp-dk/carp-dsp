@@ -37,7 +37,7 @@ class SignalProcessingFixtureTest
     private val importer = WorkflowDescriptorImporter()
 
     private fun loadSignalProcessingFixture(): String =
-        File("src/jvmTest/resources/fixtures/signal-processing.yaml").readText()
+        File("src/jvmTest/resources/integration-fixtures/signal-processing.yaml").readText()
 
     // ── Test: Parse ──────────────────────────────────────────────────────────
 
@@ -62,9 +62,8 @@ class SignalProcessingFixtureTest
         assertEquals("EEG Signal Processing Pipeline", descriptor.metadata.name)
 
         // Check environments
-        assertEquals(2, descriptor.environments.size)
+        assertEquals(1, descriptor.environments.size)
         assertTrue(descriptor.environments.containsKey("conda-eeg"))
-        assertTrue(descriptor.environments.containsKey("report-env"))
 
         // Check steps
         assertEquals(4, descriptor.steps.size)
@@ -231,7 +230,7 @@ class SignalProcessingFixtureTest
         val descriptor = codec.decodeOrThrow(yaml)
         val definition = importer.import(descriptor)
 
-        assertEquals(2, definition.environments.size, "Domain model should have 2 environments")
+        assertEquals(1, definition.environments.size, "Domain model should have 1 environment")
     }
 
     // ── Test: End-to-End Validation ──────────────────────────────────────────
@@ -259,6 +258,6 @@ class SignalProcessingFixtureTest
         val steps = definition.workflow.getComponents()
             .filterIsInstance<Step>()
         assertEquals(4, steps.size)
-        assertEquals(2, definition.environments.size)
+        assertEquals(1, definition.environments.size)
     }
 }

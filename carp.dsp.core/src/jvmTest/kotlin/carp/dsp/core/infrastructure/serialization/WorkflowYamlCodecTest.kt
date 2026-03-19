@@ -10,6 +10,7 @@ import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepMetadataDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
+import dk.cachet.carp.analytics.application.exceptions.YamlCodecException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
