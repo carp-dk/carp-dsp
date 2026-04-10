@@ -1,5 +1,6 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.application.execution.ExecutionLogger
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.exceptions.*
 import dk.cachet.carp.analytics.application.execution.*
@@ -91,6 +92,7 @@ class DefaultPlanExecutor(
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
         val context = KnownStepExecutionContext(
+            runId = runId,
             workspace = workspace,
             policy = policy,
             stepRunner = stepRunner,
@@ -145,14 +147,26 @@ class DefaultPlanExecutor(
         policy: RunPolicy
     ): Boolean {
         logger.info { "Running step '${step.metadata.name}'" }
+        val startMs = System.currentTimeMillis()
+        options.executionLogger.onStepStarted(context.runId, step.metadata.id, step.metadata.name)
+
         val result = executeStepWithFallback(step, context)
+        val durationMs = System.currentTimeMillis() - startMs
+
         return when (result.status) {
             ExecutionStatus.FAILED -> {
                 logger.warn { "Step '${step.metadata.name}' failed" }
+                options.executionLogger.onStepFailed(
+                    context.runId, step.metadata.id, step.metadata.name,
+                    result.failure?.message ?: "non-zero exit"
+                )
                 policy.stopOnFailure
             }
             else -> {
                 logger.info { "Step '${step.metadata.name}' succeeded" }
+                options.executionLogger.onStepCompleted(
+                    context.runId, step.metadata.id, step.metadata.name, durationMs
+                )
                 false
             }
         }
@@ -187,10 +201,12 @@ class DefaultPlanExecutor(
             )
         ),
         val environmentConfig: EnvironmentConfig = EnvironmentConfig(),
-        val clock: Clock = Clock.System
+        val clock: Clock = Clock.System,
+        val executionLogger: ExecutionLogger = Slf4jExecutionLogger()
     )
 
     private data class KnownStepExecutionContext(
+        val runId: UUID,
         val workspace: ExecutionWorkspace,
         val policy: RunPolicy,
         val stepRunner: CommandStepRunner,
