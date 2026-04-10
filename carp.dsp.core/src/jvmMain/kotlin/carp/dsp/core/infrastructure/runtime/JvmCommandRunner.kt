@@ -7,6 +7,7 @@ import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.InputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
@@ -33,6 +34,7 @@ class JvmCommandRunner(
     private val charset: Charset = StandardCharsets.UTF_8
 ) : CommandRunner
 {
+    private val logger = KotlinLogging.logger {}
     /**
      * Runs [command] using the JVM's current working directory as the process root.
      * [CommandPolicy.workingDirectory] is ignored — prefer [run] with an explicit workspaceRoot.
@@ -120,8 +122,8 @@ class JvmCommandRunner(
     {
         val stdout = StringBuilder()
         val stderr = StringBuilder()
-        val stdoutCollector = collectStream( process.inputStream, stdout )
-        val stderrCollector = collectStream( process.errorStream, stderr )
+        val stdoutCollector = collectStream( process.inputStream, stdout ) { logger.debug { it } }
+        val stderrCollector = collectStream( process.errorStream, stderr ) { logger.warn { it } }
         return Triple( stdout, stderr, stdoutCollector to stderrCollector )
     }
 
@@ -155,12 +157,16 @@ class JvmCommandRunner(
         }
     }
 
-    private fun collectStream( stream: InputStream, target: StringBuilder ): Thread =
-        thread( name = "JvmCommandRunner-collect-stream", start = true ) {
-            stream.bufferedReader( charset ).use { reader ->
-                target.append( reader.readText() )
-            }
+    private fun collectStream(
+        stream: InputStream,
+        target: StringBuilder,
+        log: (String) -> Unit
+    ): Thread = thread( name = "JvmCommandRunner-collect-stream", start = true ) {
+        stream.bufferedReader( charset ).forEachLine { line ->
+            target.appendLine( line )
+            log( line )
         }
+    }
 
     internal fun resolveUnderRoot( root: Path, rel: RelativePath ): Path
     {

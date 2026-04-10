@@ -204,7 +204,7 @@ class DefaultPlanExecutorTest
     fun `EAGER setup failure records issue and halts execution`()
     {
         val envId = UUID.randomUUID()
-        val envRef = SystemEnvironmentRef( id = envId.toString(), dependencies = emptyList() )
+        val envRef = CondaEnvironmentRef( id = envId.toString(), name = "test-env", dependencies = emptyList() )
 
         val report = executor(
             orchestrator = StubEnvironmentOrchestrator( setupResult = false ),

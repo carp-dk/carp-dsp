@@ -5,6 +5,7 @@ import dk.cachet.carp.analytics.domain.validation.ValidationErrorCode
 import dk.cachet.carp.analytics.domain.validation.ValidationIssue
 import dk.cachet.carp.analytics.domain.validation.ValidationResult
 import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
+import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
  * Linter for validating [WorkflowDescriptor] workflows.
@@ -30,6 +31,7 @@ import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
  */
 object WorkflowLinter
 {
+    private val logger = KotlinLogging.logger {}
     private val SUPPORTED_ENV_KINDS = setOf("conda", "pixi", "python", "system")
 
     /**
@@ -41,6 +43,7 @@ object WorkflowLinter
      */
     fun lint(descriptor: WorkflowDescriptor, config: LinterConfiguration = LinterConfiguration()): ValidationResult
     {
+        logger.info { "Linting workflow '${descriptor.metadata.name}'" }
         val issues = mutableListOf<ValidationIssue>()
 
         // Build step lookup for dependency/environment checks
@@ -73,6 +76,12 @@ object WorkflowLinter
         issues += checkMissingMetadata(descriptor, config)
         issues += checkUnusedEnvironments(descriptor, config)
         issues += checkWorkflowLength(descriptor, config)
+
+        if (issues.isEmpty()) logger.info { "Linting passed with no issues" }
+        else logger.warn {
+            "Linting found ${issues.size} issue(s): ${issues.count { it.severity == ValidationSeverity.ERROR }} " +
+                    "error(s), ${issues.count { it.severity == ValidationSeverity.WARNING }} warning(s)"
+        }
 
         return if (issues.isEmpty()) ValidationResult.OK else ValidationResult(issues)
     }

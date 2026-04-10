@@ -13,6 +13,7 @@ import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.datetime.Clock
 import java.nio.file.Path
 
@@ -37,6 +38,8 @@ class CommandStepRunner(
     /**
      * Optional collaborators and policies used by [CommandStepRunner].
      */
+    private val logger = KotlinLogging.logger {}
+
     data class Options(
         val artefactRecorder: ArtefactRecorder = FileSystemArtefactRecorder(),
         val logRecorder: StepLogRecorder = FileSystemStepLogRecorder(),
@@ -81,6 +84,7 @@ class CommandStepRunner(
         val startedAt = options.clock.now()
         val absWorkingDir = Path.of(workspace.executionRoot)
 
+        logger.debug { "Command: ${spec.executable} ${spec.args.joinToString(" ")}" }
         // Step 1: Execute command
         val outcome = executeCommand(step, spec, workspace, policy, absWorkingDir)
 

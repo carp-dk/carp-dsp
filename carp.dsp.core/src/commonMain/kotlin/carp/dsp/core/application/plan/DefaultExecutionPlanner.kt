@@ -9,6 +9,7 @@ import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.Workflow
 import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 import dk.cachet.carp.common.application.UUID
+import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
  * requiredEnvironmentRefs transforms a WorkflowDefinition (author-time model) into an ExecutionPlan (plan-time artefact).
@@ -23,6 +24,7 @@ import dk.cachet.carp.common.application.UUID
  */
 class DefaultExecutionPlanner : ExecutionPlanner {
 
+    private val logger = KotlinLogging.logger {}
     private val graphBuilder = DependencyGraphBuilder()
     private val sorter = DeterministicTopologicalSorter()
     private val bindingsResolver = BindingsResolver()
@@ -36,6 +38,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
      * @return ExecutionPlan containing planned steps and any planning issues
      */
     override fun plan( definition: WorkflowDefinition ): ExecutionPlan {
+        logger.info { "Planning workflow '${definition.workflow.metadata.name}'" }
         // Initialize
         val issues = mutableListOf<PlanIssue>()
         val plannedSteps = mutableMapOf<UUID, PlannedStep>()
@@ -79,6 +82,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
             }
         }
 
+        logger.info { "Plan ready — ${plannedSteps.size} step(s), ${issues.size} issue(s)" }
         // Construct ExecutionPlan
         return ExecutionPlan(
             workflowName = definition.workflow.metadata.name,
