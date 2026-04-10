@@ -99,13 +99,15 @@ class ExecutionLoggerTest {
         val runId = UUID.randomUUID()
         executor(log).execute(plan(step("a")), runId)
 
-        assertTrue(log.events.all { event ->
+        assertTrue(
+            log.events.all { event ->
             when (event) {
                 is CapturingExecutionLogger.Event.Started -> event.runId == runId
                 is CapturingExecutionLogger.Event.Completed -> event.runId == runId
                 is CapturingExecutionLogger.Event.Failed -> event.runId == runId
             }
-        })
+        }
+        )
     }
 
     @Test

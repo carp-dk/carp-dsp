@@ -157,7 +157,9 @@ class DefaultPlanExecutor(
             ExecutionStatus.FAILED -> {
                 logger.warn { "Step '${step.metadata.name}' failed" }
                 options.executionLogger.onStepFailed(
-                    context.runId, step.metadata.id, step.metadata.name,
+                    context.runId,
+                    step.metadata.id,
+                    step.metadata.name,
                     result.failure?.message ?: "non-zero exit"
                 )
                 policy.stopOnFailure
@@ -165,7 +167,10 @@ class DefaultPlanExecutor(
             else -> {
                 logger.info { "Step '${step.metadata.name}' succeeded" }
                 options.executionLogger.onStepCompleted(
-                    context.runId, step.metadata.id, step.metadata.name, durationMs
+                    context.runId,
+                    step.metadata.id,
+                    step.metadata.name,
+                    durationMs
                 )
                 false
             }
