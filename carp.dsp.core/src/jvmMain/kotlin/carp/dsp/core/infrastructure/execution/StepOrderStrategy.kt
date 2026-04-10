@@ -25,6 +25,6 @@ fun interface StepOrderStrategy {
  */
 object SequentialPlanOrder : StepOrderStrategy {
     override fun order(plan: ExecutionPlan): List<UUID> =
-        plan.steps.map { it.stepId }
+        plan.steps.map { it.metadata.id }
 }
 

@@ -2,26 +2,49 @@ package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
-import dk.cachet.carp.analytics.domain.data.StepOutputSource
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
 
 /**
- * Builds a directed dependency graph from workflow steps based exclusively on StepOutputSource references
- * in step inputs, while collecting structural validation issues.
+ * Builds a directed dependency graph from workflow steps based on cross-step data dependencies.
+ *
+ * A step A depends on step B if any of A's inputs come from B's outputs.
+ * Uses `InputDataSpec.stepRef` to identify producer steps.
+ *
+ * **Collects structural validation issues** while building the graph.
  */
-class DependencyGraphBuilder {
-
+class DependencyGraphBuilder
+{
+    /**
+     * Context for building the dependency graph.
+     */
+    private data class DependencyResolutionContext(
+        val stepsById: Map<UUID, Step>,
+        val stepsByName: Map<String, Step>,
+        val stepsByDescriptorId: Map<String, Step>,
+        val adjacency: MutableMap<UUID, MutableSet<UUID>>,
+        val indegree: MutableMap<UUID, Int>,
+        val issues: MutableList<PlanIssue>
+    )
     /**
      * Builds adjacency list + indegree map and returns them together with collected PlanIssues.
+     *
+     * @param steps All workflow steps
+     * @return DependencyGraphResult with adjacency, indegree, and validation issues
      */
-    fun build(steps: List<Step>): DependencyGraphResult {
+    fun build( steps: List<Step> ): DependencyGraphResult
+    {
         val issues = mutableListOf<PlanIssue>()
         val stepsById = steps.associateBy { it.metadata.id }
+        val stepsByName = steps.associateBy { it.metadata.name }
 
         // Initialize adjacency list and indegree map
         val adjacency = mutableMapOf<UUID, MutableSet<UUID>>()
         val indegree = mutableMapOf<UUID, Int>()
+
+        val stepsByDescriptorId = steps
+            .mapNotNull { step -> step.metadata.descriptorId?.let { id -> id to step } }
+            .toMap()
 
         // Initialize all steps with empty adjacency lists and zero indegree
         steps.forEach { step ->
@@ -30,9 +53,19 @@ class DependencyGraphBuilder {
             indegree[stepId] = 0
         }
 
+        // Create context for dependency resolution
+        val context = DependencyResolutionContext(
+            stepsById = stepsById,
+            stepsByName = stepsByName,
+            stepsByDescriptorId = stepsByDescriptorId,
+            adjacency = adjacency,
+            indegree = indegree,
+            issues = issues
+        )
+
         // Build dependency relationships
         steps.forEach { step ->
-            processDependenciesForStep(step, stepsById, adjacency, indegree, issues)
+            processDependenciesForStep(step, context)
         }
 
         // Convert to immutable collections
@@ -51,27 +84,32 @@ class DependencyGraphBuilder {
      */
     private fun processDependenciesForStep(
         step: Step,
-        stepsById: Map<UUID, Step>,
-        adjacency: MutableMap<UUID, MutableSet<UUID>>,
-        indegree: MutableMap<UUID, Int>,
-        issues: MutableList<PlanIssue>
-    ) {
+        context: DependencyResolutionContext
+    )
+    {
         val stepId = step.metadata.id
-        val dependencies = extractDependencies(step)
-
-        // Track processed producer-consumer pairs to avoid duplicate indegree increments
+        val dependencies = extractDependencies(step, context)
         val processedDependencies = mutableSetOf<UUID>()
 
         dependencies.forEach { dependency ->
-            val producerId = dependency.stepId
-            val outputId = dependency.outputId
+            val isValidDependency = validateDependency(
+                stepId,
+                dependency.producerStepId,
+                dependency.producerOutputId,
+                context
+            )
 
-            val isValidDependency = validateDependency(stepId, producerId, outputId, stepsById, issues)
-
-            // Only create edges for valid dependencies and avoid duplicates
-            if (isValidDependency && !processedDependencies.contains(producerId)) {
-                createDependencyEdge(producerId, stepId, adjacency, indegree)
-                processedDependencies.add(producerId)
+            if (
+                isValidDependency &&
+                dependency.producerStepId != null &&
+                !processedDependencies.contains
+                    (
+                        dependency.producerStepId
+                    )
+                )
+            {
+                createDependencyEdge(dependency.producerStepId, stepId, context)
+                processedDependencies.add(dependency.producerStepId)
             }
         }
     }
@@ -81,31 +119,45 @@ class DependencyGraphBuilder {
      */
     private fun validateDependency(
         consumerStepId: UUID,
-        producerId: UUID,
-        outputId: UUID,
-        stepsById: Map<UUID, Step>,
-        issues: MutableList<PlanIssue>
-    ): Boolean {
+        producerId: UUID?,
+        outputId: UUID?,
+        context: DependencyResolutionContext
+    ): Boolean
+    {
         var isValid = true
 
-        // Validate producer exists
-        if (!stepsById.containsKey(producerId)) {
-            validateProducerExists(producerId, stepsById, issues)
+        if ( producerId == null )
+        {
+            context.issues.add(
+                PlanIssue(
+                    severity = PlanIssueSeverity.ERROR,
+                    code = "DEPENDENCY_PRODUCER_NOT_FOUND",
+                    message = "Referenced producer step does not exist.",
+                    stepId = consumerStepId
+                )
+            )
+            isValid = false
+        }
+
+        if ( outputId == null && isValid )
+        {
+            context.issues.add(
+                PlanIssue(
+                    severity = PlanIssueSeverity.ERROR,
+                    code = "DEPENDENCY_OUTPUT_NOT_FOUND",
+                    message = "Producer step '${context.stepsById[producerId]?.metadata?.name ?: producerId}' " +
+                            "does not have a matching output for this input.",
+                    stepId = consumerStepId
+                )
+            )
             isValid = false
         }
 
         // Validate no self-dependency
-        if (consumerStepId == producerId) {
-            validateNoSelfDependency(consumerStepId, producerId, issues)
+        if ( consumerStepId == producerId )
+        {
+            validateNoSelfDependency( consumerStepId, producerId, context )
             isValid = false
-        }
-
-        // If producer exists, validate the output exists
-        stepsById[producerId]?.let { producer ->
-            if (!producer.outputs.any { it.id == outputId }) {
-                validateProducerOutputExists(producer, outputId, consumerStepId, issues)
-                isValid = false
-            }
         }
 
         return isValid
@@ -113,76 +165,43 @@ class DependencyGraphBuilder {
 
     /**
      * Creates a dependency edge in the graph.
+     *
+     * Represents: producer → consumer (consumer depends on producer)
      */
     private fun createDependencyEdge(
         producerId: UUID,
         consumerStepId: UUID,
-        adjacency: MutableMap<UUID, MutableSet<UUID>>,
-        indegree: MutableMap<UUID, Int>
-    ) {
-        // Add dependency edge: producer -> consumer
-        adjacency[producerId]?.add(consumerStepId)
+        context: DependencyResolutionContext
+    )
+    {
+        // Add dependency edge: producer → consumer
+        context.adjacency[producerId]?.add( consumerStepId )
         // Increment indegree for consumer
-        indegree[consumerStepId] = indegree[consumerStepId]!! + 1
+        context.indegree[consumerStepId] = context.indegree[consumerStepId]!! + 1
     }
 
     /**
-     * Extracts all StepOutputSource references from a step's inputs.
+     * Extracts all cross-step dependencies from a step's inputs.
+     *
+     * Returns a list of (producerId, outputId) pairs.
      */
-    private fun extractDependencies(step: Step): List<StepOutputSource> {
-        val dependencies = mutableListOf<StepOutputSource>()
+    private fun extractDependencies( step: Step, context: DependencyResolutionContext ): List<CrossStepDependency>
+    {
+        return step.inputs.mapNotNull { input ->
+            input.stepRef?.let { ref ->
+                val producerStep = tryParseUuid( ref )?.let { context.stepsById[it] }
+                    ?: context.stepsByName[ref]
+                    ?: context.stepsByDescriptorId[ref]
 
-        step.inputs.forEach { input ->
-            val source = input.source
-            if (source is StepOutputSource) {
-                dependencies.add(source)
+                val producerOutput = producerStep?.outputs?.firstOrNull { it.name == input.name }
+
+                CrossStepDependency(
+                    producerStepRef = ref,
+                    producerStepId = producerStep?.metadata?.id,
+                    producerOutputId = producerOutput?.id,
+                    outputName = input.name
+                )
             }
-        }
-
-        return dependencies
-    }
-
-    /**
-     * Adds ERROR issue if referenced producer step does not exist.
-     */
-    private fun validateProducerExists(
-        producerId: UUID,
-        stepsById: Map<UUID, Step>,
-        issues: MutableList<PlanIssue>
-    ) {
-        if (!stepsById.containsKey(producerId)) {
-            issues.add(
-                PlanIssue(
-                    severity = PlanIssueSeverity.ERROR,
-                    code = "DEPENDENCY_PRODUCER_NOT_FOUND",
-                    message = "Referenced producer step '$producerId' does not exist in the workflow.",
-                    stepId = null // This is a workflow-level issue
-                )
-            )
-        }
-    }
-
-    /**
-     * Adds ERROR issue if referenced producer output does not exist.
-     */
-    private fun validateProducerOutputExists(
-        producer: Step,
-        outputId: UUID,
-        consumerStepId: UUID,
-        issues: MutableList<PlanIssue>
-    ) {
-        val hasOutput = producer.outputs.any { it.id == outputId }
-        if (!hasOutput) {
-            issues.add(
-                PlanIssue(
-                    severity = PlanIssueSeverity.ERROR,
-                    code = "DEPENDENCY_OUTPUT_NOT_FOUND",
-                    message = "Step references non-existent output '$outputId' from producer step " +
-                            "'${producer.metadata.name}'. Available outputs: " +
-                            "${producer.outputs.map { it.id.toString() }.sorted()}",
-                    stepId = consumerStepId // Attribute to the consumer step, not the producer
-                )
-            )
         }
     }
 
@@ -191,11 +210,13 @@ class DependencyGraphBuilder {
      */
     private fun validateNoSelfDependency(
         stepId: UUID,
-        producerId: UUID,
-        issues: MutableList<PlanIssue>
-    ) {
-        if (stepId == producerId) {
-            issues.add(
+        producerId: UUID?,
+        context: DependencyResolutionContext
+    )
+    {
+        if ( stepId == producerId )
+        {
+            context.issues.add(
                 PlanIssue(
                     severity = PlanIssueSeverity.ERROR,
                     code = "DEPENDENCY_SELF_REFERENCE",
@@ -205,7 +226,20 @@ class DependencyGraphBuilder {
             )
         }
     }
+
+    internal fun tryParseUuid( uuid: String ): UUID? =
+        try { UUID.parse( uuid ) } catch ( _: Exception ) { null }
 }
+
+/**
+ * Represents a cross-step dependency extracted from a step's input.
+ */
+data class CrossStepDependency(
+    val producerStepRef: String, // original YAML ID — error messages
+    val producerStepId: UUID?, // resolved producer step UUID
+    val producerOutputId: UUID?, // resolved producer output UUID
+    val outputName: String // output name — error messages
+)
 
 /**
  * Immutable result containing graph structure and collected validation issues.

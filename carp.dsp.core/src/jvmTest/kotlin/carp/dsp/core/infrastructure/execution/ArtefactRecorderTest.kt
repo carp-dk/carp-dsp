@@ -1,9 +1,16 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.application.plan.createBindingsWithInputsOutputs
+import carp.dsp.core.application.plan.createResolvedOutput
 import dk.cachet.carp.analytics.application.execution.ArtefactStore
 import dk.cachet.carp.analytics.application.execution.ProducedOutputRef
 import dk.cachet.carp.analytics.application.execution.ResourceRef
-import dk.cachet.carp.analytics.application.plan.*
+import dk.cachet.carp.analytics.application.plan.CommandSpec
+import dk.cachet.carp.analytics.application.plan.ExpandedArg
+import dk.cachet.carp.analytics.application.plan.PlannedStep
+import dk.cachet.carp.analytics.application.plan.ResolvedBindings
+import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
@@ -11,7 +18,6 @@ import kotlin.io.path.writeText
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class ArtefactRecorderTest {
 
@@ -31,29 +37,33 @@ class ArtefactRecorderTest {
         val stepId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
 
-        // Create output file
-        val outputDir = tmpDir.resolve("outputs").resolve(outputId.toString())
-        outputDir.createDirectories()
-        outputDir.resolve("data").writeText("test data")
+        val stepWorkingDir = tmpDir
 
-        // Create step
+        val outputRelativePath = "outputs/$outputId/data"
+        val outputFile = stepWorkingDir.resolve(outputRelativePath)
+        outputFile.parent?.createDirectories()
+        outputFile.writeText("test data")
+
+        // Create step with RELATIVE path
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test",
+            metadata = StepMetadata(id = stepId, name = "test"),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("Hello"))),
             bindings = ResolvedBindings(
-                emptyMap(),
-                mapOf(outputId to DataRef(outputId, "test"))
+                outputs = mapOf(
+                    outputId to createResolvedOutput(
+                        id = outputId,
+                        format = FileFormat.CSV,
+                        path = outputRelativePath,
+                    )
+                )
             ),
-            environmentRef = UUID.randomUUID()
+                environmentRef = UUID.randomUUID()
         )
 
-        // Record
-        val artefacts = recorder.recordArtefacts(step, tmpDir, store)
+        // Record with the same working directory
+        val artefacts = recorder.recordArtefacts(step, stepWorkingDir, store)
 
-        // Verify
         assertEquals(1, artefacts.size)
-        assertNotNull(artefacts[0])
     }
 
     @Test
@@ -62,19 +72,18 @@ class ArtefactRecorderTest {
         val outputId = UUID.randomUUID()
 
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test",
-            process = CommandSpec("echo", listOf(ExpandedArg.Literal("Hello"))),
-            bindings = ResolvedBindings(
-                emptyMap(),
-                mapOf(outputId to DataRef(outputId, "test"))
+            metadata = StepMetadata(
+                id = stepId,
+                name = "test"
             ),
+            process = CommandSpec("echo", listOf(ExpandedArg.Literal("Hello"))),
+            bindings = createBindingsWithInputsOutputs(outputId),
             environmentRef = UUID.randomUUID()
         )
 
         val artefacts = recorder.recordArtefacts(step, tmpDir, store)
 
-        assertEquals(0, artefacts.size) // File didn't exist
+        assertEquals(0, artefacts.size)
     }
 
     // Mock Artefact store for testing

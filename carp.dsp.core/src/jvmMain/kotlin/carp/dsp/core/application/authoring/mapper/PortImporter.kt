@@ -1,4 +1,4 @@
-package carp.dsp.core.application.authoring.mapper
+ package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
@@ -7,147 +7,181 @@ import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import dk.cachet.carp.analytics.domain.data.DataSchema
-import dk.cachet.carp.analytics.domain.data.FileDestination
 import dk.cachet.carp.analytics.domain.data.FileFormat
-import dk.cachet.carp.analytics.domain.data.FileSystemSource
-import dk.cachet.carp.analytics.domain.data.InMemorySource
+import dk.cachet.carp.analytics.domain.data.FileLocation
+import dk.cachet.carp.analytics.domain.data.InMemoryLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
-import dk.cachet.carp.analytics.domain.data.RegistryDestination
-import dk.cachet.carp.analytics.domain.data.StepOutputSource
 import dk.cachet.carp.common.application.UUID
+
 
 /**
  * Maps `DataPortDescriptor` to `InputDataSpec` / `OutputDataSpec`.
  *
+ * Uses the unified DataLocation model:
+ * - FileInputSource → FileLocation
+ * - StepOutputInputSource → FileLocation (with empty path) + stepRef
+ * - EnvironmentVariableInputSource → InMemoryLocation
+ * - FileOutputDestination → FileLocation
+ * - EnvironmentVariableOutputDestination → InMemoryLocation
  */
 internal object PortImporter
 {
-    private val ZERO_UUID: UUID = UUID.parse("00000000-0000-0000-0000-000000000000")
-
     /**
      * Maps a data port descriptor to an input data spec.
      *
-     * ### Best-Effort Source Resolution
+     * ### Source Resolution (Using DataLocation Model)
      *
-     * If the descriptor specifies a source:
-     * - [FileInputSource] → [FileSystemSource]
-     * - [StepOutputInputSource] → [StepOutputSource] (uses placeholder UUID if step not found)
-     * - [EnvironmentVariableInputSource] → [InMemorySource]
+     * - [FileInputSource] → [FileLocation] (with file path)
+     * - [StepOutputInputSource] → [FileLocation] (empty path) with stepRef set
+     * - [EnvironmentVariableInputSource] → [InMemoryLocation]
+     * - null (no source specified) → [FileLocation] (empty path, no stepRef)
      *
-     * If no source specified: uses R1 placeholder [StepOutputSource] with zero UUID.
-     *
-     * Validation of whether step references are valid is deferred to the linter.
+     * The stepRef field indicates whether the input comes from another step.
+     * Empty path will be resolved by BindingsResolver later.
      *
      * @param portDescriptor The input port descriptor
-     * @param stepIdMap Mapping from semantic step IDs (strings) to UUIDs for resolution
-     * @return Domain InputDataSpec with mapped source
+     * @return Domain InputDataSpec with mapped DataLocation
      */
     fun importInputPort(
         portDescriptor: DataPortDescriptor,
-        stepIdMap: Map<String, UUID>
+        workflowNamespace: UUID
     ): InputDataSpec
     {
-        val portId = portDescriptor.id?.let { tryParseUuid( it ) } ?: UUID.randomUUID()
-
-        val source = when ( val inputSource = portDescriptor.source )
-        {
-            is FileInputSource ->
-                FileSystemSource(
-                    path = inputSource.path,
-                    format = inferFormatFromPath( inputSource.path ),
-                    metadata = emptyMap()
-                )
-
-            is StepOutputInputSource ->
-            {
-                // Best-effort: try to resolve semantic step ID to UUID
-                val stepUUID = stepIdMap[inputSource.stepId]
-                    ?: UUID.randomUUID() // Placeholder if not found (linter will catch)
-
-                StepOutputSource(
-                    stepId = stepUUID,
-                    outputId = tryParseUuid( inputSource.outputId ) ?: UUID.randomUUID(),
-                    metadata = emptyMap()
-                )
-            }
-
-            is EnvironmentVariableInputSource ->
-                InMemorySource(
-                    registryKey = inputSource.variableName,
-                    metadata = emptyMap()
-                )
-
-            null ->
-                // placeholder: no source specified
-                StepOutputSource(
-                    stepId = ZERO_UUID,
-                    outputId = portId,
-                    metadata = emptyMap()
-                )
-        }
+        val portId = resolvePortId( portDescriptor.id, workflowNamespace, "input" )
+        val (location, stepRef) = resolveInputLocation( portDescriptor )
 
         return InputDataSpec(
             id = portId,
-            name = portId.toString(),
+            name = portDescriptor.id ?: portId.toString(),
             description = null,
             schema = importSchema( portDescriptor ),
-            source = source,
+            location = location,
+            stepRef = stepRef,
             required = true,
             constraints = null
         )
     }
 
     /**
-     * Maps a data port descriptor to an output data spec.
-     *
-     * ### Destination Mapping
-     *
-     * If the descriptor specifies a destination:
-     * - [FileOutputDestination] → [FileDestination]
-     * - [EnvironmentVariableOutputDestination] → [RegistryDestination]
-     *
-     * If no destination specified: uses placeholder [FileDestination] with empty path.
-     *
-     * @param portDescriptor The output port descriptor
-     * @return Domain OutputDataSpec with mapped destination
+     * Resolves the location and stepRef for an input based on its source.
      */
-    fun importOutputPort(portDescriptor: DataPortDescriptor ): OutputDataSpec
+    private fun resolveInputLocation(
+        portDescriptor: DataPortDescriptor
+    ): Pair<dk.cachet.carp.analytics.domain.data.DataLocation, String?>
     {
-        val portId = portDescriptor.id?.let { tryParseUuid( it ) } ?: UUID.randomUUID()
-
-        val destination = when ( val outputDest = portDescriptor.destination )
+        return when ( val inputSource = portDescriptor.source )
         {
-            is FileOutputDestination ->
-                FileDestination(
-                    path = outputDest.path,
-                    format = inferFormatFromPath( outputDest.path ),
-                    overwrite = false,
-                    writeMode = dk.cachet.carp.analytics.domain.data.WriteMode.ERROR_IF_EXISTS
+            is FileInputSource ->
+            {
+                val fileFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+                    ?: inferFormatFromPath( inputSource.path )
+                Pair(
+                    FileLocation(
+                        path = inputSource.path,
+                        format = fileFormat,
+                        metadata = mapOf( "source" to "file" )
+                    ),
+                    null
                 )
+            }
 
-            is EnvironmentVariableOutputDestination ->
-                RegistryDestination(
-                    key = outputDest.variableName,
-                    overwrite = true
+            is StepOutputInputSource ->
+            {
+                Pair(
+                    FileLocation(
+                        path = "",
+                        format = FileFormat.UNKNOWN,
+                        metadata = mapOf( "source" to "step-output" )
+                    ),
+                    inputSource.stepId
                 )
+            }
+
+            is EnvironmentVariableInputSource ->
+            {
+                Pair(
+                    InMemoryLocation(
+                        registryKey = inputSource.variableName,
+                        metadata = mapOf( "source" to "environment" )
+                    ),
+                    null
+                )
+            }
 
             null ->
-                // placeholder: no destination specified
-                FileDestination(
-                    path = "",
-                    format = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) } ?: FileFormat.CSV,
-                    overwrite = false,
-                    writeMode = dk.cachet.carp.analytics.domain.data.WriteMode.ERROR_IF_EXISTS
+            {
+                Pair(
+                    FileLocation(
+                        path = "",
+                        format = FileFormat.UNKNOWN,
+                        metadata = emptyMap()
+                    ),
+                    null
                 )
+            }
+        }
+    }
+
+    /**
+     * Maps a data port descriptor to an output data spec.
+     *
+     * ### Destination Mapping (Using DataLocation Model)
+     *
+     * - [FileOutputDestination] → [FileLocation]
+     * - [EnvironmentVariableOutputDestination] → [InMemoryLocation]
+     * - null (no destination specified) → [FileLocation] (empty path)
+     *
+     * @param portDescriptor The output port descriptor
+     * @return Domain OutputDataSpec with mapped DataLocation
+     */
+    fun importOutputPort(
+        portDescriptor: DataPortDescriptor,
+        workflowNamespace: UUID
+    ): OutputDataSpec
+    {
+        val portId = resolvePortId( portDescriptor.id, workflowNamespace, "output" )
+
+        val location = when ( val outputDest = portDescriptor.destination )
+        {
+            is FileOutputDestination ->
+            {
+                val fileFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+                    ?: inferFormatFromPath( outputDest.path )
+                FileLocation(
+                    path = outputDest.path,
+                    format = fileFormat,
+                    metadata = mapOf( "destination" to "file" )
+                )
+            }
+
+            is EnvironmentVariableOutputDestination ->
+            {
+                // Environment variable → InMemoryLocation
+                InMemoryLocation(
+                    registryKey = outputDest.variableName,
+                    metadata = mapOf( "destination" to "environment" )
+                )
+            }
+
+            null ->
+            {
+                // No destination specified → FileLocation (empty, will be generated)
+                FileLocation(
+                    path = "",
+                    format = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+                        ?: FileFormat.UNKNOWN,
+                    metadata = emptyMap()
+                )
+            }
         }
 
         return OutputDataSpec(
             id = portId,
-            name = portId.toString(),
+            name = portDescriptor.id ?: portId.toString(),
             description = null,
             schema = importSchema( portDescriptor ),
-            destination = destination,
+            location = location,
             format = null
         )
     }
@@ -158,7 +192,7 @@ internal object PortImporter
      * @param descriptor The data port descriptor
      * @return Domain DataSchema or null if type not specified
      */
-    private fun importSchema(descriptor: DataPortDescriptor ): DataSchema? =
+    private fun importSchema( descriptor: DataPortDescriptor ): DataSchema? =
         descriptor.descriptor?.let {
             if ( it.type == null ) null
             else DataSchema(
@@ -170,12 +204,29 @@ internal object PortImporter
     /**
      * Parses a file format string to [FileFormat] enum.
      *
-     * @param type The type string (case-insensitive)
-     * @return Matched FileFormat or FileFormat.CSV as fallback
+     * Supports both enum names (e.g., "CSV", "JSON") and MIME types (e.g., "text/csv", "application/json").
+     *
+     * @param type The type string (case-insensitive) - can be enum name or MIME type
+     * @return Matched FileFormat or FileFormat.UNKNOWN as fallback
      */
-    private fun parseFileFormat( type: String ): FileFormat =
-        FileFormat.entries.firstOrNull { it.name.equals( type, ignoreCase = true ) }
-            ?: FileFormat.CSV
+    private fun parseFileFormat( type: String ): FileFormat
+    {
+        val normalizedType = type.lowercase()
+
+        // First, try to match by enum name
+        FileFormat.entries.firstOrNull { it.name.equals( type, ignoreCase = true ) }?.let { return it }
+
+        // Then, try to match by MIME type
+        FileFormat.entries.firstOrNull { it.mimeType.lowercase() == normalizedType }?.let { return it }
+
+        // If no exact match, try partial MIME type matching (for cases like "text/csv" matching "text/csv")
+        FileFormat.entries.firstOrNull {
+            it.mimeType.lowercase().contains( normalizedType ) || normalizedType.contains( it.mimeType.lowercase() )
+        }?.let { return it }
+
+        // Default fallback
+        return FileFormat.UNKNOWN
+    }
 
     /**
      * Infers a file format from a file path by examining the extension.
@@ -197,7 +248,13 @@ internal object PortImporter
             "bin" -> FileFormat.BINARY
             "tsv" -> FileFormat.TSV
             "yaml", "yml" -> FileFormat.YAML
-            else -> FileFormat.CSV // Default fallback
+            "txt" -> FileFormat.TXT
+            else -> FileFormat.UNKNOWN // Default for files with no/unknown extension
         }
     }
+
+    private fun resolvePortId( id: String?, workflowNamespace: UUID?, kind: String ): UUID =
+        id?.let { tryParseUuid( it ) }
+            ?: workflowNamespace?.let { DeterministicUUID.v5( it, "port:$kind:${id ?: "unnamed"}" ) }
+            ?: UUID.randomUUID()
 }

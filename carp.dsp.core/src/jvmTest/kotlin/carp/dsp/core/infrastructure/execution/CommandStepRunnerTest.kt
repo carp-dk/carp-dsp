@@ -1,5 +1,6 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.application.plan.createResolvedOutput
 import dk.cachet.carp.analytics.application.execution.ArtefactMetadata
 import dk.cachet.carp.analytics.application.execution.ArtefactStore
 import dk.cachet.carp.analytics.application.execution.ExecutionStatus
@@ -10,9 +11,9 @@ import dk.cachet.carp.analytics.application.execution.ResourceRef
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.execution.StepLogRecorder
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
+import dk.cachet.carp.analytics.application.execution.workspace.StepInfo
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.CommandSpec
-import dk.cachet.carp.analytics.application.plan.DataRef
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
 import dk.cachet.carp.analytics.application.plan.InTasksRun
@@ -20,6 +21,8 @@ import dk.cachet.carp.analytics.application.plan.PlannedStep
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
+import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
@@ -87,18 +90,12 @@ class CommandStepRunnerTest {
         override fun resolvePath(outputId: UUID): String? = null
     }
 
-    /**
-     * WorkspaceManager stub that optionally returns a fixed [stepWorkingDir] from
-     * [resolveStepWorkingDir], letting tests verify that the path is forwarded to the runner.
-     */
     private class CapturingWorkspaceManager(
-        private val stepWorkingDir: String? = null
+        private val executionRoot: String
     ) : WorkspaceManager {
-        override fun create(plan: ExecutionPlan, runId: UUID) =
-            ExecutionWorkspace(runId = runId, executionRoot = runId.toString())
-        override fun prepareStepDirectories(workspace: ExecutionWorkspace, stepId: UUID) = Unit
-        override fun resolveStepWorkingDir(workspace: ExecutionWorkspace, stepId: UUID): String? =
-            stepWorkingDir
+        override fun create( plan: ExecutionPlan, runId: UUID ) =
+            ExecutionWorkspace( runId = runId, executionRoot = executionRoot, workflowName = "workflow" )
+        override fun prepareStepDirectories( workspace: ExecutionWorkspace, stepId: UUID ) = Unit
     }
 
     /**
@@ -133,30 +130,43 @@ class CommandStepRunnerTest {
         )
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
-    private val workspace = ExecutionWorkspace(
-        runId = UUID.randomUUID(),
-        executionRoot = "test-root"
-    )
+    private fun createExecutionWorkspace(steps: List<PlannedStep> = emptyList()): ExecutionWorkspace {
+        val stepInfos = steps.mapIndexed { index, step ->
+            step.metadata.id to StepInfo(
+                id = step.metadata.id,
+                name = step.metadata.name,
+                executionIndex = index
+            )
+        }.toMap()
+        return ExecutionWorkspace(
+            runId = UUID.randomUUID(),
+            executionRoot = testWorkspaceRoot.toString(),
+            workflowName = "test-workflow",
+            stepInfos = stepInfos
+        )
+    }
 
     private fun commandStep(
         name: String = "step",
         executable: String = "echo",
         args: List<String> = listOf(name)
     ) = PlannedStep(
-        stepId = UUID.randomUUID(),
-        name = name,
+        metadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = name
+        ),
         process = CommandSpec(executable, args.map { ExpandedArg.Literal(it) }),
         bindings = ResolvedBindings(),
         environmentRef = UUID.randomUUID()
     )
 
     private fun inProcessStep(name: String = "in-process") = PlannedStep(
-        stepId = UUID.randomUUID(),
-        name = name,
+        metadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = name
+        ),
         process = InTasksRun(operationId = "some.operation"),
         bindings = ResolvedBindings(),
         environmentRef = UUID.randomUUID()
@@ -168,47 +178,50 @@ class CommandStepRunnerTest {
         stdout: String = "",
         stderr: String = "",
         timedOut: Boolean = false,
-        stepWorkingDir: String? = null,
         artefactStore: ArtefactStore = MockArtefactStore()
     ) = CommandStepRunner(
-        workspaceManager = CapturingWorkspaceManager(stepWorkingDir),
+        workspaceManager = CapturingWorkspaceManager(testWorkspaceRoot.toString()),
         commandRunner = FixedCommandRunner(exitCode, stdout, stderr, timedOut),
         artefactStore = artefactStore
     )
 
-    // -------------------------------------------------------------------------
-    // Artifact Recording
-    // -------------------------------------------------------------------------
+    // Artefact Recording
 
     @Test
     fun `artifacts are recorded for successful step with output files`() {
         val stepId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
+        val stepDir = "01_test_step"
+        val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+        Files.createDirectories(outputsDir)
 
         // Create output file
-        val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-        Files.createDirectories(outputDir)
-        val dataFile = outputDir.resolve("data")
+        val dataFile = outputsDir.resolve("result.csv")
         dataFile.writeText("test data content")
 
         val mockStore = MockArtefactStore()
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
+            metadata = StepMetadata(
+                id = stepId,
+                name = "test-step"
+            ),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = ResolvedBindings(
-                outputs = mapOf(outputId to DataRef(outputId, "text/plain"))
+                outputs = mapOf(
+                    outputId to createResolvedOutput(
+                        id = outputId,
+                        format = FileFormat.CSV,
+                        resolvedPath = "steps/$stepDir/outputs/result.csv"
+                    )
+                )
             ),
             environmentRef = UUID.randomUUID()
         )
 
         val result = runner(
             exitCode = 0,
-            stepWorkingDir = stepWorkingDir.toString(),
             artefactStore = mockStore
-        ).run(step, workspace)
+        ).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(ExecutionStatus.SUCCEEDED, result.status)
         assertEquals(1, mockStore.recorded.size)
@@ -217,7 +230,7 @@ class CommandStepRunnerTest {
         assertEquals(stepId, recorded.stepId)
         assertEquals(outputId, recorded.outputId)
         assertEquals(ResourceKind.RELATIVE_PATH, recorded.location.kind)
-        assertTrue(recorded.location.value.contains("steps/$stepId/outputs/$outputId/data"))
+        assertTrue(recorded.location.value.contains("steps/$stepDir/outputs/result.csv"))
         assertNotNull(recorded.metadata.sizeBytes)
         assertTrue(recorded.metadata.sizeBytes!! > 0)
         assertNotNull(recorded.metadata.sha256)
@@ -226,32 +239,32 @@ class CommandStepRunnerTest {
 
     @Test
     fun `no artifacts recorded when step fails`() {
-        val stepId = UUID.randomUUID()
+        UUID.randomUUID()
         val outputId = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
+        val stepDir = "01_test_step"
+        val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+        Files.createDirectories(outputsDir)
 
         // Create output file (even though step fails)
-        val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-        Files.createDirectories(outputDir)
-        outputDir.resolve("data").writeText("test data")
+        outputsDir.resolve("result.csv").writeText("test data")
 
         val mockStore = MockArtefactStore()
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
+            metadata = StepMetadata(
+                id = UUID.randomUUID(),
+                name = "test-step"
+            ),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = ResolvedBindings(
-                outputs = mapOf(outputId to DataRef(outputId, "text/plain"))
+                outputs = mapOf(outputId to createResolvedOutput(outputId, "text/plain", path = "steps/$stepDir/outputs/result.csv"))
             ),
             environmentRef = UUID.randomUUID()
         )
 
         val result = runner(
             exitCode = 1, // Failed
-            stepWorkingDir = stepWorkingDir.toString(),
             artefactStore = mockStore
-        ).run(step, workspace)
+        ).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(ExecutionStatus.FAILED, result.status)
         assertEquals(0, mockStore.recorded.size, "No artifacts should be recorded for failed steps")
@@ -259,14 +272,12 @@ class CommandStepRunnerTest {
 
     @Test
     fun `artifacts recorded with correct SHA-256 hash`() {
-        val stepId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
+        val stepDir = "01_test_step"
+        val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+        Files.createDirectories(outputsDir)
 
-        val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-        Files.createDirectories(outputDir)
-        val dataFile = outputDir.resolve("data")
+        val dataFile = outputsDir.resolve("data")
         val testContent = "Hello, World!"
         dataFile.writeText(testContent)
 
@@ -275,20 +286,27 @@ class CommandStepRunnerTest {
 
         val mockStore = MockArtefactStore()
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
+            metadata = StepMetadata(
+                id = UUID.randomUUID(),
+                name = "test-step"
+            ),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = ResolvedBindings(
-                outputs = mapOf(outputId to DataRef(outputId, "text/plain"))
+                outputs = mapOf(
+                    outputId to createResolvedOutput(
+                        id = outputId,
+                        format = FileFormat.CSV,
+                        resolvedPath = "steps/$stepDir/outputs/data"
+                    )
+                )
             ),
             environmentRef = UUID.randomUUID()
         )
 
         runner(
             exitCode = 0,
-            stepWorkingDir = stepWorkingDir.toString(),
             artefactStore = mockStore
-        ).run(step, workspace)
+        ).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(1, mockStore.recorded.size)
         assertEquals(expectedSha256, mockStore.recorded[0].metadata.sha256)
@@ -305,39 +323,43 @@ class CommandStepRunnerTest {
             "data.png" to "image/png"
         )
 
-        testCases.forEach { (_, expectedContentType) ->
-            val stepId = UUID.randomUUID()
+        testCases.forEach { (filename, expectedContentType) ->
             val outputId = UUID.randomUUID()
-            val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-            Files.createDirectories(stepWorkingDir)
+            val stepDir = "01_test_step"
+            val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+            Files.createDirectories(outputsDir)
 
-            val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-            Files.createDirectories(outputDir)
-            // Note: The code looks for a file named "data", but determines type from binding
-            val dataFile = outputDir.resolve("data")
+            val dataFile = outputsDir.resolve(filename)
             dataFile.writeText("test")
 
             val mockStore = MockArtefactStore()
             val step = PlannedStep(
-                stepId = stepId,
-                name = "test-step",
+                metadata = StepMetadata(
+                    id = UUID.randomUUID(),
+                    name = "test-step"
+                ),
                 process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
                 bindings = ResolvedBindings(
-                    outputs = mapOf(outputId to DataRef(outputId, expectedContentType))
+                    outputs = mapOf(
+                        outputId to createResolvedOutput(
+                            id = outputId,
+                            resolvedPath = "steps/$stepDir/outputs/$filename"
+                        )
+                    )
                 ),
                 environmentRef = UUID.randomUUID()
             )
 
-            runner(
-                exitCode = 0,
-                stepWorkingDir = stepWorkingDir.toString(),
-                artefactStore = mockStore
-            ).run(step, workspace)
+            val recorder = FileSystemArtefactRecorder()
+            val artefacts = recorder.recordArtefacts(step, testWorkspaceRoot, mockStore)
 
+            assertEquals(1, artefacts.size, "Expected 1 artefact for $filename")
+
+            // Verify the content type was correctly detected
+            val recordedCall = mockStore.recorded[0].metadata.contentType
             assertEquals(
-                expectedContentType,
-                mockStore.recorded[0].metadata.contentType,
-                "Content type mismatch for declared type: $expectedContentType"
+                expectedContentType, recordedCall,
+                "Content type mismatch for $filename"
             )
         }
     }
@@ -348,26 +370,36 @@ class CommandStepRunnerTest {
         val outputId1 = UUID.randomUUID()
         val outputId2 = UUID.randomUUID()
         val outputId3 = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
+        val stepDir = "01_test_step"
+        val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+        Files.createDirectories(outputsDir)
 
         // Create multiple output files
-        listOf(outputId1, outputId2, outputId3).forEach { outputId ->
-            val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-            Files.createDirectories(outputDir)
-            outputDir.resolve("data").writeText("output for $outputId")
+        listOf(outputId1, outputId2, outputId3).forEachIndexed { index, outputId ->
+            outputsDir.resolve("output${index + 1}.csv").writeText("output for $outputId")
         }
 
         val mockStore = MockArtefactStore()
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
+            metadata = StepMetadata(
+                id = stepId,
+                name = "test-step"
+            ),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = ResolvedBindings(
                 outputs = mapOf(
-                    outputId1 to DataRef(outputId1, "text/plain"),
-                    outputId2 to DataRef(outputId2, "application/json"),
-                    outputId3 to DataRef(outputId3, "text/csv")
+                    outputId1 to createResolvedOutput(
+                        id = outputId1,
+                        resolvedPath = "steps/$stepDir/outputs/output1.csv"
+                    ),
+                    outputId2 to createResolvedOutput(
+                        id = outputId2,
+                        resolvedPath = "steps/$stepDir/outputs/output2.csv"
+                    ),
+                    outputId3 to createResolvedOutput(
+                        id = outputId3,
+                        resolvedPath = "steps/$stepDir/outputs/output3.csv"
+                    )
                 )
             ),
             environmentRef = UUID.randomUUID()
@@ -375,9 +407,8 @@ class CommandStepRunnerTest {
 
         val result = runner(
             exitCode = 0,
-            stepWorkingDir = stepWorkingDir.toString(),
             artefactStore = mockStore
-        ).run(step, workspace)
+        ).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(ExecutionStatus.SUCCEEDED, result.status)
         assertEquals(3, mockStore.recorded.size)
@@ -395,24 +426,31 @@ class CommandStepRunnerTest {
         val stepId = UUID.randomUUID()
         val outputId1 = UUID.randomUUID()
         val outputId2 = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
+        val stepDir = "01_test_step"
+        val outputsDir = testWorkspaceRoot.resolve("steps/$stepDir/outputs")
+        Files.createDirectories(outputsDir)
 
-        // Only create one output file, leave the other missing
-        val outputDir1 = stepWorkingDir.resolve("outputs").resolve(outputId1.toString())
-        Files.createDirectories(outputDir1)
-        outputDir1.resolve("data").writeText("existing output")
-        // outputId2 directory/file not created
+        // Create only one output file
+        outputsDir.resolve("output1.csv").writeText("existing output")
+        // output2 not created
 
         val mockStore = MockArtefactStore()
         val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
+            metadata = StepMetadata(
+                id = stepId,
+                name = "test-step"
+            ),
             process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
             bindings = ResolvedBindings(
                 outputs = mapOf(
-                    outputId1 to DataRef(outputId1, "text/plain"),
-                    outputId2 to DataRef(outputId2, "text/plain")
+                    outputId1 to createResolvedOutput(
+                        id = outputId1,
+                        resolvedPath = "steps/$stepDir/outputs/output1.csv"
+                    ),
+                    outputId2 to createResolvedOutput(
+                        id = outputId2,
+                        resolvedPath = "steps/$stepDir/outputs/output2.csv"
+                    )
                 )
             ),
             environmentRef = UUID.randomUUID()
@@ -420,9 +458,8 @@ class CommandStepRunnerTest {
 
         val result = runner(
             exitCode = 0,
-            stepWorkingDir = stepWorkingDir.toString(),
             artefactStore = mockStore
-        ).run(step, workspace)
+        ).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(ExecutionStatus.SUCCEEDED, result.status)
         assertEquals(1, mockStore.recorded.size, "Only existing output should be recorded")
@@ -430,67 +467,15 @@ class CommandStepRunnerTest {
     }
 
     @Test
-    fun `no artifacts recorded when working directory is null`() {
-        val stepId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
+    fun `execution root is used as process working directory`() {
+        val step = commandStep()
+        val workspace = createExecutionWorkspace( listOf( step ) )
+        val result = runner().run( step, workspace )
 
-        val mockStore = MockArtefactStore()
-        val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
-            process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
-            bindings = ResolvedBindings(
-                outputs = mapOf(outputId to DataRef(outputId, "text/plain"))
-            ),
-            environmentRef = UUID.randomUUID()
-        )
-
-        val result = runner(
-            exitCode = 0,
-            stepWorkingDir = null, // No working directory
-            artefactStore = mockStore
-        ).run(step, workspace)
-
-        assertEquals(ExecutionStatus.SUCCEEDED, result.status)
-        assertEquals(0, mockStore.recorded.size, "No artifacts should be recorded without working directory")
+        // Working directory in the result detail should be the step's logical dir,
+        // and execution should use executionRoot as the cwd (verified by artefact resolution)
+        assertEquals( workspace.stepDir( step.metadata.id ), result.detail?.workingDirectory )
     }
-
-    @Test
-    fun `artifacts included in StepRunResult outputs`() {
-        val stepId = UUID.randomUUID()
-        val outputId = UUID.randomUUID()
-        val stepWorkingDir = testWorkspaceRoot.resolve("steps").resolve(stepId.toString())
-        Files.createDirectories(stepWorkingDir)
-
-        val outputDir = stepWorkingDir.resolve("outputs").resolve(outputId.toString())
-        Files.createDirectories(outputDir)
-        outputDir.resolve("data").writeText("test content")
-
-        val mockStore = MockArtefactStore()
-        val step = PlannedStep(
-            stepId = stepId,
-            name = "test-step",
-            process = CommandSpec("echo", listOf(ExpandedArg.Literal("test"))),
-            bindings = ResolvedBindings(
-                outputs = mapOf(outputId to DataRef(outputId, "text/plain"))
-            ),
-            environmentRef = UUID.randomUUID()
-        )
-
-        val result = runner(
-            exitCode = 0,
-            stepWorkingDir = stepWorkingDir.toString(),
-            artefactStore = mockStore
-        ).run(step, workspace)
-
-        assertNotNull(result.outputs)
-        assertEquals(1, result.outputs!!.size)
-        assertEquals(outputId, result.outputs!![0].outputId)
-        assertNotNull(result.outputs!![0].sizeBytes)
-        assertNotNull(result.outputs!![0].sha256)
-        assertNotNull(result.outputs!![0].contentType)
-    }
-
     // -------------------------------------------------------------------------
     // CommandRunner invocation — executable, args, cwd
     // -------------------------------------------------------------------------
@@ -499,7 +484,7 @@ class CommandStepRunnerTest {
     fun `runner is called with the exact executable from CommandSpec`() {
         val recording = RecordingCommandRunner(FixedCommandRunner())
         val step = commandStep(executable = "python", args = listOf("run.py"))
-        CommandStepRunner(CapturingWorkspaceManager(), recording, MockArtefactStore()).run(step, workspace)
+        CommandStepRunner(CapturingWorkspaceManager(testWorkspaceRoot.toString()), recording, MockArtefactStore()).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals("python", recording.lastCommand?.executable)
     }
@@ -508,7 +493,7 @@ class CommandStepRunnerTest {
     fun `runner is called with the exact args from CommandSpec`() {
         val recording = RecordingCommandRunner(FixedCommandRunner())
         val step = commandStep(executable = "python", args = listOf("run.py", "--verbose", "--output", "out.csv"))
-        CommandStepRunner(CapturingWorkspaceManager(), recording, MockArtefactStore()).run(step, workspace)
+        CommandStepRunner(CapturingWorkspaceManager(testWorkspaceRoot.toString()), recording, MockArtefactStore()).run(step, createExecutionWorkspace(listOf(step)))
 
         assertEquals(
             listOf("run.py", "--verbose", "--output", "out.csv").map { ExpandedArg.Literal(it) },
@@ -519,89 +504,74 @@ class CommandStepRunnerTest {
     @Test
     fun `detail workingDirectory is set to the step dir path from the workspace`() {
         val step = commandStep()
+        val workspace = createExecutionWorkspace(listOf(step))
         val result = runner().run(step, workspace)
 
         // workingDirectory in detail must match the logical workspace-relative step dir
-        assertEquals(workspace.stepDir(step.stepId), result.detail?.workingDirectory)
+        assertEquals(workspace.stepDir(step.metadata.id), result.detail?.workingDirectory)
     }
 
-    @Test
-    fun `resolveStepWorkingDir is called and its value drives the working directory`() {
-        // The workspace manager reports a concrete absolute path for this step.
-        val expectedDir = "/abs/workspace/test-root/steps/some-step"
-        val recording = RecordingCommandRunner(FixedCommandRunner())
-        val step = commandStep()
-
-        // Wire a CapturingWorkspaceManager that returns the expected path
-        CommandStepRunner(
-            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = expectedDir),
-            commandRunner = recording,
-            artefactStore = MockArtefactStore()
-        ).run(step, workspace)
-
-        // The runner is still called (path resolution is handled inside CommandStepRunner/JvmCommandRunner)
-        assertNotNull(recording.lastCommand)
-    }
-
-    // -------------------------------------------------------------------------
     // Status mapping
-    // -------------------------------------------------------------------------
 
     @Test
     fun `exit code 0 maps to SUCCEEDED`() {
-        val result = runner(exitCode = 0).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 0).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.SUCCEEDED, result.status)
     }
 
     @Test
     fun `non-zero exit code maps to FAILED`() {
-        val result = runner(exitCode = 1).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 1).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.FAILED, result.status)
     }
 
     @Test
     fun `timed-out result maps to FAILED`() {
-        val result = runner(timedOut = true).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(timedOut = true).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.FAILED, result.status)
     }
 
-    // -------------------------------------------------------------------------
     // StepFailure population
-    // -------------------------------------------------------------------------
 
     @Test
     fun `successful step has no failure`() {
-        val result = runner(exitCode = 0).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 0).run(step, createExecutionWorkspace(listOf(step)))
         assertNull(result.failure)
     }
 
     @Test
     fun `failed step carries COMMAND_FAILED failure kind`() {
-        val result = runner(exitCode = 2).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 2).run(step, createExecutionWorkspace(listOf(step)))
         assertNotNull(result.failure)
         assertEquals(FailureKind.COMMAND_FAILED, result.failure!!.kind)
     }
 
     @Test
     fun `timed-out step carries TIMEOUT failure kind`() {
-        val result = runner(timedOut = true).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(timedOut = true).run(step, createExecutionWorkspace(listOf(step)))
         assertNotNull(result.failure)
         assertEquals(FailureKind.TIMEOUT, result.failure!!.kind)
     }
 
-    // -------------------------------------------------------------------------
     // Exit code captured in detail
-    // -------------------------------------------------------------------------
 
     @Test
     fun `exit code is captured in detail on success`() {
-        val result = runner(exitCode = 0).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 0).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(0, result.detail?.exitCode)
     }
 
     @Test
     fun `non-zero exit code is captured in detail`() {
-        val result = runner(exitCode = 127).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = 127).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.FAILED, result.status)
         assertEquals(127, result.detail?.exitCode)
     }
@@ -610,44 +580,47 @@ class CommandStepRunnerTest {
     fun `timeout exit code is captured in detail`() {
         // JvmCommandRunner uses timeoutExitCode=-1 by default; FixedCommandRunner
         // returns whatever exitCode we set, so we simulate the timeout sentinel value.
-        val result = runner(exitCode = -1, timedOut = true).run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(exitCode = -1, timedOut = true).run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.FAILED, result.status)
         assertEquals(FailureKind.TIMEOUT, result.failure!!.kind)
         assertEquals(-1, result.detail?.exitCode)
     }
 
-    // -------------------------------------------------------------------------
     // StepRunDetail — command tokens
-    // -------------------------------------------------------------------------
 
     @Test
     fun `detail contains command tokens`() {
         val step = commandStep(executable = "python", args = listOf("analyse.py", "--verbose"))
-        val result = runner().run(step, workspace)
+        val result = runner().run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(listOf("python", "analyse.py", "--verbose"), result.detail?.command)
     }
 
     @Test
     fun `detail stdout ref is null when stdout is blank`() {
-        val result = runner(stdout = "").run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(stdout = "").run(step, createExecutionWorkspace(listOf(step)))
         assertNull(result.detail?.stdout)
     }
 
     @Test
     fun `detail stdout ref is populated when stdout is non-blank`() {
-        val result = runner(stdout = "hello world").run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(stdout = "hello world").run(step, createExecutionWorkspace(listOf(step)))
         assertNotNull(result.detail?.stdout)
     }
 
     @Test
     fun `detail stderr ref is null when stderr is blank`() {
-        val result = runner(stderr = "").run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(stderr = "").run(step, createExecutionWorkspace(listOf(step)))
         assertNull(result.detail?.stderr)
     }
 
     @Test
     fun `detail stderr ref is null when stderr is non-blank`() {
-        val result = runner(stderr = "error output").run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner(stderr = "error output").run(step, createExecutionWorkspace(listOf(step)))
         assertNull(result.detail?.stderr)
     }
 
@@ -657,14 +630,16 @@ class CommandStepRunnerTest {
 
     @Test
     fun `startedAt and finishedAt are populated`() {
-        val result = runner().run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner().run(step, createExecutionWorkspace(listOf(step)))
         assertNotNull(result.startedAt)
         assertNotNull(result.finishedAt)
     }
 
     @Test
     fun `startedAt is not after finishedAt`() {
-        val result = runner().run(commandStep(), workspace)
+        val step = commandStep()
+        val result = runner().run(step, createExecutionWorkspace(listOf(step)))
         val started = result.startedAt!!
         val finished = result.finishedAt!!
         assert(started <= finished) { "startedAt ($started) must not be after finishedAt ($finished)" }
@@ -676,7 +651,8 @@ class CommandStepRunnerTest {
 
     @Test
     fun `InTasksRun step fails with INFRASTRUCTURE kind`() {
-        val result = runner().run(inProcessStep(), workspace)
+        val step = inProcessStep()
+        val result = runner().run(step, createExecutionWorkspace(listOf(step)))
         assertEquals(ExecutionStatus.FAILED, result.status)
         assertNotNull(result.failure)
         assertEquals(FailureKind.INFRASTRUCTURE, result.failure!!.kind)
@@ -684,7 +660,8 @@ class CommandStepRunnerTest {
 
     @Test
     fun `InTasksRun step failure message names the process type`() {
-        val result = runner().run(inProcessStep(name = "my-step"), workspace)
+        val step = inProcessStep(name = "my-step")
+        val result = runner().run(step, createExecutionWorkspace(listOf(step)))
         assertNotNull(result.failure)
         assert(result.failure!!.message.contains("InTasksRun")) {
             "Failure message should name the unsupported type; got: ${result.failure!!.message}"
@@ -694,15 +671,15 @@ class CommandStepRunnerTest {
     @Test
     fun recordsLogsWithStepExecution() {
         val mockLogRecorder = MockStepLogRecorder()
+        val step = commandStep()
         val runner = CommandStepRunner(
-            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            workspaceManager = CapturingWorkspaceManager(testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "hello from step"),
             artefactStore = MockArtefactStore(),
             options = CommandStepRunner.Options(logRecorder = mockLogRecorder) // ← Inject mock
         )
 
-        val step = commandStep()
-        val result = runner.run(step, workspace)
+        val result = runner.run(step, createExecutionWorkspace(listOf(step)))
 
         // Verify log recorder was called
         assertTrue(mockLogRecorder.wasCalled)
@@ -713,15 +690,15 @@ class CommandStepRunnerTest {
     @Test
     fun skipsLogRecordingWhenNoOutput() {
         val mockLogRecorder = MockStepLogRecorder()
+        val step = commandStep()
         val runner = CommandStepRunner(
-            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            workspaceManager = CapturingWorkspaceManager(testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "", stderr = ""),
             artefactStore = MockArtefactStore(),
             options = CommandStepRunner.Options(logRecorder = mockLogRecorder)
         )
 
-        val step = commandStep()
-        runner.run(step, workspace)
+        runner.run(step, createExecutionWorkspace(listOf(step)))
 
         // Verify logs were skipped for empty output
         assertTrue(mockLogRecorder.recordsAreEmpty)
@@ -730,14 +707,15 @@ class CommandStepRunnerTest {
     @Test
     fun usesLogRefInStepRunDetail() {
         val mockLogRecorder = MockStepLogRecorder()
+        val step = commandStep()
         val runner = CommandStepRunner(
-            workspaceManager = CapturingWorkspaceManager(stepWorkingDir = testWorkspaceRoot.toString()),
+            workspaceManager = CapturingWorkspaceManager(testWorkspaceRoot.toString()),
             commandRunner = FixedCommandRunner(stdout = "stdout-content"),
             artefactStore = MockArtefactStore(),
             options = CommandStepRunner.Options(logRecorder = mockLogRecorder)
         )
 
-        val result = runner.run(commandStep(), workspace)
+        val result = runner.run(step, createExecutionWorkspace(listOf(step)))
 
         // Verify log ref is in result
         assertNotNull(result.detail?.stdout)
@@ -762,7 +740,7 @@ private class MockStepLogRecorder : StepLogRecorder {
         recordsAreEmpty = false
         return ResourceRef(
             kind = ResourceKind.RELATIVE_PATH,
-            value = "logs/${step.stepId}-test.log"
+            value = "logs/${step.metadata.id}-test.log"
         )
     }
 }

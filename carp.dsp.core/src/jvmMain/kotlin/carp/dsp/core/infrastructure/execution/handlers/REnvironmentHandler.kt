@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.execution.handlers
 
 import carp.dsp.core.application.execution.CommandPolicy
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.EnvironmentRef
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
@@ -9,6 +10,7 @@ import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentHandler
+import java.io.File
 import java.io.IOException
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -53,22 +55,38 @@ class REnvironmentHandler(
 
             true
         } catch (e: IllegalStateException) {
-            throw EnvironmentProvisioningException("R setup failed: ${e.message}", e)
+            throw EnvironmentSetupException(
+                message = "Failed to provision R environment '${r.name}': ${e.message}",
+                envId = r.id,
+                cause = e
+            )
         } catch (e: IOException) {
-            throw EnvironmentProvisioningException("R setup failed: ${e.message}", e)
+            throw EnvironmentSetupException(
+                message = "Failed to provision R environment '${r.name}': ${e.message}",
+                envId = r.id,
+                cause = e
+            )
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw EnvironmentProvisioningException("R setup interrupted", e)
+            throw EnvironmentSetupException(
+                message = "R setup interrupted for '${r.name}': ${e.message}",
+                envId = r.id,
+                cause = e
+            )
         }
     }
 
-    override fun generateExecutionCommand(environmentRef: EnvironmentRef, command: String): String {
+    override fun generateExecutionCommand(environmentRef: EnvironmentRef, command: String): String
+    {
         val r = environmentRef as REnvironmentRef
-        return if (r.renvLockFile != null) "Rscript --vanilla $command"
-        else "Rscript $command"
+        return if (r.renvLockFile != null) {
+            val rscript = rscriptCommand()
+            "$rscript --vanilla ${command.removePrefix("Rscript").trimStart()}"
+        } else command
     }
 
-    override fun teardown(environmentRef: EnvironmentRef): Boolean {
+    override fun teardown(environmentRef: EnvironmentRef): Boolean
+    {
         val r = environmentRef as REnvironmentRef
 
         return try {
@@ -203,8 +221,37 @@ class REnvironmentHandler(
     /**
      * Resolves the Rscript binary path.
      *
-     * Check order: `carp.rscript` system property → `CARP_RSCRIPT` env var → `"Rscript"`.
+     * Check order:
+     * 1. `carp.rscript` system property
+     * 2. `CARP_RSCRIPT` env var
+     * 3. `Rscript` on PATH
+     * 4. Windows: search `%PROGRAMFILES%\R\` for latest installed version
      */
-    private fun rscriptCommand(): String =
-        System.getProperty("carp.rscript") ?: System.getenv("CARP_RSCRIPT") ?: "Rscript"
+    private fun rscriptCommand(): String {
+        System.getProperty("carp.rscript")?.let { return it }
+        System.getenv("CARP_RSCRIPT")?.let { return it }
+
+        // Check if Rscript is already on PATH
+        try {
+            val result = Runtime.getRuntime().exec(arrayOf("Rscript", "--version"))
+            result.waitFor()
+            if (result.exitValue() == 0) return "Rscript"
+        } catch (_: Exception) { }
+
+        // Windows fallback: scan C:\Program Files\R\ for latest version
+        if (System.getProperty("os.name", "").lowercase().contains("windows")) {
+            val programFiles = System.getenv("PROGRAMFILES") ?: "C:\\Program Files"
+            val rRoot = File(programFiles, "R")
+            if (rRoot.isDirectory) {
+                val rscript = rRoot.listFiles()
+                    ?.filter { it.isDirectory }
+                    ?.sortedDescending()
+                    ?.map { File(it, "bin\\Rscript.exe") }
+                    ?.firstOrNull { it.exists() }
+                if (rscript != null) return rscript.absolutePath
+            }
+        }
+
+        return "Rscript"
+    }
 }

@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.execution.handlers
 
 import carp.dsp.core.application.execution.CommandPolicy
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.EnvironmentRef
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
@@ -41,23 +42,38 @@ class PixiEnvironmentHandler(
 
             generatePixiToml(projectDir, pixi)
 
-            check(installPixiEnvironment(projectDir)) { "pixi install failed" }
+            installPixiEnvironment(projectDir)
 
             check(validate(pixi)) { "Environment created but validation failed" }
 
             true
         } catch (e: IllegalStateException) {
-            throw EnvironmentProvisioningException("Pixi setup failed: ${e.message}", e)
+            throw EnvironmentSetupException(
+                message = "Failed to provision environment: ${pixi.name}",
+                envId = pixi.id,
+                cause = e
+            )
         } catch (e: IOException) {
-            throw EnvironmentProvisioningException("Pixi setup failed: ${e.message}", e)
+            throw EnvironmentSetupException(
+                message = "Failed to setup failed: ${pixi.name}",
+                envId = pixi.id,
+                cause = e
+            )
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw EnvironmentProvisioningException("Pixi setup interrupted", e)
+            throw EnvironmentSetupException(
+                message = "Pixi setup interrupted: ${pixi.name}",
+                envId = pixi.id,
+                cause = e
+            )
         }
     }
 
-    override fun generateExecutionCommand(environmentRef: EnvironmentRef, command: String): String =
-        "pixi run $command"
+    override fun generateExecutionCommand(environmentRef: EnvironmentRef, command: String): String {
+        val pixi = environmentRef as PixiEnvironmentRef
+        val manifest = getProjectDirectory(pixi.id).resolve("pixi.toml")
+        return "pixi run --manifest-path \"$manifest\" $command"
+    }
 
     override fun teardown(environmentRef: EnvironmentRef): Boolean {
         val pixi = environmentRef as PixiEnvironmentRef
@@ -107,25 +123,36 @@ class PixiEnvironmentHandler(
         Path.of(System.getProperty("user.home"), ".carp-dsp", "envs", "pixi", envId)
 
     private fun generatePixiToml(projectDir: Path, pixi: PixiEnvironmentRef) {
-        val dependenciesStr = pixi.dependencies.joinToString(
-            separator = "\n    ",
-            prefix = "\n    ",
-            postfix = "\n"
-        ) { "\"$it\"" }
+        val channels = pixi.channels.joinToString(", ") { "\"$it\"" }
+        val deps = buildString {
+            appendLine("python = \"==${pixi.pythonVersion}\"")
+            pixi.dependencies.forEach { appendLine("$it = \"*\"") }
+        }
 
-        val tomlContent = """
-            [project]
-            name = "carp-dsp-env"
-            version = "0.1.0"
-            description = "CARP-DSP Pixi Environment"
-            
-            [dependencies]
-            python = "${pixi.pythonVersion}"$dependenciesStr
-            
-            [tasks]
-        """.trimIndent()
+        val tomlContent = buildString {
+            appendLine("[project]")
+            appendLine("name = \"carp-dsp-env\"")
+            appendLine("version = \"0.1.0\"")
+            appendLine("channels = [$channels]")
+            appendLine("platforms = [\"${currentPlatform()}\"]")
+            appendLine()
+            appendLine("[dependencies]")
+            append(deps)
+            appendLine()
+            appendLine("[tasks]")
+        }
 
         projectDir.resolve("pixi.toml").writeText(tomlContent)
+    }
+
+    private fun currentPlatform(): String {
+        val os = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+        return when {
+            os.contains("win") -> if (arch.contains("aarch64")) "win-arm64" else "win-64"
+            os.contains("mac") -> if (arch.contains("aarch64")) "osx-arm64" else "osx-64"
+            else -> if (arch.contains("aarch64")) "linux-aarch64" else "linux-64"
+        }
     }
 
     private fun installPixiEnvironment(projectDir: Path): Boolean = try {
@@ -139,7 +166,18 @@ class PixiEnvironmentHandler(
             is JvmCommandRunner -> r.run(spec, defaultPolicy, projectDir)
             else -> runner.run(spec, defaultPolicy) // MockCommandRunner captures workingDir separately
         }
-        result.exitCode == 0
+        if (result.exitCode != 0) {
+            val detail = listOfNotNull(
+                result.stderr.takeIf { it.isNotBlank() },
+                result.stdout.takeIf { it.isNotBlank() }
+            ).joinToString("\n")
+            val msg = "pixi install failed (exit ${result.exitCode})" +
+                if (detail.isNotBlank()) ":\n$detail" else ""
+            throw IllegalStateException(msg)
+        }
+        true
+    } catch (e: IllegalStateException) {
+        throw e
     } catch (_: IOException) {
         false
     } catch (_: IllegalArgumentException) {
@@ -148,9 +186,10 @@ class PixiEnvironmentHandler(
 
     private fun findPythonExecutable(projectDir: Path): Path? =
         listOf(
-            projectDir.resolve(".pixi/envs/default/bin/python"),
-            projectDir.resolve(".pixi/envs/default/bin/python3"),
-            projectDir.resolve(".pixi/envs/default/Scripts/python.exe")
+            projectDir.resolve(".pixi/envs/default/python.exe"), // Windows (conda-style root)
+            projectDir.resolve(".pixi/envs/default/bin/python"), // Linux/macOS
+            projectDir.resolve(".pixi/envs/default/bin/python3"), // Linux/macOS fallback
+            projectDir.resolve(".pixi/envs/default/Scripts/python.exe") // Windows (Scripts subdir)
         ).find { it.toFile().exists() }
 
     private fun runCommand(executable: String): CommandResult =

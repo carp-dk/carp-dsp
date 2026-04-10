@@ -5,6 +5,7 @@ import dk.cachet.carp.analytics.application.plan.EnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
+import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.analytics.domain.environment.EnvironmentDefinition
 import dk.cachet.carp.analytics.domain.workflow.Step
@@ -73,8 +74,22 @@ class EnvironmentRefResolver {
             is PixiEnvironmentDefinition -> {
                 PixiEnvironmentRef(
                     id = id,
+                    name = definition.name,
                     dependencies = definition.dependencies,
-                    pythonVersion = definition.pythonVersion
+                    pythonVersion = definition.pythonVersion,
+                    channels = definition.channels,
+                )
+            }
+            is REnvironmentDefinition -> {
+                REnvironmentRef(
+                    id = id,
+                    name = definition.name,
+                    rVersion = definition.rVersion,
+                    rPackages = definition.rPackages,
+                    renvLockFile = definition.renvLockFile,
+                    installationPath = definition.installationPath,
+                    dependencies = definition.dependencies,
+                    environmentVariables = definition.environmentVariables
                 )
             }
             is SystemEnvironmentDefinition -> {

@@ -1,11 +1,12 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.application.execution.workspace.WorkspaceRefFactory
+import carp.dsp.core.application.plan.createResolvedOutput
 import dk.cachet.carp.analytics.application.execution.ExecutionIssueKind
 import dk.cachet.carp.analytics.application.execution.ExecutionStatus
 import dk.cachet.carp.analytics.application.execution.FailureKind
-import dk.cachet.carp.analytics.application.plan.DataRef
 import dk.cachet.carp.analytics.application.plan.ResolvedBindings
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
@@ -42,16 +43,14 @@ class StepOutputValidatorTest {
         tempRoot.deleteRecursively()
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     private fun freshOutputsDir(): Path =
         tempRoot.resolve("outputs-${UUID.randomUUID()}").createDirectories()
 
     private fun bindings(vararg outputIds: UUID): ResolvedBindings =
         ResolvedBindings(
-            outputs = outputIds.associateWith { id -> DataRef(id = id, type = "text/plain") }
+            outputs = outputIds.associateWith { id -> createResolvedOutput(id, "text/plain", path = "$id.txt") }
         )
 
     private fun sha256Hex(bytes: ByteArray): String {
@@ -59,18 +58,20 @@ class StepOutputValidatorTest {
         return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
-    // -------------------------------------------------------------------------
     // A — Declared output exists
-    // -------------------------------------------------------------------------
 
     @Test
     fun `declared output exists - no warning issued`() {
         val outputId = UUID.randomUUID()
         val dir = freshOutputsDir()
-        dir.resolve(outputId.toString()).createFile()
+        val fileName = "$outputId.txt"
+        dir.resolve(fileName).createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            stepMetadata = StepMetadata(
+                id = outputId,
+                name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = bindings(outputId)
         )
@@ -83,12 +84,18 @@ class StepOutputValidatorTest {
         val stepId = UUID.randomUUID()
         val outputId = UUID.randomUUID()
         val dir = freshOutputsDir()
-        dir.resolve(outputId.toString()).createFile()
+        val fileName = "$outputId.txt"
+        dir.resolve(fileName).createFile()
 
-        val result = StepOutputValidator.validate(stepId, dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            stepMetadata = StepMetadata(
+                id = stepId, name = "Test Step"
+            ),
+                dir, bindings(outputId)
+        )
 
         val ref = result.producedOutputRefs.single()
-        val expected = WorkspaceRefFactory.stepOutputRef(stepId, outputId.toString())
+        val expected = WorkspaceRefFactory.stepOutputRef(stepId, fileName)
         assertEquals(expected, ref.location)
     }
 
@@ -97,9 +104,15 @@ class StepOutputValidatorTest {
         val outputId = UUID.randomUUID()
         val content = "hello world".toByteArray()
         val dir = freshOutputsDir()
-        dir.resolve(outputId.toString()).writeBytes(content)
+        val fileName = "$outputId.txt"
+        dir.resolve(fileName).writeBytes(content)
 
-        val result = StepOutputValidator.validate(UUID.randomUUID(), dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            stepMetadata = StepMetadata(
+                id = outputId, name = "Test Step"
+            ),
+                dir, bindings(outputId)
+        )
 
         assertEquals(content.size.toLong(), result.producedOutputRefs.single().sizeBytes)
     }
@@ -109,9 +122,15 @@ class StepOutputValidatorTest {
         val outputId = UUID.randomUUID()
         val content = "sha256 test content".toByteArray()
         val dir = freshOutputsDir()
-        dir.resolve(outputId.toString()).writeBytes(content)
+        val fileName = "$outputId.txt"
+        dir.resolve(fileName).writeBytes(content)
 
-        val result = StepOutputValidator.validate(UUID.randomUUID(), dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            StepMetadata(
+            id = outputId, name = "Test Step"
+        ),
+            dir, bindings(outputId)
+        )
 
         assertEquals(sha256Hex(content), result.producedOutputRefs.single().sha256)
     }
@@ -122,7 +141,12 @@ class StepOutputValidatorTest {
         val dir = freshOutputsDir()
         dir.resolve(outputId.toString()).createFile()
 
-        val result = StepOutputValidator.validate(UUID.randomUUID(), dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            StepMetadata(
+            id = outputId, name = "Test Step"
+        ),
+            dir, bindings(outputId)
+        )
 
         assertNull(result.forcedStatus)
         assertNull(result.failure)
@@ -139,7 +163,9 @@ class StepOutputValidatorTest {
         // deliberately do NOT create the file
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = outputId, name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = bindings(outputId)
         )
@@ -154,7 +180,12 @@ class StepOutputValidatorTest {
         val outputId = UUID.randomUUID()
         val dir = freshOutputsDir()
 
-        val result = StepOutputValidator.validate(UUID.randomUUID(), dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            StepMetadata(
+            id = outputId, name = "Test Step"
+        ),
+            dir, bindings(outputId)
+        )
 
         assertNull(result.forcedStatus, "Default policy must not force FAILED status")
         assertNull(result.failure)
@@ -166,11 +197,18 @@ class StepOutputValidatorTest {
         val outputId = UUID.randomUUID()
         val dir = freshOutputsDir()
 
-        val result = StepOutputValidator.validate(stepId, dir, bindings(outputId))
+        val result = StepOutputValidator.validate(
+            StepMetadata(
+            id = stepId, name = "Test Step"
+        ),
+            dir, bindings(outputId)
+        )
 
         val ref = result.producedOutputRefs.singleOrNull()
         assertNotNull(ref)
-        assertEquals(WorkspaceRefFactory.stepOutputRef(stepId, outputId.toString()), ref.location)
+        val expectedFileName = "$outputId.txt"
+        val expected = WorkspaceRefFactory.stepOutputRef(stepId, expectedFileName)
+        assertEquals(expected, ref.location)
         assertNull(ref.sizeBytes)
         assertNull(ref.sha256)
     }
@@ -181,7 +219,9 @@ class StepOutputValidatorTest {
         val dir = freshOutputsDir()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = outputId, name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = bindings(outputId),
             policy = OutputValidationPolicy(strictOutputs = true)
@@ -198,7 +238,9 @@ class StepOutputValidatorTest {
         val dir = freshOutputsDir()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = outputId, name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = bindings(outputId),
             policy = OutputValidationPolicy(warnOnMissingDeclaredOutputs = false)
@@ -207,9 +249,7 @@ class StepOutputValidatorTest {
         assertTrue(result.issues.none { it.kind == ExecutionIssueKind.OUTPUT_MISSING })
     }
 
-    // -------------------------------------------------------------------------
     // B — Unexpected outputs
-    // -------------------------------------------------------------------------
 
     @Test
     fun `unexpected file in outputs dir - warning issue emitted`() {
@@ -217,7 +257,9 @@ class StepOutputValidatorTest {
         dir.resolve("unexpected.csv").createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = ResolvedBindings()
         )
@@ -233,7 +275,9 @@ class StepOutputValidatorTest {
         dir.resolve("extra.txt").createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = ResolvedBindings()
         )
@@ -249,7 +293,9 @@ class StepOutputValidatorTest {
         dir.resolve("m-file.txt").createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = ResolvedBindings()
         )
@@ -266,7 +312,9 @@ class StepOutputValidatorTest {
         dir.resolve("extra.bin").createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = ResolvedBindings(),
             policy = OutputValidationPolicy(warnOnUnexpectedOutputs = false)
@@ -279,10 +327,13 @@ class StepOutputValidatorTest {
     fun `unexpected outputs - declared output files are not reported as unexpected`() {
         val outputId = UUID.randomUUID()
         val dir = freshOutputsDir()
-        dir.resolve(outputId.toString()).createFile()
+        val fileName = "$outputId.txt"
+        dir.resolve(fileName).createFile()
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = bindings(outputId)
         )
@@ -298,7 +349,9 @@ class StepOutputValidatorTest {
         logsDir.resolve("run.log").createFile() // must NOT be seen by validator
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = isolatedOutputsDir,
             bindings = ResolvedBindings()
         )
@@ -309,9 +362,7 @@ class StepOutputValidatorTest {
         )
     }
 
-    // -------------------------------------------------------------------------
     // WorkspaceRefFactory — path traversal regression
-    // -------------------------------------------------------------------------
 
     @Test
     fun `WorkspaceRefFactory rejects absolute path`() {
@@ -340,9 +391,7 @@ class StepOutputValidatorTest {
         assertTrue(threw, "WorkspaceRefFactory must reject paths containing ':'")
     }
 
-    // -------------------------------------------------------------------------
     // Overflow cap — large number of unexpected files
-    // -------------------------------------------------------------------------
 
     @Test
     fun `unexpected output list is capped and remainder noted`() {
@@ -350,7 +399,9 @@ class StepOutputValidatorTest {
         repeat(25) { i -> dir.resolve("file-%02d.txt".format(i)).createFile() }
 
         val result = StepOutputValidator.validate(
-            stepId = UUID.randomUUID(),
+            StepMetadata(
+                id = UUID.randomUUID(), name = "Test Step"
+            ),
             outputsDir = dir,
             bindings = ResolvedBindings()
         )

@@ -3,6 +3,8 @@ package carp.dsp.core.application.authoring.mapper
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import carp.dsp.core.application.environment.REnvironmentDefinition
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedEnvironmentKindException
 import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +49,28 @@ class EnvironmentImporterTest
             "pythonVersion" to listOf(pythonVersion),
             "channels" to channels,
         ),
+    )
+
+    private fun rDesc(
+        name: String = "r-env",
+        rVersion: String = "4.3.0",
+        rPackages: List<String> = listOf("ggplot2"),
+        renvLockFile: String? = null,
+        installationPath: String? = null,
+        dependencies: List<String> = emptyList(),
+        extras: Map<String, List<String>> = emptyMap(),
+    ) = EnvironmentDescriptor(
+        name = name,
+        kind = "r",
+        spec = mapOf(
+            "rVersion" to listOf(rVersion),
+            "rPackages" to rPackages,
+        ).let { spec ->
+            val withOptional = if (renvLockFile != null) spec + ("renvLockFile" to listOf(renvLockFile)) else spec
+            val withPath = if (installationPath != null) withOptional + ("installationPath" to listOf(installationPath)) else withOptional
+            val withDeps = if (dependencies.isNotEmpty()) withPath + ("dependencies" to dependencies) else withPath
+            withDeps + extras
+        },
     )
 
     // ── importEnvironment: conda ──────────────────────────────────────────────
@@ -165,6 +189,127 @@ class EnvironmentImporterTest
             EnvironmentImporter.importEnvironment( id, pixiDesc( channels = listOf("conda-forge", "bioconda") ) )
         )
         assertEquals( listOf("conda-forge", "bioconda"), result.channels )
+    }
+
+    // ── importEnvironment: r ──────────────────────────────────────────────────
+
+    @Test
+    fun `importEnvironment maps r kind to REnvironmentDefinition`()
+    {
+        val id = UUID.randomUUID()
+        val result = EnvironmentImporter.importEnvironment( id, rDesc() )
+        assertIs<REnvironmentDefinition>( result )
+    }
+
+    @Test
+    fun `importEnvironment preserves r id and name`()
+    {
+        val id = UUID.randomUUID()
+        val result = EnvironmentImporter.importEnvironment( id, rDesc( name = "my-r-env" ) )
+        assertEquals( id, result.id )
+        assertEquals( "my-r-env", result.name )
+    }
+
+    @Test
+    fun `importEnvironment maps r rVersion`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( rVersion = "4.4.0" ) )
+        )
+        assertEquals( "4.4.0", result.rVersion )
+    }
+
+    @Test
+    fun `importEnvironment maps r rPackages`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( rPackages = listOf("dplyr", "tidyr", "ggplot2") ) )
+        )
+        assertEquals( listOf("dplyr", "tidyr", "ggplot2"), result.rPackages )
+    }
+
+    @Test
+    fun `importEnvironment maps r renvLockFile`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( renvLockFile = "/path/to/renv.lock" ) )
+        )
+        assertEquals( "/path/to/renv.lock", result.renvLockFile )
+    }
+
+    @Test
+    fun `importEnvironment maps r installationPath`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( installationPath = "/opt/R/4.3.0" ) )
+        )
+        assertEquals( "/opt/R/4.3.0", result.installationPath )
+    }
+
+    @Test
+    fun `importEnvironment maps r dependencies`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( dependencies = listOf("pandoc", "ghostscript") ) )
+        )
+        assertEquals( listOf("pandoc", "ghostscript"), result.dependencies )
+    }
+
+    @Test
+    fun `importEnvironment defaults r rVersion to 4_3_0 when absent`()
+    {
+        val id = UUID.randomUUID()
+        val d = EnvironmentDescriptor( name = "e", kind = "r", spec = mapOf("rPackages" to listOf("pkg")) )
+        val result = assertIs<REnvironmentDefinition>( EnvironmentImporter.importEnvironment( id, d ) )
+        assertEquals( "4.3.0", result.rVersion )
+    }
+
+    @Test
+    fun `importEnvironment defaults r rPackages to empty when absent`()
+    {
+        val id = UUID.randomUUID()
+        val d = EnvironmentDescriptor( name = "e", kind = "r" )
+        val result = assertIs<REnvironmentDefinition>( EnvironmentImporter.importEnvironment( id, d ) )
+        assertEquals( emptyList(), result.rPackages )
+    }
+
+    @Test
+    fun `importEnvironment r renvLockFile is optional`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( renvLockFile = null ) )
+        )
+        assertEquals( null, result.renvLockFile )
+    }
+
+    @Test
+    fun `importEnvironment r installationPath is optional`()
+    {
+        val id = UUID.randomUUID()
+        val result = assertIs<REnvironmentDefinition>(
+            EnvironmentImporter.importEnvironment( id, rDesc( installationPath = null ) )
+        )
+        assertEquals( null, result.installationPath )
+    }
+
+    @Test
+    fun `importEnvironment r extracts environment variables from env-prefixed keys`()
+    {
+        val id = UUID.randomUUID()
+        val d = rDesc(
+            extras = mapOf(
+                "env.R_LIBS" to listOf("/usr/local/lib/R"),
+                "env.R_HOME" to listOf("/opt/R/4.3.0"),
+            )
+        )
+        val result = assertIs<REnvironmentDefinition>( EnvironmentImporter.importEnvironment( id, d ) )
+        assertEquals( mapOf("R_LIBS" to "/usr/local/lib/R", "R_HOME" to "/opt/R/4.3.0"), result.environmentVariables )
     }
 
     // ── importEnvironment: kind matching is case-insensitive ──────────────────

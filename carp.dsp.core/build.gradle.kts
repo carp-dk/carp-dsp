@@ -23,6 +23,7 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-analytics")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("com.charleskorn.kaml:kaml:0.61.0")
+                implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")
 
                 // For coroutines support
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
@@ -30,6 +31,9 @@ kotlin {
                 // Ktor HTTP client for data retrieval
                 implementation("io.ktor:ktor-client-core:2.3.7")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+
+                // Multiplatform datetime support
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
             }
         }
 
@@ -45,6 +49,7 @@ kotlin {
                 // Ktor CIO engine for JVM
                 implementation("io.ktor:ktor-client-cio:2.3.7")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")
             }
         }
 
@@ -56,6 +61,13 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
             }
         }
+    }
+}
+
+// ── Integration test filtering ───────────────────────────────────────────────
+tasks.named<Test>("jvmTest") {
+    if (System.getenv("CI") == "true" || System.getenv("SKIP_INTEGRATION") == "true") {
+        exclude("**/integration/**")
     }
 }
 

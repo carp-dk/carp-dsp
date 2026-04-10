@@ -1,0 +1,33 @@
+schemaVersion: "1.0"
+metadata:
+  id: "minimal-file-output"
+  name: "Minimal File Output"
+  version: "1.0"
+
+environments:
+  system-env:
+    name: "System"
+    kind: "system"
+    spec: {}
+
+steps:
+  - id: "write-file"
+    metadata:
+      name: "Write File"
+      version: "1.0"
+    environmentId: "system-env"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-001"
+      name: "write-output"
+      executable: "sh"
+      args:
+        - "-c"
+        - "echo hello > steps/01_write_file/outputs/output-txt.txt"
+    inputs: []
+    outputs:
+      - id: "output-txt"
+        descriptor:
+          type: "TXT"
+          format: "utf-8"

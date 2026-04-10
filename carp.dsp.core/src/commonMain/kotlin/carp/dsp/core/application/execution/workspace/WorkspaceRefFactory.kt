@@ -7,7 +7,7 @@ import dk.cachet.carp.common.application.UUID
 /**
  * Factory for creating [ResourceRef] instances from ExecutionWorkspace-relative paths.
  *
- * This utility ensures all artifact paths are:
+ * This utility ensures all artefact paths are:
  * - Relative to ExecutionWorkspace.executionRoot
  * - Using [ResourceKind.RELATIVE_PATH]
  * - Properly validated to prevent path traversal attacks
@@ -40,11 +40,11 @@ object WorkspaceRefFactory {
     }
 
     /**
-     * Creates a ResourceRef for an output artifact under a specific step.
+     * Creates a ResourceRef for an output artefact under a specific step.
      *
-     * Builds the path: steps/{stepId}/outputs/{relativeFileName}
+     * Builds the path: steps/{stepMetadata}/outputs/{relativeFileName}
      *
-     * @param stepId The step ID that produced the artifact
+     * @param stepId The step ID that produced the artefact
      * @param relativeFileName The filename or relative path within the outputs directory
      * @return A ResourceRef with kind=RELATIVE_PATH and value relative to executionRoot
      * @throws IllegalArgumentException if filename is empty, absolute, contains "..", or contains ":"

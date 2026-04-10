@@ -378,7 +378,7 @@ class WorkflowDescriptorImporterTest
         )
 
         val step = importer.import( desc ).workflow.getComponents().first() as Step
-        assertNotNull( step.outputs.first().schema )
+        assertNotNull( step.outputs.first().location)
     }
 
     @Test

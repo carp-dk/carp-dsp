@@ -8,6 +8,7 @@ import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.*
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Files
 import java.nio.file.Path
@@ -44,7 +45,7 @@ class StepExecutionDemo {
         private fun executeDemo(command: CommandSpec, commandLabel: String) {
             val tmpDir = Files.createTempDirectory("step-execution-demo")
             try {
-                val workspace = ExecutionWorkspace(UUID.randomUUID(), tmpDir.toString())
+                val workspace = ExecutionWorkspace(UUID.randomUUID(), tmpDir.toString(), "StepExecutionDemo")
                 val artefactStore = FileSystemArtefactStore(tmpDir.resolve("artifacts"))
                 val runner = CommandStepRunner(
                     workspaceManager = DemoWorkspaceManager(tmpDir),
@@ -91,8 +92,10 @@ class StepExecutionDemo {
         private fun createDemoStep(command: CommandSpec): PlannedStep {
             // This demo executes arbitrary commands; outputs are not pre-declared.
             return PlannedStep(
-                stepId = UUID.randomUUID(),
-                name = "demo-step",
+                metadata = StepMetadata(
+                    id = UUID.randomUUID(),
+                    name = "demo-step"
+                ),
                 process = command,
                 bindings = ResolvedBindings(
                     outputs = emptyMap()
@@ -148,7 +151,7 @@ private class DemoWorkspaceManager(
     private val root: Path
 ) : WorkspaceManager {
     override fun create(plan: ExecutionPlan, runId: UUID): ExecutionWorkspace =
-        ExecutionWorkspace(runId = runId, executionRoot = root.toString())
+        ExecutionWorkspace(runId = runId, executionRoot = root.toString(), "StepExecutionDemo")
 
     override fun prepareStepDirectories(workspace: ExecutionWorkspace, stepId: UUID) {
         root.resolve("steps").resolve(stepId.toString()).resolve("work").createDirectories()

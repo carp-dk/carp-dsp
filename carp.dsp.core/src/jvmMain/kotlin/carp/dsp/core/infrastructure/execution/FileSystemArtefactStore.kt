@@ -1,5 +1,7 @@
 package carp.dsp.core.infrastructure.execution
 
+import dk.cachet.carp.analytics.application.exceptions.ArtefactCollectionException
+import dk.cachet.carp.analytics.application.exceptions.ExecutionIOException
 import dk.cachet.carp.analytics.application.execution.ArtefactMetadata
 import dk.cachet.carp.analytics.application.execution.ArtefactRecord
 import dk.cachet.carp.analytics.application.execution.ArtefactStore
@@ -10,6 +12,7 @@ import dk.cachet.carp.common.application.UUID
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -75,10 +78,21 @@ class FileSystemArtefactStore(
 
             producedRef
         }
-        catch (_: Exception)
-        {
-            null
-            // TODO: Log error, possibly escalate based on policy
+        catch (e: IOException) {
+            throw ExecutionIOException(
+                message = "Failed to record artifact",
+                filePath = location.value,
+                cause = e
+            )
+            // TODO Add logging
+        }
+        catch (e: IllegalArgumentException) {
+            throw ArtefactCollectionException(
+                message = "Invalid artifact metadata for outputId=$outputId: ${e.message}",
+                artefactId = outputId,
+                cause = e
+            )
+            // TODO Add logging
         }
     }
 
@@ -103,9 +117,7 @@ class FileSystemArtefactStore(
         }
     }
 
-    // -------------------------------------------------------------------------
     // Persistence
-    // -------------------------------------------------------------------------
 
     private fun getArtefactDir( stepId: UUID, outputId: UUID ): Path =
         outputsDir.resolve(stepId.toString()).resolve(outputId.toString())
@@ -142,7 +154,15 @@ class FileSystemArtefactStore(
                 .filter { it.exists() }
                 .forEach { tryLoadArtefact(it) }
         }
-        catch (_: Exception) { /* Graceful degradation — start with empty registry */ }
+        catch (_: IOException)
+        {
+            // TODO Add logging
+            /* Failed to walk directory - graceful degradation */
+        }
+        catch (_: SecurityException) {
+            // TODO Add logging
+            /* Insufficient permissions to read - graceful degradation */
+        }
     }
 
     @OptIn(ExperimentalTime::class)
@@ -168,12 +188,19 @@ class FileSystemArtefactStore(
             )
             _registry[persisted.outputId] = record
         }
-        catch (_: Exception) { /* Skip malformed metadata files */ }
+        catch (_: IOException)
+        {
+            // TODO: add logs - collect logs for ExecutionReport
+            // _logs.add(ExecutionLog(level = "WARN", message = "Failed to walk artifact directory", cause = e))
+        }
+        catch (_: SecurityException)
+        {
+            // TODO: add logs - collect logs for ExecutionReport
+            // _logs.add(ExecutionLog(level = "WARN", message = "No read permission for artifact directory", cause = e))
+        }
     }
 
-    // -------------------------------------------------------------------------
-    // Serialisable metadata for persistence
-    // -------------------------------------------------------------------------
+    // Serializable metadata for persistence
 
     @kotlinx.serialization.Serializable
     private data class PersistedArtefactMetadata(

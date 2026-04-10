@@ -2,8 +2,9 @@ package carp.dsp.core.application.plan
 
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
 import dk.cachet.carp.analytics.application.plan.*
-import dk.cachet.carp.analytics.domain.data.FileDestination
 import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.data.FileLocation
+import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
 import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
 import dk.cachet.carp.analytics.domain.tasks.Literal
@@ -21,13 +22,12 @@ fun createTestExecutionPlan(
 ): ExecutionPlan {
     val steps = (1..stepCount).map { i ->
         PlannedStep(
-            stepId = UUID.randomUUID(),
-            name = "Step $i",
-            process = CommandSpec("python", listOf(ExpandedArg.Literal("script.py"))),
-            bindings = ResolvedBindings(
-                inputs = mapOf(),
-                outputs = mapOf(UUID.randomUUID() to DataRef(UUID.randomUUID(), "csv"))
+            metadata = StepMetadata(
+                id = UUID.randomUUID(),
+                name = "Step $i",
             ),
+            process = CommandSpec("python", listOf(ExpandedArg.Literal("script.py"))),
+            bindings = createBindingsWithInputsOutputs(),
             environmentRef = UUID.randomUUID()
         )
     }
@@ -43,7 +43,7 @@ fun createTestExecutionPlan(
     }
 
     return ExecutionPlan(
-        workflowId = workflowId,
+        workflowName = workflowId,
         planId = planId,
         steps = steps,
         issues = issues,
@@ -71,7 +71,11 @@ fun createTestWorkflowDefinition(
                 OutputDataSpec(
                     id = UUID.randomUUID(),
                     name = "output-$i",
-                    destination = FileDestination("output-$i.csv", format = FileFormat.CSV),
+                    location = FileLocation(
+                        path = "/data/output-$i.csv",
+                        format = FileFormat.CSV,
+                        metadata = mapOf("encoding" to "UTF-8")
+                    ),
                 )
             ),
             task = CommandTaskDefinition(
@@ -113,49 +117,6 @@ fun createTestWorkflowDefinition(
 
 // ── PlanIssue Helpers ──────────────────────────────────────────────────────────
 
-fun createTestPlanWithIssues(
-    errors: Int = 0,
-    warnings: Int = 0,
-    infos: Int = 0
-): ExecutionPlan {
-    val issues = mutableListOf<PlanIssue>()
-
-    repeat(errors) { i ->
-        issues.add(
-            PlanIssue(
-                severity = PlanIssueSeverity.ERROR,
-                code = "ERROR_$i",
-                message = "Error $i",
-                stepId = null
-            )
-        )
-    }
-
-    repeat(warnings) { i ->
-        issues.add(
-            PlanIssue(
-                severity = PlanIssueSeverity.WARNING,
-                code = "WARNING_$i",
-                message = "Warning $i",
-                stepId = null
-            )
-        )
-    }
-
-    repeat(infos) { i ->
-        issues.add(
-            PlanIssue(
-                severity = PlanIssueSeverity.INFO,
-                code = "INFO_$i",
-                message = "Info $i",
-                stepId = null
-            )
-        )
-    }
-
-    return createTestExecutionPlan(issues = issues)
-}
-
 // ── Mock Objects ───────────────────────────────────────────────────────────────
 
 class MockPlanHasher(val hashValue: String = "mock-hash-12345") : PlanHasher {
@@ -167,4 +128,90 @@ class DeterministicPlanHasher : PlanHasher {
         // Simple deterministic hash for testing
         return plan.planId.hashCode().toString().padStart(64, '0').take(64)
     }
+}
+
+// ── Binding Helpers ────────────────────────────────────────────────────────────
+// Create a single ResolvedInput. All parameters are customizable with sensible defaults.
+fun createResolvedInput(
+    id: UUID = UUID.randomUUID(),
+    name: String = "input-data",
+    description: String = "Test input data",
+    // Source-specific defaults
+    path: String = "/data/input.csv",
+    format: FileFormat = FileFormat.CSV,
+    metadata: Map<String, String> = mapOf("encoding" to "UTF-8"),
+): ResolvedInput {
+    val spec = InputDataSpec(
+        id = id,
+        name = name,
+        description = description,
+        location = FileLocation(
+            path = path,
+            format = format,
+            metadata = metadata
+        )
+    )
+
+
+    return ResolvedInput(
+        spec,
+        location = FileLocation(
+        path = path,
+        format = format,
+        metadata = metadata
+    )
+    )
+}
+
+fun createResolvedOutput(
+    id: UUID = UUID.randomUUID(),
+    name: String = "output-data",
+    description: String = "Test output data",
+    format: FileFormat? = null,
+    path: String? = null,
+    resolvedPath: String? = null,
+): ResolvedOutput {
+    // Use path if provided, otherwise try resolvedPath, otherwise use default
+    val actualPath = path ?: resolvedPath ?: "/data/output.json"
+
+    val fileLocation = FileLocation(
+        path = actualPath,
+        format = format ?: FileFormat.CSV
+    )
+
+    val spec = OutputDataSpec(
+        id = id,
+        name = name,
+        description = description,
+        location = fileLocation
+    )
+
+    return ResolvedOutput(spec, location = fileLocation)
+}
+
+/**
+ * Overload for minimal calls: createResolvedOutput(id, "text/plain")
+ */
+fun createResolvedOutput(id: UUID, formatMimeType: String): ResolvedOutput {
+    val format = try {
+        FileFormat.entries.first { it.mimeType == formatMimeType }
+    } catch (_: NoSuchElementException) {
+        FileFormat.CSV
+    }
+    return createResolvedOutput(id, format = format)
+}
+
+
+// Helper that composes a ResolvedInput and ResolvedOutput into ResolvedBindings.
+fun createBindingsWithInputsOutputs(
+    inputId: UUID = UUID.randomUUID(),
+    outputId: UUID = UUID.randomUUID(),
+): ResolvedBindings {
+    val resolvedInput = createResolvedInput(id = inputId, path = "/data/input.csv")
+    val resolvedOutput = createResolvedOutput(id = outputId, path = "/data/output.json")
+
+    return ResolvedBindings(
+        inputs = mapOf(UUID.randomUUID() to resolvedInput),
+        outputs = mapOf(UUID.randomUUID() to resolvedOutput)
+    )
 }

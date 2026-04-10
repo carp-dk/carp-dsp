@@ -1,0 +1,154 @@
+schemaVersion: "1.0"
+metadata:
+  id: "signal-processing-workflow-001"
+  name: "EEG Signal Processing Pipeline"
+  description: "Four-step signal processing pipeline: validate, preprocess, extract features, generate report"
+  version: "1.0"
+  tags:
+    - "eeg"
+    - "signal-processing"
+    - "python"
+    - "system"
+    - "fixture"
+
+environments:
+  env-system:
+    name: "system"
+    kind: "system"
+    spec: {}
+
+steps:
+  # Step 1: Validate raw signal input
+  - id: "validate-signal"
+    metadata:
+      name: "Validate Signal"
+      description: "Check required columns exist and all values are numeric"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-validate"
+      name: "validate-signal"
+      executable: "python"
+      args:
+        - "scripts/sp_validate.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "raw-signal"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Raw multi-channel signal data"
+        source:
+          type: "file"
+          path: "inputs/eeg_signal.csv"
+    outputs:
+      - id: "validated-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Validated signal data"
+
+  # Step 2: Preprocess — z-score normalise each channel
+  - id: "preprocess-signal"
+    metadata:
+      name: "Preprocess Signal"
+      description: "Z-score normalise each channel column"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn:
+      - "validate-signal"
+    task:
+      type: "command"
+      id: "task-preprocess"
+      name: "preprocess-signal"
+      executable: "python"
+      args:
+        - "scripts/sp_preprocess.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "validated-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "validate-signal"
+          outputId: "validated-csv"
+    outputs:
+      - id: "preprocessed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Normalised signal data"
+
+  # Step 3: Extract per-channel features
+  - id: "extract-features"
+    metadata:
+      name: "Extract Features"
+      description: "Compute mean, std, min, max per channel"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn:
+      - "preprocess-signal"
+    task:
+      type: "command"
+      id: "task-features"
+      name: "extract-features"
+      executable: "python"
+      args:
+        - "scripts/sp_extract_features.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "preprocessed-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "preprocess-signal"
+          outputId: "preprocessed-csv"
+    outputs:
+      - id: "features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Feature matrix (channel x statistic)"
+
+  # Step 4: Generate summary report
+  - id: "generate-report"
+    metadata:
+      name: "Generate Report"
+      description: "Summarise pipeline results into a report CSV"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn:
+      - "extract-features"
+    task:
+      type: "command"
+      id: "task-report"
+      name: "generate-report"
+      executable: "python"
+      args:
+        - "scripts/sp_generate_report.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+        source:
+          type: "step-output"
+          stepId: "extract-features"
+          outputId: "features-csv"
+    outputs:
+      - id: "report-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Pipeline summary report"

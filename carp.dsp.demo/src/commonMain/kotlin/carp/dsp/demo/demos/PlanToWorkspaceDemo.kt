@@ -66,15 +66,15 @@ class PlanToWorkspaceDemo(
         println("RUN ID        : $runId")
         println("EXECUTION ROOT: ${workspace.executionRoot}")
         println()
-        println("PER-STEP LAYOUT (sorted by stepId):")
+        println("PER-STEP LAYOUT (sorted by stepMetadata):")
         println("-".repeat(60))
 
-        plan.steps.sortedBy { it.stepId.toString() }.forEach { step ->
-            println("  Step ${step.stepId}")
-            println("    work dir : ${workspace.stepDir(step.stepId)}")
-            println("    inputs/  : ${workspace.stepInputsDir(step.stepId)}")
-            println("    outputs/ : ${workspace.stepOutputsDir(step.stepId)}")
-            println("    logs/    : ${workspace.stepLogsDir(step.stepId)}")
+        plan.steps.sortedBy { it.metadata.id.toString() }.forEach { step ->
+            println("  Step ${step.metadata.id} : ${step.metadata.name}")
+            println("    work dir : ${workspace.stepDir(step.metadata.id)}")
+            println("    inputs/  : ${workspace.stepInputsDir(step.metadata.id)}")
+            println("    outputs/ : ${workspace.stepOutputsDir(step.metadata.id)}")
+            println("    logs/    : ${workspace.stepLogsDir(step.metadata.id)}")
         }
 
         println("-".repeat(60))

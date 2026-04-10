@@ -2,6 +2,8 @@ package carp.dsp.core.infrastructure.execution.handlers
 
 import carp.dsp.core.application.execution.CommandPolicy
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
+import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
+import dk.cachet.carp.analytics.application.exceptions.ProcessExecutionException
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.EnvironmentRef
@@ -29,8 +31,9 @@ class CondaEnvironmentHandler(
         val conda = environmentRef as CondaEnvironmentRef
 
         if (!verifyCondaInstalled()) {
-            throw EnvironmentProvisioningException(
-                "Conda not found. Install conda and add to PATH."
+            throw EnvironmentSetupException(
+                message = "Conda not found. Install conda and add to PATH.",
+                envId = environmentRef.id,
             )
         }
 
@@ -41,14 +44,16 @@ class CondaEnvironmentHandler(
             dependencies = conda.dependencies
         )
         if (!createSuccess) {
-            throw EnvironmentProvisioningException(
-                "Failed to create conda environment: ${conda.name}"
+            throw EnvironmentSetupException(
+                message = "Failed to create conda environment: ${conda.name}",
+                envId = environmentRef.id,
             )
         }
 
         if (!validate(conda)) {
-            throw EnvironmentProvisioningException(
-                "Environment created but validation failed"
+            throw EnvironmentSetupException(
+                message = "Environment ${conda.name}, created but validation failed",
+                envId = environmentRef.id,
             )
         }
 
@@ -64,10 +69,6 @@ class CondaEnvironmentHandler(
         val conda = environmentRef as CondaEnvironmentRef
 
         return try {
-            // Mirrors conda's own behaviour: `conda env remove` exits 0 silently when
-            // the environment does not exist. teardown's postcondition is "the environment
-            // does not exist", which is already satisfied whether we removed it or it
-            // was never there. -y suppresses the interactive confirmation prompt in CI.
             runCommand("env", "remove", "-n", conda.name, "-y").exitCode == 0
         } catch (_: Exception) {
             false
@@ -134,23 +135,33 @@ class CondaEnvironmentHandler(
         }
 
         val createArgs = mutableListOf("create", "-n", name, "-y", "python=$pythonVersion")
-        for (channel in channels) {
-            createArgs.add("-c")
-        createArgs.add(channel)
-        }
+
         createArgs.addAll(condaPackages)
         if (pipPackages.isNotEmpty()) createArgs.add("pip")
 
+        for (channel in channels) {
+            createArgs.add("-c")
+            createArgs.add(channel)
+        }
+
         val createResult = runCommand(createArgs)
         if (createResult.exitCode != 0) {
-            throw CondaCommandExecutionException("conda create failed:\n${createResult.stderr}")
+            throw ProcessExecutionException(
+                message = "Failed to run conda command:\n${createResult.stderr}",
+                command = "conda",
+                exitCode = 0
+            )
         }
 
         if (pipPackages.isNotEmpty()) {
             val pipCmd = listOf("run", "-n", name, "pip", "install") + pipPackages
             val pipResult = runCommand(pipCmd)
             if (pipResult.exitCode != 0) {
-                throw CondaCommandExecutionException("pip install failed:\n${pipResult.stderr}")
+                throw ProcessExecutionException(
+                    message = "Failed pip install:\n${pipResult.stderr}",
+                    command = "conda",
+                    exitCode = 0
+                )
             }
         }
 
@@ -174,5 +185,3 @@ class CondaEnvironmentHandler(
 
     private fun runCommand(vararg args: String): CommandResult = runCommand(args.toList())
 }
-
-class CondaCommandExecutionException(message: String) : IllegalStateException(message)

@@ -1,31 +1,19 @@
 package carp.dsp.core.application.authoring.mapper
 
-import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
-import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.*
+import dk.cachet.carp.analytics.application.exceptions.UnsupportedTaskTypeException
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.data.OutputDataSpec
-import dk.cachet.carp.analytics.domain.tasks.ArgToken
-import dk.cachet.carp.analytics.domain.tasks.CommandTaskDefinition
-import dk.cachet.carp.analytics.domain.tasks.InputRef
-import dk.cachet.carp.analytics.domain.tasks.Literal
-import dk.cachet.carp.analytics.domain.tasks.Module
-import dk.cachet.carp.analytics.domain.tasks.OutputRef
-import dk.cachet.carp.analytics.domain.tasks.ParamRef
-import dk.cachet.carp.analytics.domain.tasks.PythonTaskDefinition
-import dk.cachet.carp.analytics.domain.tasks.Script
-import dk.cachet.carp.analytics.domain.tasks.TaskDefinition
+import dk.cachet.carp.analytics.domain.tasks.*
 import dk.cachet.carp.common.application.UUID
 
 /**
  * Maps [TaskDescriptor] variants to [TaskDefinition] domain equivalents.
  *
- * Handles three task types:
+ * Handles four task types:
  * - [CommandTaskDescriptor] → [CommandTaskDefinition]
  * - [PythonTaskDescriptor] → [PythonTaskDefinition]
+ * - [RTaskDescriptor] → [RTaskDefinition]
  * - [InProcessTaskDescriptor] → Throws (not yet supported)
  *
  */
@@ -41,13 +29,19 @@ internal object TaskImporter
      */
     fun importTask(
         descriptor: TaskDescriptor,
-        workflowNamespace: UUID
+        workflowNamespace: UUID,
+        inputs: List<InputDataSpec> = emptyList(),
+        outputs: List<OutputDataSpec> = emptyList()
     ): TaskDefinition =
         when ( descriptor )
         {
-            is CommandTaskDescriptor -> importCommandTask( descriptor, workflowNamespace )
-            is PythonTaskDescriptor -> importPythonTask( descriptor, workflowNamespace )
-            is InProcessTaskDescriptor -> throw UnsupportedTaskTypeException( "in-process" )
+            is CommandTaskDescriptor -> importCommandTask( descriptor, workflowNamespace, inputs, outputs )
+            is PythonTaskDescriptor -> importPythonTask( descriptor, workflowNamespace, inputs, outputs )
+            is RTaskDescriptor -> importRTask( descriptor, workflowNamespace, inputs, outputs )
+            is InProcessTaskDescriptor -> throw UnsupportedTaskTypeException(
+                "in-process task descriptor is not supported",
+                InProcessTaskDescriptor::class.qualifiedName!!
+            )
         }
 
     /**
@@ -103,7 +97,34 @@ internal object TaskImporter
         )
 
     /**
-     * Infers the type of an argument string and converts it to a domain ArgToken.
+     * Imports an R task descriptor.
+     *
+     * @param rTaskDescriptor The R task descriptor
+     * @param workflowNamespace The namespace UUID for deterministic ID generation
+     * @param inputs List of input ports (for argument inference)
+     * @param outputs List of output ports (for argument inference)
+     * @return Domain RTaskDefinition
+     */
+    fun importRTask(
+        rTaskDescriptor: RTaskDescriptor,
+        workflowNamespace: UUID,
+        inputs: List<InputDataSpec> = emptyList(),
+        outputs: List<OutputDataSpec> = emptyList()
+    ): RTaskDefinition =
+        RTaskDefinition(
+            id = rTaskDescriptor.id?.let { tryParseUuid( it ) }
+                ?: DeterministicUUID.v5(workflowNamespace, "task:r:${rTaskDescriptor.name}"),
+            name = rTaskDescriptor.name,
+            description = rTaskDescriptor.description,
+            entryPoint = when ( val ep = rTaskDescriptor.entryPoint )
+            {
+                else -> RScript(ep.scriptPath)
+            },
+            args = rTaskDescriptor.args.map { inferAndImportArgument(it, inputs, outputs, workflowNamespace) },
+        )
+
+    /**
+     * Infers the type of argument string and converts it to a domain ArgToken.
      *
      * Type inference rules:
      * - `input.N` → InputRef(inputsN.id)

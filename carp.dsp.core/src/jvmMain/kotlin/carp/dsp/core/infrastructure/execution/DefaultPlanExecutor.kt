@@ -1,21 +1,13 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
-import dk.cachet.carp.analytics.application.execution.ArtefactStore
-import dk.cachet.carp.analytics.application.execution.ExecutionIssue
-import dk.cachet.carp.analytics.application.execution.ExecutionIssueKind
-import dk.cachet.carp.analytics.application.execution.ExecutionReport
-import dk.cachet.carp.analytics.application.execution.ExecutionStatus
-import dk.cachet.carp.analytics.application.execution.PlanExecutor
-import dk.cachet.carp.analytics.application.execution.RunPolicy
-import dk.cachet.carp.analytics.application.execution.StepRunResult
+import dk.cachet.carp.analytics.application.exceptions.*
+import dk.cachet.carp.analytics.application.execution.*
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
-import dk.cachet.carp.analytics.application.plan.CommandSpec
-import dk.cachet.carp.analytics.application.plan.ExecutionPlan
-import dk.cachet.carp.analytics.application.plan.ExpandedArg
-import dk.cachet.carp.analytics.application.plan.PlannedStep
+import dk.cachet.carp.analytics.application.plan.*
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
+import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentConfig
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentExecutionLogs
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentOrchestrator
@@ -65,7 +57,7 @@ class DefaultPlanExecutor(
     ): ExecutionReport {
         val workspace = workspaceManager.create(plan, runId)
         val stepOrder = options.stepOrderStrategy.order(plan)
-        val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.stepId }
+        val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.metadata.id }
         val stepRunner = createStepRunner()
         val environmentCoordinator = EnvironmentExecutionCoordinator(
             plan = plan,
@@ -91,16 +83,22 @@ class DefaultPlanExecutor(
             for (stepId in stepOrder) {
                 val step = stepsById[stepId]
                 if (step == null) {
-                    halted = handleUnknownStep(stepId, policy, stepResults, runIssues, halted)
+                    halted = handleUnknownStep(
+                        StepMetadata(
+                        "Unknown step $stepId",
+                        id = stepId
+                    ),
+                        policy, stepResults, runIssues, halted
+                    )
                     continue
                 }
 
                 if (halted) {
-                    recordSkippedStep(stepId, stepResults)
+                    recordSkippedStep(step.metadata, stepResults)
                     continue
                 }
 
-                val result = runKnownStep(step, knownStepContext)
+                val result = executeStepWithFallback(step, knownStepContext)
                 if (result.status == ExecutionStatus.FAILED && policy.stopOnFailure) {
                     halted = true
                 }
@@ -160,19 +158,19 @@ class DefaultPlanExecutor(
     )
 
     private fun handleUnknownStep(
-        stepId: UUID,
+        stepMetadata: StepMetadata,
         policy: RunPolicy,
         stepResults: MutableList<StepRunResult>,
         runIssues: MutableList<ExecutionIssue>,
         halted: Boolean
     ): Boolean {
         runIssues += ExecutionIssue(
-            stepId = stepId,
+            stepMetadata = stepMetadata,
             kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
-            message = "Step order strategy referenced unknown step id '$stepId'."
+            message = "Step order strategy referenced unknown step id '${stepMetadata.name}' (${stepMetadata.id})."
         )
         stepResults += StepRunResult(
-            stepId = stepId,
+            stepMetadata = stepMetadata,
             status = ExecutionStatus.FAILED,
             startedAt = null,
             finishedAt = null,
@@ -182,9 +180,9 @@ class DefaultPlanExecutor(
         return halted || policy.stopOnFailure
     }
 
-    private fun recordSkippedStep(stepId: UUID, stepResults: MutableList<StepRunResult>) {
+    private fun recordSkippedStep(stepMetadata: StepMetadata, stepResults: MutableList<StepRunResult>) {
         stepResults += StepRunResult(
-            stepId = stepId,
+            stepMetadata = stepMetadata,
             status = ExecutionStatus.SKIPPED,
             startedAt = null,
             finishedAt = null,
@@ -199,7 +197,7 @@ class DefaultPlanExecutor(
         val preparedStep = context.environmentCoordinator.prepareStep(step, context.runIssues)
         if (preparedStep == null) {
             val failedResult = StepRunResult(
-                stepId = step.stepId,
+                stepMetadata = step.metadata,
                 status = ExecutionStatus.FAILED,
                 startedAt = null,
                 finishedAt = null,
@@ -211,8 +209,80 @@ class DefaultPlanExecutor(
 
         val result = context.stepRunner.run(preparedStep, context.workspace, context.policy)
         context.stepResults += result
-        context.runIssues += context.stepRunner.drainIssues(step.stepId)
+        context.runIssues += context.stepRunner.drainIssues(step.metadata.id)
         return result
+    }
+
+    /**
+     * Executes a step, catching any workflow execution exceptions
+     * and converting them to ExecutionIssues.
+     *
+     * @param step The step to execute
+     * @param context Shared execution context with issue tracking
+     * @return Either the successful result or a failed result with issue recorded
+     */
+    private fun executeStepWithFallback(
+        step: PlannedStep,
+        context: KnownStepExecutionContext
+    ): StepRunResult = try {
+        runKnownStep(step, context)
+    } catch (e: WorkflowExecutionException) {
+        handleStepException(step.metadata, e, context)
+    }
+
+    /**
+     * Converts a WorkflowExecutionException to an ExecutionIssue
+     * and returns a failed StepRunResult.
+     *
+     * Maps exception types to appropriate issue kinds and formats
+     * human-readable error messages.
+     *
+     * @param stepMetadata The metadata of the step that threw the exception
+     * @param exception The exception that occurred
+     * @param context Shared execution context to record the issue
+     * @return A failed StepRunResult documenting the error
+     */
+    private fun handleStepException(
+        stepMetadata: StepMetadata,
+        exception: WorkflowExecutionException,
+        context: KnownStepExecutionContext
+    ): StepRunResult {
+        val issueKind = when (exception) {
+            is ProcessExecutionException -> ExecutionIssueKind.PROCESS_FAILED
+            is EnvironmentSetupException -> ExecutionIssueKind.ORCHESTRATOR_ERROR
+            is ExecutionIOException -> ExecutionIssueKind.ORCHESTRATOR_ERROR
+            is ArtefactCollectionException -> ExecutionIssueKind.ORCHESTRATOR_ERROR
+            else -> ExecutionIssueKind.ORCHESTRATOR_ERROR
+        }
+
+        val message = when (exception) {
+            is ProcessExecutionException ->
+                "Command '${exception.command}' failed with exit code ${exception.exitCode ?: "unknown"}"
+            is EnvironmentSetupException ->
+                "Failed to setup environment: ${exception.message}"
+            is ExecutionIOException ->
+                "File I/O error: ${exception.message}"
+            is ArtefactCollectionException ->
+                "Failed to collect artifacts: ${exception.message}"
+            else ->
+                "Execution error: ${exception.message ?: "Unknown error"}"
+        }
+
+        context.runIssues.add(
+            ExecutionIssue(
+                stepMetadata = stepMetadata,
+                kind = issueKind,
+                message = message
+            )
+        )
+
+        return StepRunResult(
+            stepMetadata = stepMetadata,
+            status = ExecutionStatus.FAILED,
+            startedAt = Clock.System.now(),
+            finishedAt = Clock.System.now(),
+            outputs = emptyList()
+        )
     }
 
     private fun buildExecutionReport(
@@ -261,7 +331,7 @@ class DefaultPlanExecutor(
 
             var failed = false
             for (environmentRef in requiredRefs) {
-                if (!ensureSetup(environmentRef.id, runIssues)) {
+                if (!ensureSetup(environmentRef.id, runIssues )) {
                     failed = true
                 }
             }
@@ -275,14 +345,14 @@ class DefaultPlanExecutor(
             val environmentRef = plan.requiredEnvironmentRefs[environmentId]
             if (environmentRef == null) {
                 runIssues += ExecutionIssue(
-                    stepId = step.stepId,
+                    stepMetadata = step.metadata,
                     kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
-                    message = "No EnvironmentRef mapped for step '${step.name}' ($environmentId)."
+                    message = "No EnvironmentRef mapped for step '${step.metadata.name}' ($environmentId)."
                 )
                 return null
             }
 
-            if (config.setupTiming == SetupTiming.LAZY && !ensureSetup(environmentRef.id, runIssues, step.stepId)) {
+            if (config.setupTiming == SetupTiming.LAZY && !ensureSetup(environmentRef.id, runIssues, step.metadata)) {
                 return null
             }
 
@@ -308,26 +378,33 @@ class DefaultPlanExecutor(
         private fun ensureSetup(
             environmentId: String,
             runIssues: MutableList<ExecutionIssue>,
-            stepId: UUID? = null
+            stepMetadata: StepMetadata? = null
         ): Boolean {
             if (setupEnvironments.contains(environmentId)) return true
 
             val ref = requiredRefs.firstOrNull { it.id == environmentId }
             if (ref == null) {
                 runIssues += ExecutionIssue(
-                    stepId = stepId,
+                    stepMetadata = stepMetadata,
                     kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
                     message = "Environment '$environmentId' is not available in requiredEnvironmentRefs."
                 )
                 return false
             }
 
-            val setupOk = runCatching { orchestrator.setup(ref) }.getOrElse { false }
+            val setupResult = runCatching { orchestrator.setup(ref) }
+            val setupOk = setupResult.getOrDefault(false)
             if (!setupOk) {
+                val ex = setupResult.exceptionOrNull()
+                val msg = buildString {
+                    append("Failed to setup environment '${ref.id}'")
+                    ex?.message?.let { append(": $it") }
+                    ex?.cause?.message?.let { append(" ($it)") }
+                }
                 runIssues += ExecutionIssue(
-                    stepId = stepId,
+                    stepMetadata = stepMetadata,
                     kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
-                    message = "Failed to setup environment '${ref.id}'."
+                    message = msg
                 )
                 return false
             }
@@ -339,21 +416,21 @@ class DefaultPlanExecutor(
         private fun wrapStepCommand(
             step: PlannedStep,
             environmentId: String,
-            environmentRef: dk.cachet.carp.analytics.application.plan.EnvironmentRef,
+            environmentRef: EnvironmentRef,
             runIssues: MutableList<ExecutionIssue>
         ): PlannedStep? {
             val process = step.process
             if (process !is CommandSpec) return step
 
             val wrappedSpec = runCatching {
-                val baseCommand = buildBaseCommand(process)
+                val baseCommand = buildBaseCommand(process, step.bindings)
                 val wrapped = orchestrator.generateExecutionCommand(environmentRef, baseCommand)
                 toShellCommandSpec(wrapped)
             }.getOrNull()
 
             if (wrappedSpec == null) {
                 runIssues += ExecutionIssue(
-                    stepId = step.stepId,
+                    stepMetadata = step.metadata,
                     kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
                     message = "Failed to generate execution command for environment '$environmentId'."
                 )
@@ -363,17 +440,15 @@ class DefaultPlanExecutor(
             return step.copy(process = wrappedSpec)
         }
 
-        private fun buildBaseCommand(spec: CommandSpec): String {
-            val args = spec.args
-                .map { argToLiteral(it) }
-                .joinToString(" ") { shellQuote(it) }
-            return if (args.isBlank()) spec.executable else "${spec.executable} $args"
-        }
+        private fun buildBaseCommand( spec: CommandSpec, bindings: ResolvedBindings ): String
+        {
+            val resolver = ArgResolver( bindings )
 
-        private fun argToLiteral(arg: ExpandedArg): String = when (arg) {
-            is ExpandedArg.Literal -> arg.value
-            is ExpandedArg.DataReference -> arg.dataRefId.toString()
-            is ExpandedArg.PathSubstitution -> arg.template.replace("$()", arg.dataRefId.toString())
+            val args = spec.args
+                .map { resolver.resolve( it ) }
+                .joinToString( " " ) { shellQuote( it ) }
+
+            return if ( args.isBlank() ) spec.executable else "${spec.executable} $args"
         }
 
         private fun toShellCommandSpec(command: String): CommandSpec {

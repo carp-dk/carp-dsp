@@ -11,7 +11,7 @@ import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 import dk.cachet.carp.common.application.UUID
 
 /**
- * requiredEnvironmentRefs transforms a WorkflowDefinition (author-time model) into an ExecutionPlan (plan-time artifact).
+ * requiredEnvironmentRefs transforms a WorkflowDefinition (author-time model) into an ExecutionPlan (plan-time artefact).
  *
  * The planner uses a multi-stage algorithm:
  * 1. Flatten workflow steps preserving declaration order
@@ -35,7 +35,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
      * @param definition The workflow definition to plan
      * @return ExecutionPlan containing planned steps and any planning issues
      */
-    override fun plan(definition: WorkflowDefinition): ExecutionPlan {
+    override fun plan( definition: WorkflowDefinition ): ExecutionPlan {
         // Initialize
         val issues = mutableListOf<PlanIssue>()
         val plannedSteps = mutableMapOf<UUID, PlannedStep>()
@@ -61,11 +61,16 @@ class DefaultExecutionPlanner : ExecutionPlanner {
         issues.addAll(order.issues)
 
         // Plan Steps (in sorted order)
-        for (stepId in order.ordered) {
+        for ((executionIndex, stepId) in order.ordered.withIndex()) {
             val step = steps.find { it.metadata.id == stepId }
             if (step != null) {
                 // Resolve bindings
-                val bindings = bindingsResolver.resolve(step, plannedSteps, issues)
+                val bindings = bindingsResolver.resolve(
+                    step,
+                    plannedSteps,
+                    issues,
+                    executionIndex
+                )
                 // Compile step
                 val compiled = stepCompiler.compile(step, bindings, issues)
                 if (compiled != null) {
@@ -76,7 +81,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
 
         // Construct ExecutionPlan
         return ExecutionPlan(
-            workflowId = definition.workflow.metadata.id.toString(),
+            workflowName = definition.workflow.metadata.name,
             planId = UUID.randomUUID().toString(),
             steps = plannedSteps.values.toList(),
             issues = issues.toList(),
