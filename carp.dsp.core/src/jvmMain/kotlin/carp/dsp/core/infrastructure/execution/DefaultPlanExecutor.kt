@@ -1,5 +1,6 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.application.execution.ExecutionLogger
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.exceptions.*
 import dk.cachet.carp.analytics.application.execution.*
@@ -13,6 +14,7 @@ import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentExecutionLog
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentOrchestrator
 import dk.cachet.carp.analytics.infrastructure.execution.SetupTiming
 import dk.cachet.carp.common.application.UUID
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.datetime.Clock
 import java.nio.file.Paths
 
@@ -39,6 +41,8 @@ class DefaultPlanExecutor(
     private val options: Options = Options()
 ) : PlanExecutor {
 
+    private val logger = KotlinLogging.logger {}
+
     /**
      * Executes all steps in [plan] and returns a completed [ExecutionReport].
      *
@@ -55,9 +59,30 @@ class DefaultPlanExecutor(
         runId: UUID,
         policy: RunPolicy
     ): ExecutionReport {
+        logger.info { "Executing plan '${plan.workflowName}' (${plan.steps.size} step(s), runId=$runId)" }
+        val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy)
+
+        try {
+            executeSteps(plan, policy, context, environmentCoordinator)
+        } finally {
+            environmentCoordinator.teardownAll(context.runIssues)
+        }
+
+        return buildExecutionReport(
+            plan = plan,
+            runId = runId,
+            stepResults = context.stepResults,
+            runIssues = context.runIssues,
+            environmentLogs = environmentCoordinator.environmentLogs()
+        )
+    }
+
+    private fun initializeExecutionContext(
+        plan: ExecutionPlan,
+        runId: UUID,
+        policy: RunPolicy
+    ): Pair<KnownStepExecutionContext, EnvironmentExecutionCoordinator> {
         val workspace = workspaceManager.create(plan, runId)
-        val stepOrder = options.stepOrderStrategy.order(plan)
-        val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.metadata.id }
         val stepRunner = createStepRunner()
         val environmentCoordinator = EnvironmentExecutionCoordinator(
             plan = plan,
@@ -66,7 +91,8 @@ class DefaultPlanExecutor(
         )
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
-        val knownStepContext = KnownStepExecutionContext(
+        val context = KnownStepExecutionContext(
+            runId = runId,
             workspace = workspace,
             policy = policy,
             stepRunner = stepRunner,
@@ -74,46 +100,81 @@ class DefaultPlanExecutor(
             stepResults = stepResults,
             runIssues = runIssues
         )
-        var halted = false
-        try {
-            if (environmentCoordinator.setupEagerEnvironments(runIssues) && policy.stopOnFailure) {
-                halted = true
-            }
+        return Pair(context, environmentCoordinator)
+    }
 
+    private fun executeSteps(
+        plan: ExecutionPlan,
+        policy: RunPolicy,
+        context: KnownStepExecutionContext,
+        environmentCoordinator: EnvironmentExecutionCoordinator
+    ) {
+        val stepOrder = options.stepOrderStrategy.order(plan)
+        val stepsById: Map<UUID, PlannedStep> = plan.steps.associateBy { it.metadata.id }
+
+        if (environmentCoordinator.setupEagerEnvironments(context.runIssues) && policy.stopOnFailure) {
+            // Record all remaining steps as skipped
             for (stepId in stepOrder) {
                 val step = stepsById[stepId]
-                if (step == null) {
-                    halted = handleUnknownStep(
-                        StepMetadata(
-                        "Unknown step $stepId",
-                        id = stepId
-                    ),
-                        policy, stepResults, runIssues, halted
-                    )
-                    continue
-                }
-
-                if (halted) {
-                    recordSkippedStep(step.metadata, stepResults)
-                    continue
-                }
-
-                val result = executeStepWithFallback(step, knownStepContext)
-                if (result.status == ExecutionStatus.FAILED && policy.stopOnFailure) {
-                    halted = true
+                if (step != null) {
+                    recordSkippedStep(step.metadata, context.stepResults)
                 }
             }
-        } finally {
-            environmentCoordinator.teardownAll(runIssues)
+            return
         }
 
-        return buildExecutionReport(
-            plan = plan,
-            runId = runId,
-            stepResults = stepResults,
-            runIssues = runIssues,
-            environmentLogs = environmentCoordinator.environmentLogs()
-        )
+        var halted = false
+        for (stepId in stepOrder) {
+            val step = stepsById[stepId]
+            halted = when {
+                step == null -> handleUnknownStep(
+                    StepMetadata("Unknown step $stepId", id = stepId),
+                    policy, context.stepResults, context.runIssues, halted
+                )
+                halted -> {
+                    logger.info { "Skipping step '${step.metadata.name}' (halted)" }
+                    recordSkippedStep(step.metadata, context.stepResults)
+                    true
+                }
+                else -> processStep(step, context, policy)
+            }
+        }
+    }
+
+    private fun processStep(
+        step: PlannedStep,
+        context: KnownStepExecutionContext,
+        policy: RunPolicy
+    ): Boolean {
+        logger.info { "Running step '${step.metadata.name}'" }
+        val startMs = System.currentTimeMillis()
+        options.executionLogger.onStepStarted(context.runId, step.metadata.id, step.metadata.name)
+
+        val result = executeStepWithFallback(step, context)
+        val durationMs = System.currentTimeMillis() - startMs
+
+        return when (result.status) {
+            ExecutionStatus.FAILED -> {
+                logger.warn { "Step '${step.metadata.name}' failed" }
+                options.executionLogger.onStepFailed(
+                    context.runId,
+                    step.metadata.id,
+                    step.metadata.name,
+                    result.failure?.message ?: "non-zero exit"
+                )
+                policy.stopOnFailure
+            }
+            else -> {
+                logger.info { "Step '${step.metadata.name}' succeeded" }
+                options.executionLogger.onStepCompleted(
+                    context.runId,
+                    step.metadata.id,
+                    step.metadata.name,
+                    durationMs
+                )
+                false
+            }
+        }
     }
 
     // Helpers
@@ -145,10 +206,12 @@ class DefaultPlanExecutor(
             )
         ),
         val environmentConfig: EnvironmentConfig = EnvironmentConfig(),
-        val clock: Clock = Clock.System
+        val clock: Clock = Clock.System,
+        val executionLogger: ExecutionLogger = Slf4jExecutionLogger()
     )
 
     private data class KnownStepExecutionContext(
+        val runId: UUID,
         val workspace: ExecutionWorkspace,
         val policy: RunPolicy,
         val stepRunner: CommandStepRunner,

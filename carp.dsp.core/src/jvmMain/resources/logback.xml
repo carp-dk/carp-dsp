@@ -1,0 +1,14 @@
+<configuration>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss} %-5level [%X{stepId}] %logger{25} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Set to DEBUG to see stdout from child processes -->
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+
+</configuration>
