@@ -28,7 +28,7 @@ class Slf4jExecutionLogger : ExecutionLogger {
     }
 
     override fun onStepFailed(runId: UUID, stepId: UUID, stepName: String, reason: String) {
-        logger.warn { "[$stepName] failed — $reason" }
+        logger.warn { "[$stepName] failed - $reason" }
         MDC.clear()
     }
 }

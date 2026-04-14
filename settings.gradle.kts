@@ -7,6 +7,12 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Auto-provision JDKs via Foojay — needed because health-workflow-interfaces:lib targets JVM 21
+    // while carp-dsp targets JVM 17. In a composite build only the root's toolchain resolver applies.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+}
+
 dependencyResolutionManagement {
     @Suppress("UnstableApiUsage")
     repositories {
@@ -151,6 +157,30 @@ if (useLocalCore && corePath != null) {
         println("📦 USE_LOCAL_CORE disabled - falling back to published artifacts")
     }
     println("📦 Using published dk.cachet.carp artifacts from Maven Central")
+}
+
+// ---- Composite build: health-workflow-interfaces ----
+// Required in all environments — not published to Maven Central.
+// Locally: sibling directory ../health-workflow-interfaces
+// CI: checked out to the same relative path by ci.yml
+val hwifPath = file("../health-workflow-interfaces")
+if (!hwifPath.exists()) {
+    throw GradleException(
+        """
+        health-workflow-interfaces not found at ${hwifPath.absolutePath}
+
+        This library is not published to Maven Central and must be available
+        as a local composite build.
+
+        Locally:  clone health-workflow-interfaces as a sibling of carp-dsp
+        CI:       the checkout step in ci.yml must check it out to health-workflow-interfaces/
+        """.trimIndent()
+    )
+}
+includeBuild(hwifPath) {
+    dependencySubstitution {
+        substitute(module("health.workflows:lib")).using(project(":lib"))
+    }
 }
 
 include(":detekt")

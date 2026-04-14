@@ -37,7 +37,8 @@ kotlin {
 
         jvmMain {
             dependencies {
-                // JVM-specific dependencies if needed
+                // JSON parsing for demo output
+                implementation("com.google.code.gson:gson:2.10.1")
             }
         }
 
@@ -69,15 +70,28 @@ tasks.register<JavaExec>("run") {
 
 }
 
-// Create a test task for P0 demo
-tasks.register<JavaExec>("testP0Demo") {
-    group = "verification"
-    description = "Test the P0 Planning Demo"
+// Generic workflow runner: ./gradlew :carp.dsp.demo:runWorkflow -Pworkflow=<path> [-Pworkspace=<dir>]
+tasks.register<JavaExec>("runWorkflow") {
+    group = "application"
+    description = "Run a DSP workflow YAML file"
 
     classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
                 kotlin.jvm().compilations.getByName("main").output.allOutputs
-    mainClass.set("carp.dsp.demo.TestP0DemoKt")
+    mainClass.set("carp.dsp.demo.WorkflowRunnerKt")
 
+    val workflowArg = project.findProperty("workflow") as String?
+    val workspaceArg = project.findProperty("workspace") as String?
+
+    val runArgs = mutableListOf<String>()
+    if (workflowArg != null) {
+        runArgs += listOf("--workflow", workflowArg)
+    }
+    if (workspaceArg != null) {
+        runArgs += listOf("--workspace", workspaceArg)
+    }
+    args = runArgs
+
+    standardInput = System.`in`
     standardOutput = System.out
 }
 

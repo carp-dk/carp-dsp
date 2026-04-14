@@ -124,10 +124,21 @@ class PixiEnvironmentHandler(
 
     private fun generatePixiToml(projectDir: Path, pixi: PixiEnvironmentRef) {
         val channels = pixi.channels.joinToString(", ") { "\"$it\"" }
-        val deps = buildString {
-            appendLine("python = \"==${pixi.pythonVersion}\"")
-            pixi.dependencies.forEach { appendLine("$it = \"*\"") }
+
+        // Partition dependencies into conda (default) vs PyPI (prefixed with "pypi:")
+        val (pypiDeps, condaDeps) = pixi.dependencies.partition { it.startsWith("pypi:") }
+
+        val condaSection = buildString {
+            appendLine("python = \"${pixi.pythonVersion}.*\"")
+            condaDeps.forEach { appendLine("$it = \"*\"") }
         }
+
+        val pypiSection = if (pypiDeps.isNotEmpty()) buildString {
+            pypiDeps.forEach { dep ->
+                val pkg = dep.removePrefix("pypi:")
+                appendLine("$pkg = \"*\"")
+            }
+        } else null
 
         val tomlContent = buildString {
             appendLine("[project]")
@@ -137,7 +148,12 @@ class PixiEnvironmentHandler(
             appendLine("platforms = [\"${currentPlatform()}\"]")
             appendLine()
             appendLine("[dependencies]")
-            append(deps)
+            append(condaSection)
+            if (pypiSection != null) {
+                appendLine()
+                appendLine("[pypi-dependencies]")
+                append(pypiSection)
+            }
             appendLine()
             appendLine("[tasks]")
         }
