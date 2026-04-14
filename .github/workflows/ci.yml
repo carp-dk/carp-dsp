@@ -25,6 +25,13 @@ jobs:
         path: carp.core-kotlin
         fetch-depth: 0
 
+    - name: Checkout health-workflow-interfaces
+      uses: actions/checkout@v4
+      with:
+        repository: carp-dk/health-workflow-interfaces
+        path: health-workflow-interfaces
+        fetch-depth: 0
+
     - name: Verify directory structure
       run: |
         echo "🔍 Directory structure verification:"
@@ -36,6 +43,9 @@ jobs:
         echo ""
         echo "📁 carp.core-kotlin directory:"
         ls -la carp.core-kotlin/ || echo "❌ carp.core-kotlin directory not found"
+        echo ""
+        echo "📁 health-workflow-interfaces directory:"
+        ls -la health-workflow-interfaces/ || echo "❌ health-workflow-interfaces directory not found"
 
     - name: Verify CARP core branch and commit
       run: |

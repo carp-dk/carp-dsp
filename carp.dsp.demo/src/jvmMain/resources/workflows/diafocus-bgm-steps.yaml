@@ -1,0 +1,145 @@
+schemaVersion: "1.0"
+metadata:
+  id: "diafocus-bgm-steps"
+  name: "DiaFocus Blood Glucose & Steps Analysis"
+  description: "Three-step workflow for blood glucose monitoring and daily steps analysis. Loads BGM and steps data from a single source, then performs comprehensive analysis."
+  version: "1.0"
+  tags:
+    - "diafocus"
+    - "blood-glucose"
+    - "steps"
+    - "python"
+    - "system"
+    - "health-monitoring"
+
+environments:
+  env-system:
+    name: "system"
+    kind: "system"
+    spec: {}
+  env-pixi:
+    name: "python-pixi"
+    kind: "pixi"
+    spec:
+      dependencies:
+        - "pandas"
+        - "numpy"
+      pythonVersion:
+        - "3.11"
+
+steps:
+  # Step 1: Load BGM data — extract blood_glucose array from source JSON
+  - id: "load-bgm"
+    metadata:
+      name: "Load Blood Glucose Data"
+      description: "Read diafocus_mock.json and extract the blood_glucose array"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-load-bgm"
+      name: "load-bgm"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_bgm.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "diafocus-mock"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "DiaFocus mock data containing blood glucose and steps arrays"
+        source:
+          type: "file"
+          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/data/diafocus_mock.json"
+    outputs:
+      - id: "bgm-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Extracted blood glucose readings array"
+
+  # Step 2: Load Steps data — extract daily_steps array from source JSON
+  - id: "load-steps"
+    metadata:
+      name: "Load Daily Steps Data"
+      description: "Read diafocus_mock.json and extract the daily_steps array"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-load-steps"
+      name: "load-steps"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_steps.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "diafocus-mock"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "DiaFocus mock data containing blood glucose and steps arrays"
+        source:
+          type: "file"
+          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/data/diafocus_mock.json"
+    outputs:
+      - id: "steps-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Extracted daily steps readings array"
+
+  # Step 3: Analyse BGM + Steps — run comprehensive analysis combining both datasets
+  - id: "analyse"
+    metadata:
+      name: "Analyse BGM and Steps"
+      description: "Compute blood glucose metrics (in-range %, thresholds) and step trends"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "load-bgm"
+      - "load-steps"
+    task:
+      type: "command"
+      id: "task-analyse"
+      name: "bgm-steps-analysis"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/bgm_steps_analysis.py"
+        - "--bgm"
+        - "input.0"
+        - "--steps"
+        - "input.1"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "bgm-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Blood glucose measurements"
+        source:
+          type: "step-output"
+          stepId: "load-bgm"
+          outputId: "bgm-json"
+      - id: "steps-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Daily step counts"
+        source:
+          type: "step-output"
+          stepId: "load-steps"
+          outputId: "steps-json"
+    outputs:
+      - id: "summary-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Analysis summary with BGM metrics and step trend"
+

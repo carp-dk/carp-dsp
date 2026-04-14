@@ -43,3 +43,9 @@ build/
 # Coverage reports
 .kover/
 **/kover/
+
+# Demo results (generated during demo runs)
+demo_results/
+dsp-output/
+
+/.claude/settings.local.json
