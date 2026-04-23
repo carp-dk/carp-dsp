@@ -82,7 +82,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
             }
         }
 
-        logger.info { "Plan ready — ${plannedSteps.size} step(s), ${issues.size} issue(s)" }
+        logger.info { "Plan ready - ${plannedSteps.size} step(s), ${issues.size} issue(s)" }
         // Construct ExecutionPlan
         return ExecutionPlan(
             workflowName = definition.workflow.metadata.name,

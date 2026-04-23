@@ -25,6 +25,13 @@ jobs:
         path: carp.core-kotlin
         fetch-depth: 0
 
+    - name: Checkout health-workflow-interfaces
+      uses: actions/checkout@v4
+      with:
+        repository: carp-dk/health-workflow-interfaces
+        path: health-workflow-interfaces
+        fetch-depth: 0
+
     - name: Verify CARP core setup
       run: |
         cd carp.core-kotlin

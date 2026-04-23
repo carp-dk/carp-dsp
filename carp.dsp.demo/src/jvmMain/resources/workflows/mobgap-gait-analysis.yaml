@@ -1,0 +1,431 @@
+schemaVersion: "1.0"
+metadata:
+  id: "mobgap-gait-analysis"
+  name: "Mobgap Gait Analysis Pipeline"
+  description: "Six-step IMU gait analysis pipeline using the Mobilise-D algorithm suite. Imports a lab recording, detects gait sequences and initial contacts, estimates per-second gait parameters, assembles walking bouts, and produces aggregated digital mobility outcomes (DMOs)."
+  version: "1.0"
+  tags:
+    - "mobgap"
+    - "gait"
+    - "imu"
+    - "mobilise-d"
+    - "walking-speed"
+    - "python"
+    - "health-monitoring"
+
+environments:
+  env-pixi:
+    name: "python-pixi"
+    kind: "pixi"
+    spec:
+      dependencies:
+        - "pypi:mobgap"
+        - "pypi:seaborn"
+        - "pypi:matplotlib"
+      pythonVersion:
+        - "3.12"
+
+steps:
+  # Step 1: Import — fetch LabExampleDataset and write flat files
+  - id: "import-data"
+    metadata:
+      name: "Import IMU Data"
+      description: "Download mobgap's built-in LabExampleDataset (MS cohort, Test11, Trial1) and export to imu_data.csv + config.json"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-import-data"
+      name: "import-data"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/import_data.py"
+        - "--imu-data"
+        - "output.0"
+        - "--config"
+        - "output.1"
+    outputs:
+      - id: "imu-data-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "IMU recording in body frame: acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z — one row per sample"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata: sampling_rate_hz, cohort, height_m, measurement_condition"
+
+  # Step 2: GSD — detect gait sequences in the full recording
+  - id: "gsd"
+    metadata:
+      name: "Gait Sequence Detection"
+      description: "Run GsdIluz on the full IMU recording to identify regions likely containing gait (gait sequences)"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "import-data"
+    task:
+      type: "command"
+      id: "task-gsd"
+      name: "gsd"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/gsd.py"
+        - "--imu-data"
+        - "input.0"
+        - "--config"
+        - "input.1"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "imu-data-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Full IMU recording"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "imu-data-csv"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "config-json"
+    outputs:
+      - id: "gs-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Gait sequence list: gs_id (index), start (sample), end (sample) — recording-level indices"
+
+  # Step 3: ICD — detect initial contacts, classify laterality, detect turns
+  - id: "icd"
+    metadata:
+      name: "Initial Contact Detection"
+      description: "Per gait sequence: detect initial contacts (IcdShinImproved), classify left/right (LrcUllrich), detect turns (TdElGohary)"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "gsd"
+    task:
+      type: "command"
+      id: "task-icd"
+      name: "icd"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/icd.py"
+        - "--imu-data"
+        - "input.0"
+        - "--gs-list"
+        - "input.1"
+        - "--config"
+        - "input.2"
+        - "--ic-list"
+        - "output.0"
+        - "--turn-list"
+        - "output.1"
+    inputs:
+      - id: "imu-data-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Full IMU recording"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "imu-data-csv"
+      - id: "gs-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Gait sequence boundaries"
+        source:
+          type: "step-output"
+          stepId: "gsd"
+          outputId: "gs-list-csv"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "config-json"
+    outputs:
+      - id: "ic-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Initial contacts: gs_id, ic_id, ic (recording-level sample), lr_label"
+      - id: "turn-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Detected turns: gs_id, turn_id, start, end (recording-level samples), duration_s, direction"
+
+  # Step 4: Per-second parameters — cadence, stride length, walking speed
+  - id: "per-sec-params"
+    metadata:
+      name: "Per-Second Parameter Estimation"
+      description: "Per gait sequence (refined to first–last IC): estimate cadence (CadFromIc), stride length (SlZijlstra), and walking speed (WsNaive) at one-second resolution"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "icd"
+    task:
+      type: "command"
+      id: "task-per-sec-params"
+      name: "per-sec-params"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/per_sec_params.py"
+        - "--imu-data"
+        - "input.0"
+        - "--gs-list"
+        - "input.1"
+        - "--ic-list"
+        - "input.2"
+        - "--config"
+        - "input.3"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "imu-data-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Full IMU recording"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "imu-data-csv"
+      - id: "gs-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Gait sequence boundaries"
+        source:
+          type: "step-output"
+          stepId: "gsd"
+          outputId: "gs-list-csv"
+      - id: "ic-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Initial contacts with laterality"
+        source:
+          type: "step-output"
+          stepId: "icd"
+          outputId: "ic-list-csv"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "config-json"
+    outputs:
+      - id: "per-sec-params-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Per-second gait parameters: gs_id, sec_center (recording-level s), cadence_spm, stride_length_m, walking_speed_mps"
+
+  # Step 5: WBA — assemble walking bouts from strides
+  - id: "wba"
+    metadata:
+      name: "Walking Bout Assembly"
+      description: "Convert ICs to strides, interpolate per-second parameters to per-stride, apply stride selection rules, and assemble valid walking bouts (WbAssembly)"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "per-sec-params"
+    task:
+      type: "command"
+      id: "task-wba"
+      name: "wba"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/wba.py"
+        - "--ic-list"
+        - "input.0"
+        - "--per-sec-params"
+        - "input.1"
+        - "--config"
+        - "input.2"
+        - "--stride-list"
+        - "output.0"
+        - "--wb-params"
+        - "output.1"
+    inputs:
+      - id: "ic-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Initial contacts with laterality"
+        source:
+          type: "step-output"
+          stepId: "icd"
+          outputId: "ic-list-csv"
+      - id: "per-sec-params-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Per-second gait parameters"
+        source:
+          type: "step-output"
+          stepId: "per-sec-params"
+          outputId: "per-sec-params-csv"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "config-json"
+    outputs:
+      - id: "stride-list-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Annotated stride list: s_id, start, end, lr_label, stride_duration_s, cadence_spm, stride_length_m, walking_speed_mps, wb_id"
+      - id: "wb-params-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Walking bout parameters: wb_id, start, end, n_strides, mean stride_duration_s, cadence_spm, stride_length_m, walking_speed_mps"
+
+  # Step 6: Aggregate — apply DMO thresholds and produce final summary
+  - id: "aggregate"
+    metadata:
+      name: "DMO Aggregation"
+      description: "Apply Mobilise-D DMO validity thresholds to walking bouts, then aggregate to a single-row summary of digital mobility outcomes per recording"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "wba"
+    task:
+      type: "command"
+      id: "task-aggregate"
+      name: "aggregate"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/aggregate.py"
+        - "--wb-params"
+        - "input.0"
+        - "--config"
+        - "input.1"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "wb-params-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Walking bout parameters"
+        source:
+          type: "step-output"
+          stepId: "wba"
+          outputId: "wb-params-csv"
+      - id: "config-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Recording metadata (cohort + measurement_condition for threshold selection)"
+        source:
+          type: "step-output"
+          stepId: "import-data"
+          outputId: "config-json"
+    outputs:
+      - id: "aggregated-dmos-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Final aggregated DMOs: single-row summary of walking speed, cadence, stride length, stride duration, and WB-level statistics"
+
+  # Step 7: Plot WB-level trends
+  - id: "plot-wb-params"
+    metadata:
+      name: "Plot Walking Bout Parameters"
+      description: "Generate a PNG plot of walking bout metrics across wb_id"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "aggregate"
+    task:
+      type: "command"
+      id: "task-plot-wb-params"
+      name: "plot-wb-params"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/plot_wb_params.py"
+        - "--wb-params"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "wb-params-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Walking bout parameters"
+        source:
+          type: "step-output"
+          stepId: "wba"
+          outputId: "wb-params-csv"
+    outputs:
+      - id: "wb-params-plot-png"
+        descriptor:
+          type: "png"
+          format: "binary"
+          notes: "Line plots of WB-level cadence, stride length, stride duration, and walking speed"
+
+  # Step 8: Plot aggregated DMO summary
+  - id: "plot-aggregated-dmos"
+    metadata:
+      name: "Plot Aggregated DMOs"
+      description: "Generate a PNG bar chart of key aggregated mobility outcomes"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "aggregate"
+    task:
+      type: "command"
+      id: "task-plot-aggregated-dmos"
+      name: "plot-aggregated-dmos"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/plot_aggregated_dmos.py"
+        - "--aggregated-dmos"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "aggregated-dmos-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Final aggregated DMOs"
+        source:
+          type: "step-output"
+          stepId: "aggregate"
+          outputId: "aggregated-dmos-csv"
+    outputs:
+      - id: "aggregated-dmos-plot-png"
+        descriptor:
+          type: "png"
+          format: "binary"
+          notes: "Bar chart summary of aggregated mobility outcomes"
+

@@ -1,0 +1,138 @@
+schemaVersion: "1.0"
+metadata:
+  id: "dbdp-covid-hr-steps"
+  name: "DBDP COVID Heart Rate & Steps Analysis"
+  description: "Three-step workflow for COVID-19 health monitoring. Loads HR and steps data, analyzes for biomarkers, and generates a summary report."
+  version: "1.0"
+  tags:
+    - "dbdp"
+    - "covid"
+    - "heart-rate"
+    - "steps"
+    - "python"
+    - "system"
+    - "health-monitoring"
+
+environments:
+  env-system:
+    name: "system"
+    kind: "system"
+    spec: {}
+  env-pixi:
+    name: "python-pixi"
+    kind: "pixi"
+    spec:
+      dependencies:
+        - "pandas"
+        - "numpy"
+      pythonVersion:
+        - "3.11"
+
+steps:
+  # Step 1: Load data — copy CSV and validate columns
+  - id: "load-data"
+    metadata:
+      name: "Load HR and Steps Data"
+      description: "Read dbdp_covid_sample.csv, validate columns, write to hr_steps.csv"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-load-data"
+      name: "load-data"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_hr_steps.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "covid-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Raw COVID-19 HR and steps data"
+        source:
+          type: "file"
+          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources//data/dbdp_covid_sample.csv"
+    outputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Validated HR and steps CSV"
+
+  # Step 2: Analyse — run biomarker detection
+  - id: "analyse"
+    metadata:
+      name: "Analyse HR and Steps for Biomarkers"
+      description: "Detect anomalies indicating health deviation (elevated HR + reduced steps)"
+      version: "1.0"
+    environmentId: "env-pixi"
+    dependsOn:
+      - "load-data"
+    task:
+      type: "python"
+      id: "task-analyse"
+      name: "covid-hr-steps-analysis"
+      description: "Detect COVID-19 health anomalies using Pixi Python environment"
+      entryPoint:
+        type: "script"
+        scriptPath: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/covid_hr_steps.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "HR and steps data"
+        source:
+          type: "step-output"
+          stepId: "load-data"
+          outputId: "hr-steps-csv"
+    outputs:
+      - id: "biomarker-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Biomarker analysis results (alert flag, metrics)"
+
+  # Step 3: Report — generate human-readable summary
+  - id: "report"
+    metadata:
+      name: "Generate Biomarker Report"
+      description: "Format biomarker results as a human-readable report"
+      version: "1.0"
+    environmentId: "env-system"
+    dependsOn:
+      - "analyse"
+    task:
+      type: "command"
+      id: "task-report"
+      name: "biomarker-report"
+      executable: "python"
+      args:
+        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/report_biomarker.py"
+        - "input.0"
+        - "output.0"
+    inputs:
+      - id: "biomarker-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Biomarker analysis results"
+        source:
+          type: "step-output"
+          stepId: "analyse"
+          outputId: "biomarker-json"
+    outputs:
+      - id: "report-json"
+        descriptor:
+          type: "json"
+          format: "utf-8"
+          notes: "Formatted biomarker report"
+
