@@ -7,11 +7,6 @@ pluginManagement {
     }
 }
 
-plugins {
-    // Auto-provision JDKs via Foojay — needed because health-workflow-interfaces:lib targets JVM 21
-    // while carp-dsp targets JVM 17. In a composite build only the root's toolchain resolver applies.
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
-}
 
 dependencyResolutionManagement {
     @Suppress("UnstableApiUsage")
