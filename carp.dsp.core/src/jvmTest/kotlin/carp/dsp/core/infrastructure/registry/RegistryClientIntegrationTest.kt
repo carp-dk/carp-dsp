@@ -12,7 +12,7 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -38,14 +38,14 @@ class RegistryClientIntegrationTest {
 
     @Test
     fun `search returns empty list on fresh server`() = runTest {
-        assumeTrue(baseUrl != null, "HWF_BASE_URL not set — skipping server integration test")
+        assumeTrue("HWF_BASE_URL not set — skipping server integration test", baseUrl != null)
         val results = client().search(SearchQuery())
         assertTrue(results.isEmpty())
     }
 
     @Test
     fun `publish then retrieve round-trip`() = runTest {
-        assumeTrue(baseUrl != null, "HWF_BASE_URL not set — skipping server integration test")
+        assumeTrue("HWF_BASE_URL not set — skipping server integration test", baseUrl != null)
 
         val pkg = WorkflowArtifactPackage(
             id = "ci-test-workflow",
@@ -73,7 +73,7 @@ class RegistryClientIntegrationTest {
 
     @Test
     fun `published component appears in search results`() = runTest {
-        assumeTrue(baseUrl != null, "HWF_BASE_URL not set — skipping server integration test")
+        assumeTrue("HWF_BASE_URL not set — skipping server integration test", baseUrl != null)
 
         val pkg = WorkflowArtifactPackage(
             id = "searchable-workflow",
