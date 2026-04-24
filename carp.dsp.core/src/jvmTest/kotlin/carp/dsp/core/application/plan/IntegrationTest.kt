@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class IntegrationTest {
-    private val mockHasher = MockPlanHasher("integration-test-hash") // ✅ Use mock (MPP-safe)
+    private val mockHasher = MockPlanHasher("integration-test-hash") // Use mock (MPP-safe)
 
     @Test
     fun full_planning_produces_valid_diagnostics() {

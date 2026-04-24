@@ -49,8 +49,10 @@ kotlin {
                 // health-workflow-interfaces — WAP types for packaging
                 implementation("health.workflows:lib")
 
-                // Ktor CIO engine for JVM
+                // Ktor CIO engine + JSON serialization for WorkflowHubClient
                 implementation("io.ktor:ktor-client-cio:2.3.7")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")
                 // SLF4J backend — enables kotlin-logging output at runtime
@@ -64,6 +66,7 @@ kotlin {
                 implementation("org.junit.jupiter:junit-jupiter-engine:5.10.0")
                 implementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
             }
         }
     }
