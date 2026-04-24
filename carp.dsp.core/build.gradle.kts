@@ -1,3 +1,11 @@
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.inject.Inject
+import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kover)
@@ -109,4 +117,124 @@ kover {
         }
     }
 }
+
+// ── HWF server integration test task ─────────────────────────────────────────
+// Pulls the latest HWF server image, starts it (unless already running on the
+// configured port), runs the registry integration tests, then stops the container.
+//
+// Usage:
+//   ./gradlew :carp.dsp.core:hwfIntegrationTest
+//   HWF_PORT=9090 ./gradlew :carp.dsp.core:hwfIntegrationTest  (custom port)
+abstract class HwfIntegrationTestTask @Inject constructor(
+    private val execOperations: ExecOperations,
+) : DefaultTask() {
+    init {
+        group = "verification"
+        description = "Runs RegistryClientIntegrationTest against a live HWF server container."
+    }
+
+    @TaskAction
+    fun run() {
+        val image = "ghcr.io/carp-dk/hwf-server:latest"
+        val containerName = "hwf-integration-test"
+        val port = System.getenv("HWF_PORT")?.toIntOrNull() ?: 8080
+        val testApiKey = "hwf-integration-test-key"
+        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+
+        // ── 1. Check if a container is already publishing the port ─────────────
+        val portCheck = ByteArrayOutputStream()
+        execOperations.exec {
+            commandLine("docker", "ps", "--filter", "publish=$port", "--format", "{{.ID}}")
+            standardOutput = portCheck
+            isIgnoreExitValue = true
+        }
+        val serverAlreadyRunning = portCheck.toString().trim().isNotEmpty()
+
+        var managedContainer: String? = null
+
+        if (serverAlreadyRunning) {
+            logger.lifecycle("HWF server already running on port $port — using existing instance.")
+        } else {
+            // ── 2. Pull latest image ───────────────────────────────────────────
+            logger.lifecycle("Pulling $image...")
+            execOperations.exec { commandLine("docker", "pull", image) }
+
+            // ── 3. Start container ─────────────────────────────────────────────
+            val startOut = ByteArrayOutputStream()
+            execOperations.exec {
+                commandLine(
+                    "docker", "run", "--detach",
+                    "--name", containerName,
+                    "--publish", "$port:$port",
+                    "--env", "HWF_API_KEY=$testApiKey",
+                    image,
+                )
+                standardOutput = startOut
+            }
+            managedContainer = startOut.toString().trim()
+            logger.lifecycle("Container started: ${managedContainer.take(12)}")
+
+            // ── 4. Wait for server to be ready ─────────────────────────────────
+            logger.lifecycle("Waiting for server to be ready...")
+            var ready = false
+            for (attempt in 1..20) {
+                Thread.sleep(2000)
+                try {
+                    val conn = URL("http://localhost:$port/api/v1/components/search")
+                        .openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Authorization", "Bearer $testApiKey")
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write("{}".toByteArray()) }
+                    if (conn.responseCode == 200) {
+                        ready = true
+                        logger.lifecycle("Server ready (attempt $attempt).")
+                    }
+                    conn.disconnect()
+                } catch (_: Exception) {
+                    logger.lifecycle("  waiting... ($attempt/20)")
+                }
+                if (ready) break
+            }
+
+            if (!ready) {
+                execOperations.exec { commandLine("docker", "stop", containerName); isIgnoreExitValue = true }
+                execOperations.exec { commandLine("docker", "rm", containerName); isIgnoreExitValue = true }
+                error("HWF server did not become ready in time.")
+            }
+        }
+
+        // Key for already-running servers (may use a different key)
+        val effectiveApiKey = if (serverAlreadyRunning) {
+            System.getenv("HWF_API_KEY") ?: "dev-local-key-change-in-production"
+        } else {
+            testApiKey
+        }
+
+        // ── 5. Run the tests ───────────────────────────────────────────────────
+        try {
+            val gradlew = if (isWindows) listOf("cmd", "/c", "gradlew.bat") else listOf("./gradlew")
+            execOperations.exec {
+                commandLine(
+                    *gradlew.toTypedArray(),
+                    ":carp.dsp.core:jvmTest",
+                    "--tests", "carp.dsp.core.infrastructure.registry.RegistryClientIntegrationTest",
+                )
+                environment("HWF_BASE_URL", "http://localhost:$port")
+                environment("HWF_API_KEY", effectiveApiKey)
+                workingDir(project.rootDir)
+            }
+        } finally {
+            // ── 6. Stop container if we started it ────────────────────────────
+            if (managedContainer != null) {
+                logger.lifecycle("Stopping container...")
+                execOperations.exec { commandLine("docker", "stop", containerName); isIgnoreExitValue = true }
+                execOperations.exec { commandLine("docker", "rm", containerName); isIgnoreExitValue = true }
+            }
+        }
+    }
+}
+
+tasks.register<HwfIntegrationTestTask>("hwfIntegrationTest")
 
