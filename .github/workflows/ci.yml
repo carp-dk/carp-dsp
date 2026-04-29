@@ -131,8 +131,26 @@ jobs:
         
         echo "✅ carp-dsp build completed successfully"
 
-    - name: Pull cwltool Docker image
-      run: docker pull quay.io/commonwl/cwltool
+    - name: Start HWF server
+      run: |
+        docker run -d \
+          --name hwf-server \
+          -p 8080:8080 \
+          -e HWF_API_KEY=ci-test-key \
+          ghcr.io/carp-dk/hwf-server:latest
+        echo "Waiting for server to be ready..."
+        for i in $(seq 1 20); do
+          if curl -sf -X POST \
+            -H "Authorization: Bearer ci-test-key" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            http://localhost:8080/api/v1/components/search > /dev/null 2>&1; then
+            echo "HWF server ready"
+            break
+          fi
+          echo "  attempt $i/20..."
+          sleep 3
+        done
 
     - name: Run core module tests
       run: |
@@ -143,6 +161,21 @@ jobs:
           exit 1
         }
         echo "✅ Core module tests passed"
+
+    - name: Run server integration tests
+      env:
+        HWF_BASE_URL: http://localhost:8080
+        HWF_API_KEY: ci-test-key
+      run: |
+        echo "🧪 Running server integration tests..."
+        cd carp-dsp
+        ./gradlew :carp.dsp.core:jvmTest \
+          --tests "carp.dsp.core.infrastructure.registry.RegistryClientIntegrationTest" \
+          --info || {
+          echo "❌ Server integration tests failed"
+          exit 1
+        }
+        echo "✅ Server integration tests passed"
 
     - name: Run demo module tests
       run: |
