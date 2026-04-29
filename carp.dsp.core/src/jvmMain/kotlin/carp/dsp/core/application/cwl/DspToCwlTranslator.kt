@@ -107,15 +107,16 @@ object DspToCwlTranslator {
     }
 
     private fun StringBuilder.appendRequirements(ctx: CwlYamlContext) {
-        if (ctx.softwarePackages.isEmpty() && ctx.envVars.isEmpty()) return
-
-        appendLine("requirements:")
+        // SoftwareRequirement goes in hints (advisory; cwltool rejects it in requirements)
         if (ctx.softwarePackages.isNotEmpty()) {
+            appendLine("hints:")
             appendLine("  SoftwareRequirement:")
             appendLine("    packages:")
             ctx.softwarePackages.forEach { pkg -> appendLine("      - package: ${q(pkg)}") }
         }
+        // EnvVarRequirement stays in requirements (fully supported)
         if (ctx.envVars.isNotEmpty()) {
+            appendLine("requirements:")
             appendLine("  EnvVarRequirement:")
             appendLine("    envDef:")
             ctx.envVars.forEach { (k, v) ->

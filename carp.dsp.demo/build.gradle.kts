@@ -39,6 +39,11 @@ kotlin {
             dependencies {
                 // JSON parsing for demo output
                 implementation("com.google.code.gson:gson:2.10.1")
+                implementation("health.workflows:lib")
+                // Ktor client for e2e server publishing
+                implementation("io.ktor:ktor-client-cio:2.3.7")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
             }
         }
 
@@ -67,7 +72,6 @@ tasks.register<JavaExec>("run") {
     // Required to receive input from console
     standardInput = System.`in`
     standardOutput = System.out
-
 }
 
 // Generic workflow runner: ./gradlew :carp.dsp.demo:runWorkflow -Pworkflow=<path> [-Pworkspace=<dir>]
