@@ -1,4 +1,4 @@
-package carp.dsp.core.application.cwl
+package carp.dsp.core.application.translation.cwl
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
@@ -13,26 +13,25 @@ import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
+import carp.dsp.core.application.translation.WorkflowExporter
 
 /**
- * Translates a [WorkflowDescriptor] into CWL [CwlStepAsset] documents.
+ * Exports a [WorkflowDescriptor] to a list of CWL v1.2 [CwlDocument]s — one per step.
  *
- * R1 scope: one CWL `CommandLineTool` per DSP step.
- * [InProcessTaskDescriptor] steps are skipped — they have no CWL equivalent.
- * Docker environments are not yet supported — see ticket E1.
- * Multi-step `Workflow` class, Scatter, and sub-workflows are out of scope for R1.
+ * [InProcessTaskDescriptor] steps are skipped (no CWL equivalent).
+ * Docker environments are not yet supported
  */
-object DspToCwlTranslator {
+object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
 
-    fun translate(descriptor: WorkflowDescriptor): List<CwlStepAsset> =
+    override fun export(descriptor: WorkflowDescriptor): List<CwlDocument> =
         descriptor.steps.mapNotNull { step ->
-            translateStep(step, descriptor.environments)
+            exportStep(step, descriptor.environments)
         }
 
-    private fun translateStep(
+    private fun exportStep(
         step: StepDescriptor,
         environments: Map<String, EnvironmentDescriptor>,
-    ): CwlStepAsset? {
+    ): CwlDocument? {
         val (baseCommand, arguments) = commandFor(step.task) ?: return null
         val env = environments[step.environmentId]
 
@@ -40,7 +39,6 @@ object DspToCwlTranslator {
             env?.spec?.get("dependencies") ?: emptyList()
         else emptyList()
 
-        // Environment variables declared as KEY=VALUE entries under spec["env"]
         val envVars = env?.spec?.get("env")
             ?.mapNotNull { entry ->
                 val parts = entry.split("=", limit = 2)
@@ -49,18 +47,11 @@ object DspToCwlTranslator {
 
         val stepId = step.id ?: step.task.name
         val ctx = CwlYamlContext(baseCommand, arguments, softwarePackages, envVars, step.inputs, step.outputs)
-        return CwlStepAsset(
-            stepId = stepId,
-            content = buildCwlYaml(ctx),
-        )
+        return CwlDocument(stepId = stepId, content = buildCwlYaml(ctx))
     }
 
-    // -- Task → CWL baseCommand ------------------------------------------------
+    // -- Task → CWL baseCommand -----------------------------------------------
 
-    /**
-     * Returns (baseCommand, arguments) for supported task types, or null for
-     * [InProcessTaskDescriptor] which cannot be represented in CWL.
-     */
     private fun commandFor(task: TaskDescriptor): Pair<List<String>, List<String>>? = when (task) {
         is CommandTaskDescriptor -> listOf(task.executable) to task.args
         is PythonTaskDescriptor -> when (val ep = task.entryPoint) {
@@ -71,7 +62,7 @@ object DspToCwlTranslator {
         is InProcessTaskDescriptor -> null
     }
 
-    // -- CWL YAML builder ------------------------------------------------------
+    // -- CWL YAML builder -----------------------------------------------------
 
     private data class CwlYamlContext(
         val baseCommand: List<String>,
@@ -82,17 +73,15 @@ object DspToCwlTranslator {
         val outputs: List<DataPortDescriptor>,
     )
 
-    private fun buildCwlYaml(ctx: CwlYamlContext): String {
-        return buildString {
-            appendLine("cwlVersion: v1.2")
-            appendLine("class: CommandLineTool")
-            appendBaseCommand(ctx)
-            appendArguments(ctx)
-            appendRequirements(ctx)
-            appendInputs(ctx)
-            appendOutputs(ctx)
-        }.trimEnd()
-    }
+    private fun buildCwlYaml(ctx: CwlYamlContext): String = buildString {
+        appendLine("cwlVersion: v1.2")
+        appendLine("class: CommandLineTool")
+        appendBaseCommand(ctx)
+        appendArguments(ctx)
+        appendRequirements(ctx)
+        appendInputs(ctx)
+        appendOutputs(ctx)
+    }.trimEnd()
 
     private fun StringBuilder.appendBaseCommand(ctx: CwlYamlContext) {
         appendLine("baseCommand:")
@@ -107,14 +96,12 @@ object DspToCwlTranslator {
     }
 
     private fun StringBuilder.appendRequirements(ctx: CwlYamlContext) {
-        // SoftwareRequirement goes in hints (advisory; cwltool rejects it in requirements)
         if (ctx.softwarePackages.isNotEmpty()) {
             appendLine("hints:")
             appendLine("  SoftwareRequirement:")
             appendLine("    packages:")
             ctx.softwarePackages.forEach { pkg -> appendLine("      - package: ${q(pkg)}") }
         }
-        // EnvVarRequirement stays in requirements (fully supported)
         if (ctx.envVars.isNotEmpty()) {
             appendLine("requirements:")
             appendLine("  EnvVarRequirement:")
@@ -158,13 +145,11 @@ object DspToCwlTranslator {
         }
     }
 
-    /** Quote a YAML scalar if it contains characters that require quoting. */
     private fun q(s: String): String =
         if (needsQuoting(s)) "\"${s.replace("\\", "\\\\").replace("\"", "\\\"")}\"" else s
 
     private fun needsQuoting(s: String): Boolean =
         s.isEmpty() || s.any { it in ":{}[]#&*?|>!'\"@`" } || s.first().isWhitespace() || s.last().isWhitespace()
 
-    /** Sanitize a port ID to a valid CWL identifier (replace hyphens with underscores). */
     private fun String.cwlId(): String = replace("-", "_")
 }

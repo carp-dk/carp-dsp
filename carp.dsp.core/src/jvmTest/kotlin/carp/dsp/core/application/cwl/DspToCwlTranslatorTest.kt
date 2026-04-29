@@ -14,6 +14,7 @@ import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
+import carp.dsp.core.application.translation.cwl.DspToCwlExporter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -80,7 +81,7 @@ private fun workflowWith(
 
 // -- Tests --------------------------------------------------------------------
 
-class DspToCwlTranslatorTest {
+class DspToCwlExporterTest {
 
     // -- Python / Conda --------------------------------------------------------
 
@@ -90,7 +91,7 @@ class DspToCwlTranslatorTest {
             pythonStep(),
             environments = mapOf("conda-env" to condaEnv),
         )
-        val assets = DspToCwlTranslator.translate(wf)
+        val assets = DspToCwlExporter.export(wf)
 
         assertEquals(1, assets.size)
         val cwl = assets.first().content
@@ -101,7 +102,7 @@ class DspToCwlTranslatorTest {
     @Test
     fun `conda environment produces SoftwareRequirement`() {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("SoftwareRequirement" in cwl)
         assertTrue("pandas" in cwl)
@@ -111,7 +112,7 @@ class DspToCwlTranslatorTest {
     @Test
     fun `environment variables produce EnvVarRequirement`() {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnvWithVars))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("EnvVarRequirement" in cwl)
         assertTrue("MY_VAR" in cwl)
@@ -124,7 +125,7 @@ class DspToCwlTranslatorTest {
             pythonStep(args = listOf("--verbose", "--output", "out.csv")),
             environments = mapOf("conda-env" to condaEnv)
         )
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("arguments:" in cwl)
         assertTrue("--verbose" in cwl)
@@ -143,7 +144,7 @@ class DspToCwlTranslatorTest {
             ),
         )
         val wf = workflowWith(step, environments = mapOf("conda-env" to condaEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("- python" in cwl)
         assertTrue("- -m" in cwl)
@@ -166,7 +167,7 @@ class DspToCwlTranslatorTest {
             outputs = listOf(DataPortDescriptor(id = "output-csv", destination = FileOutputDestination("data/output.csv"))),
         )
         val wf = workflowWith(step, environments = mapOf("r-env" to rEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("- Rscript" in cwl)
         assertTrue("- scripts/process_data.R" in cwl)
@@ -183,7 +184,7 @@ class DspToCwlTranslatorTest {
             task = CommandTaskDescriptor(name = "copy-step", executable = "cp", args = listOf("src.csv", "dst.csv")),
         )
         val wf = workflowWith(step, environments = mapOf("system-env" to systemEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("- cp" in cwl)
         assertFalse("SoftwareRequirement" in cwl)
@@ -199,7 +200,7 @@ class DspToCwlTranslatorTest {
             task = InProcessTaskDescriptor(name = "in-process-step", operationId = "my.operation"),
         )
         val wf = workflowWith(step, environments = mapOf("system-env" to systemEnv))
-        val assets = DspToCwlTranslator.translate(wf)
+        val assets = DspToCwlExporter.export(wf)
 
         assertTrue(assets.isEmpty(), "InProcess steps should be skipped")
     }
@@ -209,7 +210,7 @@ class DspToCwlTranslatorTest {
     @Test
     fun `file inputs are typed as File in CWL`() {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("type: File" in cwl)
         assertTrue("inputBinding:" in cwl)
@@ -218,7 +219,7 @@ class DspToCwlTranslatorTest {
     @Test
     fun `file outputs include glob`() {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("outputBinding:" in cwl)
         assertTrue("glob:" in cwl)
@@ -240,7 +241,7 @@ class DspToCwlTranslatorTest {
             inProcess,
             environments = mapOf("conda-env" to condaEnv, "system-env" to systemEnv),
         )
-        val assets = DspToCwlTranslator.translate(wf)
+        val assets = DspToCwlExporter.export(wf)
 
         assertEquals(2, assets.size, "Expected 2 assets: two Python steps; InProcess skipped")
         assertEquals("step-a", assets[0].stepId)
@@ -252,18 +253,18 @@ class DspToCwlTranslatorTest {
     @Test
     fun `output declares cwlVersion and class`() {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertTrue("cwlVersion: v1.2" in cwl)
         assertTrue("class: CommandLineTool" in cwl)
-        assertEquals("v1.2", DspToCwlTranslator.translate(wf).first().toolVersion)
+        assertEquals("v1.2", DspToCwlExporter.export(wf).first().toolVersion)
     }
 
     @Test
     fun `system environment produces no SoftwareRequirement`() {
         val step = pythonStep(environmentId = "system-env")
         val wf = workflowWith(step, environments = mapOf("system-env" to systemEnv))
-        val cwl = DspToCwlTranslator.translate(wf).first().content
+        val cwl = DspToCwlExporter.export(wf).first().content
 
         assertFalse("SoftwareRequirement" in cwl)
     }
