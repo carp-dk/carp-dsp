@@ -1,4 +1,4 @@
-    package carp.dsp.core.application.snakemake
+ package carp.dsp.core.application.snakemake
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
@@ -60,8 +60,8 @@ object DspToSnakemakeTranslator {
         val inputFiles = step.inputs.mapNotNull { port ->
             when (val src = port.source) {
                 is StepOutputInputSource -> outputFiles[src.outputId]
-                is FileInputSource       -> src.path
-                else                     -> null
+                is FileInputSource -> src.path
+                else -> null
             }
         }
         val outputFilesList = step.outputs.mapNotNull { port -> outputFiles[port.id] }
@@ -88,13 +88,13 @@ object DspToSnakemakeTranslator {
                 is ScriptEntryPointDescriptor -> "python ${ep.scriptPath}" to task.args
                 is ModuleEntryPointDescriptor -> "python -m ${ep.moduleName}" to task.args
             }
-            is CommandTaskDescriptor  -> task.executable to task.args
-            is RTaskDescriptor        -> "Rscript ${task.entryPoint.scriptPath}" to task.args
+            is CommandTaskDescriptor -> task.executable to task.args
+            is RTaskDescriptor -> "Rscript ${task.entryPoint.scriptPath}" to task.args
             is InProcessTaskDescriptor -> return "echo 'in-process task: ${task.name}'"
         }
 
         val substituted = args.map { arg ->
-            val inputMatch  = Regex("^input\\.(\\d+)$").matchEntire(arg)
+            val inputMatch = Regex("^input\\.(\\d+)$").matchEntire(arg)
             val outputMatch = Regex("^output\\.(\\d+)$").matchEntire(arg)
             when {
                 inputMatch != null -> {
@@ -115,12 +115,12 @@ object DspToSnakemakeTranslator {
     /** Converts a port id and type string into a concrete filename. */
     private fun portToFilename(id: String, type: String?): String {
         val base = id.replace("-", "_")
-        val ext  = when (type?.lowercase()) {
-            "csv"  -> ".csv"
-            "png"  -> ".png"
+        val ext = when (type?.lowercase()) {
+            "csv" -> ".csv"
+            "png" -> ".png"
             "json" -> ".json"
-            "tsv"  -> ".tsv"
-            else   -> ".dat"
+            "tsv" -> ".tsv"
+            else -> ".dat"
         }
         return "$base$ext"
     }

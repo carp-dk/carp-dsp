@@ -131,6 +131,9 @@ jobs:
         
         echo "✅ carp-dsp build completed successfully"
 
+    - name: Pull cwltool Docker image
+      run: docker pull quay.io/commonwl/cwltool
+
     - name: Run core module tests
       run: |
         echo "🧪 Running core module tests..."

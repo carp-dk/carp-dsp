@@ -221,7 +221,7 @@ class HrActivityDemo {
             println("=" * 60)
 
             // Feature CSV
-            val dspCsv   = resultsDir.walk().filter { it.name.endsWith(".csv") && "features" in it.name }.firstOrNull()
+            val dspCsv   = resultsDir.walk().firstOrNull { it.name.endsWith(".csv") && "features" in it.name }
             val snakeCsv = snakemakeDir.resolve("daily_features_csv.csv").takeIf { it.exists() }
 
             if (dspCsv == null || snakeCsv == null) {
@@ -262,7 +262,7 @@ class HrActivityDemo {
 
             // PNG sizes
             println()
-            val dspPng   = resultsDir.walk().filter { it.name.endsWith(".png") }.firstOrNull()
+            val dspPng   = resultsDir.walk().firstOrNull { it.name.endsWith(".png") }
             val snakePng = snakemakeDir.resolve("summary_plot_png.png").takeIf { it.exists() }
 
             if (dspPng != null && snakePng != null) {
@@ -325,21 +325,30 @@ class HrActivityDemo {
             runProcess("docker", "rm", containerName)
         }
 
-        private fun validateCwl(cwlContent: String, workDir: Path) {
+        private fun validateCwl(cwlContent: String, @Suppress("UNUSED_PARAMETER") workDir: Path) {
             println()
-            println("[cwl] Validating CWL with cwltool...")
-            val cwlFile = workDir.resolve("workflow.cwl")
-            cwlFile.writeText(cwlContent)
-            val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-            val cwlPath = if (isWindows) {
-                val abs = cwlFile.toAbsolutePath().toString()
-                "/mnt/" + abs[0].lowercaseChar() + abs.drop(2).replace("\\", "/")
-            } else cwlFile.toAbsolutePath().toString()
-            val cmd = if (isWindows) arrayOf("wsl", "cwltool", "--validate", cwlPath)
-                      else           arrayOf("cwltool", "--validate", cwlPath)
-            val exit = runProcess(*cmd)
-            if (exit == 0) println(Color.green("[cwl] Validation passed [OK]"))
-            else           println(Color.red("[cwl] Validation failed (exit $exit)"))
+            println("[cwl] Validating CWL with cwltool (Docker)...")
+            val pwd = System.getProperty("user.dir").replace("\\", "/")
+            val tmpFile = java.io.File(System.getProperty("user.dir"), "cwl-validate-tmp-${System.nanoTime()}.cwl")
+            try {
+                tmpFile.writeText(cwlContent)
+                val process = ProcessBuilder(
+                    "docker", "run", "--rm",
+                    "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                    "-v", "$pwd:/workspace",
+                    "-w", "/workspace",
+                    "quay.io/commonwl/cwltool",
+                    "--validate", "--no-container",
+                    "/workspace/${tmpFile.name}"
+                )
+                    .redirectErrorStream(true)
+                    .start()
+                val exit = process.waitFor()
+                if (exit == 0) println(Color.green("[cwl] Validation passed [OK]"))
+                else           println(Color.red("[cwl] Validation failed (exit $exit)"))
+            } finally {
+                tmpFile.delete()
+            }
         }
 
         private fun publishPackage(pkg: WorkflowArtifactPackage, baseUrl: String, apiKey: String) {
@@ -420,11 +429,11 @@ class HrActivityDemo {
         // -- ANSI color helpers ---------------------------------------------
 
         private object Color {
-            private val ESC    = ""
-            val GREEN  = "${ESC}[32m"
-            val RED    = "${ESC}[31m"
-            val YELLOW = "${ESC}[33m"
-            val RESET  = "${ESC}[0m"
+            private const val ESC    = ""
+            const val GREEN  = "${ESC}[32m"
+            const val RED    = "${ESC}[31m"
+            const val YELLOW = "${ESC}[33m"
+            const val RESET  = "${ESC}[0m"
 
             fun green(s: String)  = "$GREEN$s$RESET"
             fun red(s: String)    = "$RED$s$RESET"
