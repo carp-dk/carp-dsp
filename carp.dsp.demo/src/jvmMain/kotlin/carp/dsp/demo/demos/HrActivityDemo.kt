@@ -2,7 +2,7 @@ package carp.dsp.demo.demos
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.packaging.PackageBuilder
-import carp.dsp.core.application.snakemake.DspToSnakemakeTranslator
+import carp.dsp.core.application.translation.snakemake.DspToSnakemakeExporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
 import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
@@ -150,7 +150,7 @@ class HrActivityDemo {
             println("[snakemake] Decoded: ${descriptor.metadata.name} (${descriptor.steps.size} steps)")
 
             // 3. Generate Snakefile
-            val snakefile = DspToSnakemakeTranslator.translate(descriptor)
+            val snakefile = DspToSnakemakeExporter.export(descriptor).content
             snakemakeDir.resolve("Snakefile").writeText(snakefile)
             println("[snakemake] Snakefile written to $snakemakeDir")
             println()

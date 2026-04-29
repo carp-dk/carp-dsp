@@ -1,4 +1,4 @@
- package carp.dsp.core.application.snakemake
+package carp.dsp.core.application.translation.snakemake
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
@@ -11,37 +11,36 @@ import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import carp.dsp.core.application.authoring.descriptor.TaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
+import carp.dsp.core.application.translation.WorkflowExporter
 
 /**
- * Translates a [WorkflowDescriptor] into a Snakemake Snakefile string.
+ * Exports a [WorkflowDescriptor] to a [SnakemakeWorkflow].
  *
  * Each DSP step becomes one Snakemake rule. Input/output port connections
- * are resolved to concrete filenames (port-id in snake_case + type extension).
- *
- * Arguments using `input.N` / `output.N` placeholders are substituted with
- * Snakemake's `{input}` / `{output}` (single port) or `{input[N]}` / `{output[N]}`
- * (multiple ports) syntax.
+ * are resolved to concrete filenames. A `rule all` is prepended to declare
+ * the final step's outputs as pipeline targets.
  */
-object DspToSnakemakeTranslator {
+object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
 
-    fun translate(descriptor: WorkflowDescriptor): String = buildString {
-        val outputFiles = buildOutputFileMap(descriptor)
+    override fun export(descriptor: WorkflowDescriptor): SnakemakeWorkflow {
+        val content = buildString {
+            val outputFiles = buildOutputFileMap(descriptor)
 
-        // rule all: target the final step's outputs
-        val finalOutputs = descriptor.steps.last().outputs
-            .mapNotNull { port -> outputFiles[port.id] }
+            val finalOutputs = descriptor.steps.last().outputs
+                .mapNotNull { port -> outputFiles[port.id] }
 
-        appendLine("rule all:")
-        appendLine("    input:")
-        finalOutputs.forEach { f -> appendLine("        \"$f\",") }
-        appendLine()
+            appendLine("rule all:")
+            appendLine("    input:")
+            finalOutputs.forEach { f -> appendLine("        \"$f\",") }
+            appendLine()
 
-        descriptor.steps.forEach { step -> appendRule(step, outputFiles) }
+            descriptor.steps.forEach { step -> appendRule(step, outputFiles) }
+        }
+        return SnakemakeWorkflow(content)
     }
 
     // -- Helpers ------------------------------------------------------------------
 
-    /** Maps every output port id → filename across the whole workflow. */
     private fun buildOutputFileMap(descriptor: WorkflowDescriptor): Map<String, String> =
         buildMap {
             descriptor.steps.forEach { step ->
@@ -65,7 +64,6 @@ object DspToSnakemakeTranslator {
             }
         }
         val outputFilesList = step.outputs.mapNotNull { port -> outputFiles[port.id] }
-
         val shellCmd = buildShellCommand(step.task, inputFiles.size, outputFilesList.size)
 
         appendLine("rule $ruleName:")
@@ -108,11 +106,9 @@ object DspToSnakemakeTranslator {
                 else -> arg
             }
         }
-
         return "$baseCmd ${substituted.joinToString(" ")}"
     }
 
-    /** Converts a port id and type string into a concrete filename. */
     private fun portToFilename(id: String, type: String?): String {
         val base = id.replace("-", "_")
         val ext = when (type?.lowercase()) {

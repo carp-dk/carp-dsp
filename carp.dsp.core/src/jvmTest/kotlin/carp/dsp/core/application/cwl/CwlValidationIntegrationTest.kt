@@ -1,5 +1,6 @@
 package carp.dsp.core.application.cwl
 
+import carp.dsp.core.application.translation.cwl.DspToCwlExporter
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import org.junit.Assume.assumeTrue
 import org.junit.BeforeClass
@@ -58,7 +59,7 @@ class CwlValidationIntegrationTest {
 
         val yaml = loadFixtureYaml(fixtureName)
         val descriptor = codec.decodeOrThrow(yaml)
-        val assets = DspToCwlTranslator.translate(descriptor)
+        val assets = DspToCwlExporter.export(descriptor)
         assertTrue(assets.isNotEmpty(), "No CWL assets generated from $fixtureName")
 
         assets.forEach { asset ->
