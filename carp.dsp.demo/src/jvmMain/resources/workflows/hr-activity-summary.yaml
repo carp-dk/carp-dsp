@@ -1,0 +1,121 @@
+schemaVersion: "1.0"
+metadata:
+  id: "hr-activity-summary"
+  name: "Heart Activity Summary"
+  description: "Three-step wearable data pipeline: generate synthetic HR + step data, compute daily features, and produce a summary chart. Demonstrates DSP workflow packaging and CWL export."
+  version: "1.0"
+  tags:
+    - "heart-rate"
+    - "activity"
+    - "wearable"
+    - "python"
+    - "demo"
+
+environments:
+  env-conda:
+    name: "hr-activity"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:matplotlib"
+
+steps:
+  - id: "load-data"
+    metadata:
+      name: "Load Data"
+      description: "Generate 7 days of synthetic hourly heart rate and step count data"
+      version: "1.0"
+    environmentId: "env-conda"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-load-data"
+      name: "load-data"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_activity/load_data.py"
+      args:
+        - "--output"
+        - "output.0"
+    outputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Hourly wearable data: timestamp, heart_rate_bpm, steps"
+
+  - id: "compute-features"
+    metadata:
+      name: "Compute Features"
+      description: "Aggregate hourly data to daily features: mean HR, resting HR, peak HR, total steps, active hours"
+      version: "1.0"
+    environmentId: "env-conda"
+    dependsOn:
+      - "load-data"
+    task:
+      type: "python"
+      id: "task-compute-features"
+      name: "compute-features"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_activity/compute_features.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Hourly wearable data"
+        source:
+          type: "step-output"
+          stepId: "load-data"
+          outputId: "hr-steps-csv"
+    outputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily summary features: date, mean_hr, resting_hr, peak_hr, total_steps, active_hours"
+
+  - id: "visualize"
+    metadata:
+      name: "Visualize"
+      description: "Generate a 2x2 summary plot of the weekly heart rate and activity features"
+      version: "1.0"
+    environmentId: "env-conda"
+    dependsOn:
+      - "compute-features"
+    task:
+      type: "python"
+      id: "task-visualize"
+      name: "visualize"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_activity/visualize.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily summary features"
+        source:
+          type: "step-output"
+          stepId: "compute-features"
+          outputId: "daily-features-csv"
+    outputs:
+      - id: "summary-plot-png"
+        descriptor:
+          type: "png"
+          format: "binary"
+          notes: "2x2 chart: mean/resting HR, peak HR, daily steps, active hours"
