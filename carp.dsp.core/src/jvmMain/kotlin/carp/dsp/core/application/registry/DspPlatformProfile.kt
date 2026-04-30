@@ -22,6 +22,7 @@ val DspPlatformProfile = PlatformProfile(
         EnvironmentType.PIXI,
         EnvironmentType.R,
         EnvironmentType.SYSTEM,
+        EnvironmentType.DOCKER,
     ),
     supportedOperations = listOf(
         "getComponent",

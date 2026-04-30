@@ -10,7 +10,9 @@ import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 // -- Fixtures ------------------------------------------------------------------
@@ -18,7 +20,20 @@ import kotlin.test.assertTrue
 private val condaEnv = EnvironmentDescriptor(
     name = "python-processing",
     kind = "conda",
-    spec = mapOf("dependencies" to listOf("pandas")),
+    spec = mapOf(
+        "pythonVersion" to listOf("3.11"),
+        "channels" to listOf("conda-forge"),
+        "dependencies" to listOf("pandas"),
+    ),
+)
+
+private val pixiEnv = EnvironmentDescriptor(
+    name = "pixi-env",
+    kind = "pixi",
+    spec = mapOf(
+        "pythonVersion" to listOf("3.12"),
+        "dependencies" to listOf("numpy"),
+    ),
 )
 
 private val dockerEnv = EnvironmentDescriptor(
@@ -88,5 +103,85 @@ class DspToSnakemakeExporterTest {
         val snakefile = DspToSnakemakeExporter.export(wf).content
 
         assertTrue("rule all:" in snakefile)
+    }
+
+    // -- Conda directive ----------------------------------------------------------
+
+    @Test
+    fun `conda environment emits conda directive pointing to envs file`() {
+        val wf = workflowWith(step(environmentId = "conda-env"), environments = mapOf("conda-env" to condaEnv))
+        val snakefile = DspToSnakemakeExporter.export(wf).content
+
+        assertTrue("conda: \"envs/conda-env.yaml\"" in snakefile)
+    }
+
+    @Test
+    fun `conda directive appears before shell`() {
+        val wf = workflowWith(step(environmentId = "conda-env"), environments = mapOf("conda-env" to condaEnv))
+        val snakefile = DspToSnakemakeExporter.export(wf).content
+
+        val condaIdx = snakefile.indexOf("conda:")
+        val shellIdx = snakefile.indexOf("shell:")
+        assertTrue(condaIdx >= 0, "conda: directive expected")
+        assertTrue(condaIdx < shellIdx, "conda: must appear before shell:")
+    }
+
+    @Test
+    fun `pixi environment emits conda directive`() {
+        val wf = workflowWith(step(environmentId = "pixi-env"), environments = mapOf("pixi-env" to pixiEnv))
+        val snakefile = DspToSnakemakeExporter.export(wf).content
+
+        assertTrue("conda: \"envs/pixi-env.yaml\"" in snakefile)
+    }
+
+    @Test
+    fun `docker environment does not emit conda directive`() {
+        val wf = workflowWith(step(environmentId = "docker-env"), environments = mapOf("docker-env" to dockerEnv))
+        val snakefile = DspToSnakemakeExporter.export(wf).content
+
+        assertFalse("conda:" in snakefile)
+    }
+
+    // -- envFiles -----------------------------------------------------------------
+
+    @Test
+    fun `conda environment produces envFile entry`() {
+        val wf = workflowWith(step(environmentId = "conda-env"), environments = mapOf("conda-env" to condaEnv))
+        val result = DspToSnakemakeExporter.export(wf)
+
+        assertNotNull(result.envFiles["envs/conda-env.yaml"])
+    }
+
+    @Test
+    fun `generated envFile contains name channels and dependencies`() {
+        val wf = workflowWith(step(environmentId = "conda-env"), environments = mapOf("conda-env" to condaEnv))
+        val yaml = DspToSnakemakeExporter.export(wf).envFiles["envs/conda-env.yaml"]!!
+
+        assertTrue("name: python-processing" in yaml)
+        assertTrue("conda-forge" in yaml)
+        assertTrue("python=3.11" in yaml)
+        assertTrue("- pandas" in yaml)
+    }
+
+    @Test
+    fun `docker environment produces no envFiles`() {
+        val wf = workflowWith(step(environmentId = "docker-env"), environments = mapOf("docker-env" to dockerEnv))
+        val result = DspToSnakemakeExporter.export(wf)
+
+        assertTrue(result.envFiles.isEmpty())
+    }
+
+    @Test
+    fun `multi-env workflow produces one envFile per conda env`() {
+        val wf = workflowWith(
+            step(id = "s1", environmentId = "conda-env"),
+            step(id = "s2", environmentId = "pixi-env"),
+            environments = mapOf("conda-env" to condaEnv, "pixi-env" to pixiEnv),
+        )
+        val result = DspToSnakemakeExporter.export(wf)
+
+        assertEquals(2, result.envFiles.size)
+        assertTrue("envs/conda-env.yaml" in result.envFiles)
+        assertTrue("envs/pixi-env.yaml" in result.envFiles)
     }
 }
