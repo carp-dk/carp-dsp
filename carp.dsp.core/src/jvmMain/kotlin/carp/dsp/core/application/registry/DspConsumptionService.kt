@@ -1,5 +1,7 @@
 package carp.dsp.core.application.registry
 
+import carp.dsp.core.infrastructure.serialization.DecodeResult
+import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import health.workflows.interfaces.api.CompatibilityEvaluator
 import health.workflows.interfaces.api.CompatibilityReport
 import health.workflows.interfaces.api.ConsumptionInterface
@@ -17,11 +19,13 @@ import health.workflows.interfaces.model.WorkflowArtifactPackage
  * Delegates [getComponent], [search], and [publish] to [registry].
  * [checkCompatibility] is evaluated locally via [evaluator] — no extra round-trip needed.
  * [resolveDependencies] is derived from the package's dependency list.
- * [getDOI] and [getLineage] are stubbed for R1.
+ * [getDOI] is stubbed for R1.
+ * [getLineage] builds a typed [LineageGraph] from the package's native workflow descriptor.
  */
 class DspConsumptionService(
     private val registry: RegistryPort,
     private val evaluator: CompatibilityEvaluator = DefaultCompatibilityEvaluator,
+    private val codec: WorkflowYamlCodec = WorkflowYamlCodec(),
 ) : ConsumptionInterface {
 
     override suspend fun getComponent(id: String, version: String): WorkflowArtifactPackage =
@@ -50,6 +54,11 @@ class DspConsumptionService(
     override suspend fun getDOI(id: String, version: String): String =
         throw NotImplementedError("DOI minting not wired in R1")
 
-    override suspend fun getLineage(id: String, version: String): LineageGraph =
-        LineageGraph()
+    override suspend fun getLineage(id: String, version: String): LineageGraph {
+        val pkg = getComponent(id, version)
+        return when (val result = codec.decode(pkg.native.content)) {
+            is DecodeResult.Success -> LineageGraphBuilder.build(result.descriptor)
+            else -> LineageGraph()
+        }
+    }
 }

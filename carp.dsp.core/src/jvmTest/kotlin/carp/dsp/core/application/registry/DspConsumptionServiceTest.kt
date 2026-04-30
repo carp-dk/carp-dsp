@@ -130,8 +130,45 @@ class DspConsumptionServiceTest {
     }
 
     @Test
-    fun `getLineage returns empty graph`() = runTest {
+    fun `getLineage returns empty graph when native content is not a valid descriptor`() = runTest {
         val graph = service.getLineage("risk-scoring", "1.0")
         assertTrue(graph.nodes.isEmpty())
+    }
+
+    @Test
+    fun `getLineage returns populated graph for valid workflow descriptor`() = runTest {
+        val yaml = """
+            metadata:
+              name: HR Activity
+            environments:
+              env1:
+                name: python-env
+                kind: conda
+                spec:
+                  pythonVersion: ["3.11"]
+                  dependencies: ["pandas"]
+            steps:
+              - id: step1
+                environmentId: env1
+                task:
+                  type: python
+                  name: compute
+                  entryPoint:
+                    type: script
+                    scriptPath: scripts/compute.py
+        """.trimIndent()
+
+        val validStub = StubRegistry(
+            fixturePackage.copy(
+            native = NativeWorkflowAsset(format = WorkflowFormat.CARP_DSP, content = yaml)
+        )
+        )
+        val svc = DspConsumptionService(registry = validStub)
+        val graph = svc.getLineage("risk-scoring", "1.0")
+
+        assertTrue(graph.nodes.any { it.id == "step1" && it.type == "step" })
+        assertTrue(graph.nodes.any { it.id == "env1" && it.type == "environment" })
+        assertTrue(graph.nodes.any { it.type == "package" })
+        assertTrue(graph.edges.any { it.fromId == "step1" && it.toId == "env1" && it.relation == "USES" })
     }
 }
