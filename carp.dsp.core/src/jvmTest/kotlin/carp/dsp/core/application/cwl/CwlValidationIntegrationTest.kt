@@ -49,7 +49,12 @@ class CwlValidationIntegrationTest {
         validateFixture("single-step-r.yaml")
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    @Test
+    fun `single-step Docker workflow produces valid CWL`() {
+        validateFixture("single-step-docker.yaml")
+    }
+
+    // -- helpers --------------------------------------------------------------
 
     private fun validateFixture(fixtureName: String) {
         assumeTrue(

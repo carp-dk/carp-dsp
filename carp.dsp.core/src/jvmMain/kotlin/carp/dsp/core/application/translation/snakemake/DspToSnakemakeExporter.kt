@@ -1,6 +1,7 @@
 package carp.dsp.core.application.translation.snakemake
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
@@ -34,7 +35,7 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
             finalOutputs.forEach { f -> appendLine("        \"$f\",") }
             appendLine()
 
-            descriptor.steps.forEach { step -> appendRule(step, outputFiles) }
+            descriptor.steps.forEach { step -> appendRule(step, descriptor.environments, outputFiles) }
         }
         return SnakemakeWorkflow(content)
     }
@@ -51,10 +52,17 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
             }
         }
 
-    private fun StringBuilder.appendRule(step: StepDescriptor, outputFiles: Map<String, String>) {
+    private fun StringBuilder.appendRule(
+        step: StepDescriptor,
+        environments: Map<String, EnvironmentDescriptor>,
+        outputFiles: Map<String, String>,
+    ) {
         val ruleName = (step.id ?: step.task.name)
             .replace(Regex("[^a-zA-Z0-9]+"), "_")
             .trim('_')
+
+        val env = environments[step.environmentId]
+        val dockerImage = if (env?.kind == "docker") env.spec["image"]?.firstOrNull() else null
 
         val inputFiles = step.inputs.mapNotNull { port ->
             when (val src = port.source) {
@@ -74,6 +82,9 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
         if (outputFilesList.isNotEmpty()) {
             appendLine("    output:")
             outputFilesList.forEach { f -> appendLine("        \"$f\",") }
+        }
+        if (dockerImage != null) {
+            appendLine("    container: \"docker://$dockerImage\"")
         }
         appendLine("    shell:")
         appendLine("        \"$shellCmd\"")

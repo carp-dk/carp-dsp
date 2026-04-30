@@ -18,7 +18,7 @@ class EnvironmentImporterTest
 {
     private val namespace = UUID( "6ba7b810-9dad-11d1-80b4-00c04fd430c8" )
 
-    // ── Helpers
+    // -- Helpers
 
     private fun condaDesc(
         name: String = "test-env",
@@ -73,7 +73,7 @@ class EnvironmentImporterTest
         },
     )
 
-    // ── importEnvironment: conda ──────────────────────────────────────────────
+    // -- importEnvironment: conda ----------------------------------------------
 
     @Test
     fun `importEnvironment maps conda kind to CondaEnvironmentDefinition`()
@@ -149,7 +149,7 @@ class EnvironmentImporterTest
         assertEquals( emptyList(), result.dependencies )
     }
 
-    // ── importEnvironment: pixi ───────────────────────────────────────────────
+    // -- importEnvironment: pixi -----------------------------------------------
 
     @Test
     fun `importEnvironment maps pixi kind to PixiEnvironmentDefinition`()
@@ -191,7 +191,7 @@ class EnvironmentImporterTest
         assertEquals( listOf("conda-forge", "bioconda"), result.channels )
     }
 
-    // ── importEnvironment: r ──────────────────────────────────────────────────
+    // -- importEnvironment: r --------------------------------------------------
 
     @Test
     fun `importEnvironment maps r kind to REnvironmentDefinition`()
@@ -312,7 +312,7 @@ class EnvironmentImporterTest
         assertEquals( mapOf("R_LIBS" to "/usr/local/lib/R", "R_HOME" to "/opt/R/4.3.0"), result.environmentVariables )
     }
 
-    // ── importEnvironment: kind matching is case-insensitive ──────────────────
+    // -- importEnvironment: kind matching is case-insensitive ------------------
 
     @Test
     fun `importEnvironment accepts uppercase CONDA kind`()
@@ -328,7 +328,7 @@ class EnvironmentImporterTest
         assertIs<PixiEnvironmentDefinition>( EnvironmentImporter.importEnvironment( UUID.randomUUID(), d ) )
     }
 
-    // ── importEnvironment: environmentVariables from env. prefix ─────────────
+    // -- importEnvironment: environmentVariables from env. prefix -------------
 
     @Test
     fun `importEnvironment extracts env-prefixed spec keys as environmentVariables`()
@@ -372,12 +372,12 @@ class EnvironmentImporterTest
         assertTrue( result.environmentVariables.containsKey("PATH") )
     }
 
-    // ── importEnvironment: unknown kind ───────────────────────────────────────
+    // -- importEnvironment: unknown kind ---------------------------------------
 
     @Test
     fun `importEnvironment throws UnsupportedEnvironmentKindException for unknown kind`()
     {
-        val d = EnvironmentDescriptor( name = "alien", kind = "docker" )
+        val d = EnvironmentDescriptor( name = "alien", kind = "not-an-env" )
         assertFailsWith<UnsupportedEnvironmentKindException> {
             EnvironmentImporter.importEnvironment( UUID.randomUUID(), d )
         }
@@ -386,14 +386,14 @@ class EnvironmentImporterTest
     @Test
     fun `importEnvironment exception message contains the offending kind`()
     {
-        val d = EnvironmentDescriptor( name = "alien", kind = "docker" )
+        val d = EnvironmentDescriptor( name = "alien", kind = "not-an-env" )
         val ex = assertFailsWith<UnsupportedEnvironmentKindException> {
             EnvironmentImporter.importEnvironment( UUID.randomUUID(), d )
         }
-        assertTrue( ex.message!!.contains("docker"), "Exception message should contain offending kind" )
+        assertTrue( ex.message!!.contains("not-an-env"), "Exception message should contain offending kind" )
     }
 
-    // ── importEnvironments: UUID key resolution ───────────────────────────────
+    // -- importEnvironments: UUID key resolution -------------------------------
 
     @Test
     fun `importEnvironments parses valid UUID string keys directly`()
