@@ -19,7 +19,8 @@ import carp.dsp.core.application.translation.WorkflowExporter
  * Exports a [WorkflowDescriptor] to a list of CWL v1.2 [CwlDocument]s — one per step.
  *
  * [InProcessTaskDescriptor] steps are skipped (no CWL equivalent).
- * Docker environments are not yet supported
+ * Docker environments emit a `DockerRequirement` in `requirements:`.
+ * Conda/Pixi environments emit a `SoftwareRequirement` in `hints:`.
  */
 object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
 
@@ -35,7 +36,9 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
         val (baseCommand, arguments) = commandFor(step.task) ?: return null
         val env = environments[step.environmentId]
 
-        val softwarePackages = if (env?.kind in listOf("conda", "pixi"))
+        val dockerImage = if (env?.kind == "docker") env.spec["image"]?.firstOrNull() else null
+
+        val softwarePackages = if (dockerImage == null && env?.kind in listOf("conda", "pixi"))
             env?.spec?.get("dependencies") ?: emptyList()
         else emptyList()
 
@@ -46,7 +49,8 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
             } ?: emptyList()
 
         val stepId = step.id ?: step.task.name
-        val ctx = CwlYamlContext(baseCommand, arguments, softwarePackages, envVars, step.inputs, step.outputs)
+        val ctx =
+            CwlYamlContext(baseCommand, arguments, softwarePackages, envVars, dockerImage, step.inputs, step.outputs)
         return CwlDocument(stepId = stepId, content = buildCwlYaml(ctx))
     }
 
@@ -69,6 +73,7 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
         val arguments: List<String>,
         val softwarePackages: List<String>,
         val envVars: List<Pair<String, String>>,
+        val dockerImage: String?,
         val inputs: List<DataPortDescriptor>,
         val outputs: List<DataPortDescriptor>,
     )
@@ -96,19 +101,28 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
     }
 
     private fun StringBuilder.appendRequirements(ctx: CwlYamlContext) {
+        // SoftwareRequirement is advisory — goes in hints (cwltool rejects it in requirements)
         if (ctx.softwarePackages.isNotEmpty()) {
             appendLine("hints:")
             appendLine("  SoftwareRequirement:")
             appendLine("    packages:")
             ctx.softwarePackages.forEach { pkg -> appendLine("      - package: ${q(pkg)}") }
         }
-        if (ctx.envVars.isNotEmpty()) {
+        // DockerRequirement and EnvVarRequirement are mandatory — go in requirements
+        val hasRequirements = ctx.dockerImage != null || ctx.envVars.isNotEmpty()
+        if (hasRequirements) {
             appendLine("requirements:")
-            appendLine("  EnvVarRequirement:")
-            appendLine("    envDef:")
-            ctx.envVars.forEach { (k, v) ->
-                appendLine("      - envName: ${q(k)}")
-                appendLine("        envValue: ${q(v)}")
+            if (ctx.dockerImage != null) {
+                appendLine("  DockerRequirement:")
+                appendLine("    dockerPull: ${q(ctx.dockerImage)}")
+            }
+            if (ctx.envVars.isNotEmpty()) {
+                appendLine("  EnvVarRequirement:")
+                appendLine("    envDef:")
+                ctx.envVars.forEach { (k, v) ->
+                    appendLine("      - envName: ${q(k)}")
+                    appendLine("        envValue: ${q(v)}")
+                }
             }
         }
     }

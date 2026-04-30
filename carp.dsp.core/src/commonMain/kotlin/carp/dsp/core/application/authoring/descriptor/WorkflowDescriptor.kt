@@ -43,6 +43,7 @@ data class WorkflowMetadataDescriptor(
  * - `"pixi"` — Pixi-managed environment.
  * - `"python"` — Plain Python venv/system.
  * - `"system"` — No managed environment; commands run in the host process environment.
+ * - `"docker"` — Docker container. `spec["image"]` (required) holds the image reference.
  *
  * @property name Human-readable environment name.
  * @property kind Environment manager / type identifier (case-insensitive).

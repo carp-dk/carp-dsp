@@ -12,7 +12,7 @@ import dk.cachet.carp.analytics.domain.workflow.*
 import dk.cachet.carp.common.application.UUID
 import kotlin.collections.emptyList
 
-// ── MetadataExporter ──────────────────────────────────────────────────────────
+// -- MetadataExporter ----------------------------------------------------------
 
 /**
  * Maps workflow- and step-level [ComponentMetadata] to their descriptor equivalents.
@@ -35,7 +35,7 @@ internal object MetadataExporter
         )
 }
 
-// ── PortExporter ──────────────────────────────────────────────────────────────
+// -- PortExporter --------------------------------------------------------------
 
 /**
  * Maps [InputDataSpec] / [OutputDataSpec] to [DataPortDescriptor].
@@ -68,7 +68,7 @@ internal object PortExporter
         }
 }
 
-// ── TaskExporter ──────────────────────────────────────────────────────────────
+// -- TaskExporter --------------------------------------------------------------
 
 /**
  * Maps [TaskDefinition] variants and their [dk.cachet.carp.analytics.domain.tasks.ArgToken] lists to descriptor equivalents.
@@ -171,7 +171,7 @@ internal object TaskExporter
     }
 }
 
-// ── EnvironmentExporter ───────────────────────────────────────────────────────
+// -- EnvironmentExporter -------------------------------------------------------
 
 /**
  * Maps [EnvironmentDefinition] implementations to [EnvironmentDescriptor].
@@ -223,12 +223,19 @@ internal object EnvironmentExporter
                 "pixi" to baseSpec
             }
             "SystemEnvironmentDefinition" -> "system" to baseSpec
+            "DockerEnvironmentDefinition" ->
+            {
+                ( env as? carp.dsp.core.application.environment.DockerEnvironmentDefinition )?.let {
+                    baseSpec["image"] = listOf( it.image )
+                }
+                "docker" to baseSpec
+            }
             else -> "unknown" to baseSpec
         }
     }
 }
 
-// ── WorkflowDescriptorExporter ────────────────────────────────────────────────
+// -- WorkflowDescriptorExporter ------------------------------------------------
 
 /**
  * Converts canonical domain models to [WorkflowDescriptor] DTOs.
@@ -250,7 +257,7 @@ internal object EnvironmentExporter
  */
 class WorkflowDescriptorExporter
 {
-    // ── Public entry point ────────────────────────────────────────────────────
+    // -- Public entry point ----------------------------------------------------
 
     fun export( definition: WorkflowDefinition, schemaVersion: String = "1.0" ): WorkflowDescriptor =
         WorkflowDescriptor(
@@ -260,7 +267,7 @@ class WorkflowDescriptorExporter
             environments = EnvironmentExporter.exportEnvironments( definition.environments ),
         )
 
-    // ── Steps (only method that combines sub-exporters) ───────────────────────
+    // -- Steps (only method that combines sub-exporters) -----------------------
 
     internal fun exportSteps( workflow: Workflow ): List<StepDescriptor> =
         workflow.getComponents()

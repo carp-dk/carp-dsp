@@ -2,6 +2,7 @@ package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.environment.CondaEnvironmentDefinition
+import carp.dsp.core.application.environment.DockerEnvironmentDefinition
 import carp.dsp.core.application.environment.PixiEnvironmentDefinition
 import carp.dsp.core.application.environment.REnvironmentDefinition
 import carp.dsp.core.application.environment.SystemEnvironmentDefinition
@@ -100,6 +101,13 @@ internal object EnvironmentImporter
                 id = id,
                 name = environmentDescriptor.name,
                 dependencies = deps,
+                environmentVariables = envVars,
+            )
+            "docker" -> DockerEnvironmentDefinition(
+                id = id,
+                name = environmentDescriptor.name,
+                image = environmentDescriptor.spec["image"]?.firstOrNull()
+                    ?: error("Docker environment '${environmentDescriptor.name}' missing required spec field 'image'"),
                 environmentVariables = envVars,
             )
             else -> throw UnsupportedEnvironmentKindException(

@@ -1,0 +1,55 @@
+schemaVersion: "1.0"
+metadata:
+  id: "single-step-docker-001"
+  name: "Single Step - Python in Docker"
+  description: "Minimal one-step workflow: Python script in a Docker container"
+  version: "1.0"
+  tags:
+    - "docker"
+    - "python"
+    - "single-step"
+    - "fixture"
+
+environments:
+  python-docker:
+    name: "python-slim"
+    kind: "docker"
+    spec:
+      image:
+        - "python:3.11-slim"
+
+steps:
+  - id: "process-data"
+    metadata:
+      name: "Process Data in Docker"
+      description: "Python script that runs inside a Docker container"
+      version: "1.0"
+    environmentId: "python-docker"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "python-task"
+      name: "process-data"
+      description: "Process input CSV and write output"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/process_data.py"
+      args: []
+    inputs:
+      - id: "input-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Input data CSV file"
+        source:
+          type: "file"
+          path: "data/input.csv"
+    outputs:
+      - id: "output-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Processed data CSV file"
+        destination:
+          type: "file"
+          path: "output/result.csv"

@@ -47,6 +47,12 @@ private val systemEnv = EnvironmentDescriptor(
     spec = emptyMap(),
 )
 
+private val dockerEnv = EnvironmentDescriptor(
+    name = "python-slim",
+    kind = "docker",
+    spec = mapOf("image" to listOf("python:3.11-slim")),
+)
+
 private fun pythonStep(
     id: String = "process-data",
     environmentId: String = "conda-env",
@@ -267,5 +273,51 @@ class DspToCwlExporterTest {
         val cwl = DspToCwlExporter.export(wf).first().content
 
         assertFalse("SoftwareRequirement" in cwl)
+    }
+
+    // -- Docker ----------------------------------------------------------------
+
+    @Test
+    fun `docker environment emits DockerRequirement with correct image`() {
+        val step = pythonStep(environmentId = "docker-env")
+        val wf = workflowWith(step, environments = mapOf("docker-env" to dockerEnv))
+        val cwl = DspToCwlExporter.export(wf).first().content
+
+        assertTrue("DockerRequirement" in cwl)
+        assertTrue("dockerPull: \"python:3.11-slim\"" in cwl)
+    }
+
+    @Test
+    fun `docker environment does not emit SoftwareRequirement`() {
+        val step = pythonStep(environmentId = "docker-env")
+        val wf = workflowWith(step, environments = mapOf("docker-env" to dockerEnv))
+        val cwl = DspToCwlExporter.export(wf).first().content
+
+        assertFalse("SoftwareRequirement" in cwl)
+    }
+
+    @Test
+    fun `docker DockerRequirement is in requirements not hints`() {
+        val step = pythonStep(environmentId = "docker-env")
+        val wf = workflowWith(step, environments = mapOf("docker-env" to dockerEnv))
+        val cwl = DspToCwlExporter.export(wf).first().content
+
+        val requirementsIdx = cwl.indexOf("requirements:")
+        val hintsIdx = cwl.indexOf("hints:")
+        val dockerIdx = cwl.indexOf("DockerRequirement")
+
+        assertTrue(requirementsIdx >= 0, "requirements: block expected")
+        assertTrue(dockerIdx > requirementsIdx, "DockerRequirement must appear after requirements:")
+        assertTrue(hintsIdx !in 0..dockerIdx, "DockerRequirement must not be under hints:")
+    }
+
+    @Test
+    fun `conda environment still produces SoftwareRequirement when docker env present on other steps`() {
+        val condaStep = pythonStep(id = "step-a", environmentId = "conda-env")
+        val wf = workflowWith(condaStep, environments = mapOf("conda-env" to condaEnv))
+        val cwl = DspToCwlExporter.export(wf).first().content
+
+        assertTrue("SoftwareRequirement" in cwl)
+        assertFalse("DockerRequirement" in cwl)
     }
 }
