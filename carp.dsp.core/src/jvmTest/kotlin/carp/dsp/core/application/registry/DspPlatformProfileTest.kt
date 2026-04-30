@@ -27,7 +27,7 @@ class DspPlatformProfileTest {
         assertTrue(EnvironmentType.PIXI in envs)
         assertTrue(EnvironmentType.R in envs)
         assertTrue(EnvironmentType.SYSTEM in envs)
-        assertFalse(EnvironmentType.DOCKER in envs, "DOCKER should be excluded for R1")
+        assertTrue(EnvironmentType.DOCKER in envs)
     }
 
     @Test

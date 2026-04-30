@@ -20,10 +20,19 @@ import carp.dsp.core.application.translation.WorkflowExporter
  * Each DSP step becomes one Snakemake rule. Input/output port connections
  * are resolved to concrete filenames. A `rule all` is prepended to declare
  * the final step's outputs as pipeline targets.
+ *
+ * Environment handling:
+ * - `docker` → `container: "docker://<image>"` directive on the rule
+ * - `conda` / `pixi` → `conda: "envs/<envId>.yaml"` directive on the rule;
+ *    a matching `environment.yaml` is generated in [SnakemakeWorkflow.envFiles]
+ * - `system` / `r` → no directive; runner uses whatever is on PATH
  */
 object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
 
+    private val CONDA_KINDS = setOf("conda", "pixi")
+
     override fun export(descriptor: WorkflowDescriptor): SnakemakeWorkflow {
+        val envFiles = buildEnvFiles(descriptor)
         val content = buildString {
             val outputFiles = buildOutputFileMap(descriptor)
 
@@ -37,10 +46,37 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
 
             descriptor.steps.forEach { step -> appendRule(step, descriptor.environments, outputFiles) }
         }
-        return SnakemakeWorkflow(content)
+        return SnakemakeWorkflow(content = content, envFiles = envFiles)
     }
 
-    // -- Helpers ------------------------------------------------------------------
+    // -- Conda env file generation -------------------------------------------------
+
+    /**
+     * Generates one `environment.yaml` per conda/pixi environment in the descriptor.
+     * Keys are relative paths suitable for the `conda:` directive (e.g. `"envs/env1.yaml"`).
+     */
+    private fun buildEnvFiles(descriptor: WorkflowDescriptor): Map<String, String> =
+        descriptor.environments
+            .filter { (_, env) -> env.kind in CONDA_KINDS }
+            .mapKeys { (envId, _) -> "envs/$envId.yaml" }
+            .mapValues { (_, env) -> buildCondaEnvYaml(env) }
+
+    private fun buildCondaEnvYaml(env: EnvironmentDescriptor): String = buildString {
+        appendLine("name: ${env.name}")
+
+        val channels = env.spec["channels"]?.takeIf { it.isNotEmpty() }
+            ?: listOf("conda-forge", "defaults")
+        appendLine("channels:")
+        channels.forEach { appendLine("  - $it") }
+
+        appendLine("dependencies:")
+        // Pin the language version as the first dependency
+        env.spec["pythonVersion"]?.firstOrNull()?.let { appendLine("  - python=$it") }
+        env.spec["rVersion"]?.firstOrNull()?.let { appendLine("  - r-base=$it") }
+        env.spec["dependencies"]?.forEach { appendLine("  - $it") }
+    }.trimEnd()
+
+    // -- Snakefile rule builder ---------------------------------------------------
 
     private fun buildOutputFileMap(descriptor: WorkflowDescriptor): Map<String, String> =
         buildMap {
@@ -63,6 +99,7 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
 
         val env = environments[step.environmentId]
         val dockerImage = if (env?.kind == "docker") env.spec["image"]?.firstOrNull() else null
+        val condaFile = if (env?.kind in CONDA_KINDS) "envs/${step.environmentId}.yaml" else null
 
         val inputFiles = step.inputs.mapNotNull { port ->
             when (val src = port.source) {
@@ -85,6 +122,9 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
         }
         if (dockerImage != null) {
             appendLine("    container: \"docker://$dockerImage\"")
+        }
+        if (condaFile != null) {
+            appendLine("    conda: \"$condaFile\"")
         }
         appendLine("    shell:")
         appendLine("        \"$shellCmd\"")
