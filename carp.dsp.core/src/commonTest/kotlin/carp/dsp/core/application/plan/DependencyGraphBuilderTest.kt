@@ -1,5 +1,6 @@
 package carp.dsp.core.application.plan
 
+import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
@@ -160,6 +161,36 @@ class DependencyGraphBuilderTest
 
         assertEquals( 1, result.issues.size )
         assertEquals( "DEPENDENCY_OUTPUT_NOT_FOUND", result.issues[0].code )
+    }
+
+    @Test
+    fun `build detects type mismatch on a data connection`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+
+        // Producer output declares CSV; consumer input declares JSON — same port name, different type.
+        val producer = createTypedStep( producerId, "producer", output = FileFormat.CSV )
+        val consumer = createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.JSON )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertEquals( 1, result.issues.size )
+        assertEquals( "DEPENDENCY_TYPE_MISMATCH", result.issues[0].code )
+    }
+
+    @Test
+    fun `build accepts a data connection with matching declared types`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+
+        val producer = createTypedStep( producerId, "producer", output = FileFormat.CSV )
+        val consumer = createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.CSV )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertTrue( result.issues.isEmpty() )
     }
 
     @Test
@@ -405,4 +436,56 @@ class DependencyGraphBuilderTest
             required = true
         )
     }
+
+    /** Producer step with a single typed output named "Output shared". */
+    private fun createTypedStep(
+        id: UUID,
+        name: String,
+        output: FileFormat
+    ): Step = Step(
+        metadata = StepMetadata(
+            id = id,
+            name = name,
+            description = "Test step: $name",
+            version = Version( 1, 0 )
+        ),
+        inputs = emptyList(),
+        outputs = listOf(
+            OutputDataSpec(
+                id = UUID.randomUUID(),
+                name = "Output shared",
+                schema = DataSchema( format = output, encoding = "UTF-8" ),
+                location = FileLocation( path = "", format = output )
+            )
+        ),
+        task = TestTask( name = "task-$name" ),
+        environmentId = UUID.randomUUID()
+    )
+
+    /** Consumer step whose single typed input reads "Output shared" from [producerId]. */
+    private fun createTypedConsumer(
+        name: String,
+        producerId: UUID,
+        inputFormat: FileFormat
+    ): Step = Step(
+        metadata = StepMetadata(
+            id = UUID.randomUUID(),
+            name = name,
+            description = "Test step: $name",
+            version = Version( 1, 0 )
+        ),
+        inputs = listOf(
+            InputDataSpec(
+                id = UUID.randomUUID(),
+                name = "Output shared",
+                schema = DataSchema( format = inputFormat, encoding = "UTF-8" ),
+                location = FileLocation( path = "", format = inputFormat ),
+                stepRef = producerId.toString(),
+                required = true
+            )
+        ),
+        outputs = emptyList(),
+        task = TestTask( name = "task-$name" ),
+        environmentId = UUID.randomUUID()
+    )
 }

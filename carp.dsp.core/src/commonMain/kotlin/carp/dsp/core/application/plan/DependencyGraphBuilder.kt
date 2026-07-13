@@ -2,6 +2,7 @@ package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
+import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
 
@@ -98,6 +99,11 @@ class DependencyGraphBuilder
                 dependency.producerOutputId,
                 context
             )
+
+            if ( isValidDependency )
+            {
+                validateTypeCompatibility( stepId, dependency, context )
+            }
 
             if (
                 isValidDependency &&
@@ -199,9 +205,47 @@ class DependencyGraphBuilder
                     producerStepRef = ref,
                     producerStepId = producerStep?.metadata?.id,
                     producerOutputId = producerOutput?.id,
-                    outputName = input.name
+                    outputName = input.name,
+                    consumerInputFormat = input.schema?.format,
+                    producerOutputFormat = producerOutput?.schema?.format
                 )
             }
+        }
+    }
+
+    /**
+     * Adds an ERROR issue if a resolved data connection joins two ports with
+     * incompatible declared types.
+     *
+     * A connection is flagged only when both the consuming input and the producing
+     * output declare a *known* [FileFormat] (neither null nor [FileFormat.UNKNOWN])
+     * and the two differ. Undeclared or unknown types are left unchecked, so this
+     * never rejects a workflow whose ports simply omit a type.
+     */
+    private fun validateTypeCompatibility(
+        consumerStepId: UUID,
+        dependency: CrossStepDependency,
+        context: DependencyResolutionContext
+    )
+    {
+        val consumerFormat = dependency.consumerInputFormat
+        val producerFormat = dependency.producerOutputFormat
+
+        val bothKnown = consumerFormat != null && producerFormat != null &&
+            consumerFormat != FileFormat.UNKNOWN && producerFormat != FileFormat.UNKNOWN
+
+        if ( bothKnown && consumerFormat != producerFormat )
+        {
+            context.issues.add(
+                PlanIssue(
+                    severity = PlanIssueSeverity.ERROR,
+                    code = "DEPENDENCY_TYPE_MISMATCH",
+                    message = "Input '${dependency.outputName}' declares type '$consumerFormat' " +
+                        "but producer step '${dependency.producerStepRef}' provides type '$producerFormat' " +
+                        "for this connection.",
+                    stepId = consumerStepId
+                )
+            )
         }
     }
 
@@ -238,7 +282,9 @@ data class CrossStepDependency(
     val producerStepRef: String, // original YAML ID — error messages
     val producerStepId: UUID?, // resolved producer step UUID
     val producerOutputId: UUID?, // resolved producer output UUID
-    val outputName: String // output name — error messages
+    val outputName: String, // output name — error messages
+    val consumerInputFormat: FileFormat? = null, // declared type of the consuming input
+    val producerOutputFormat: FileFormat? = null // declared type of the producing output
 )
 
 /**
