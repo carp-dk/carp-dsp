@@ -4,9 +4,14 @@ import carp.dsp.demo.demos.DiafocusRegisteredDemo
 import carp.dsp.demo.demos.DbdpCovidRegisteredDemo
 import carp.dsp.demo.demos.MobgapRegisteredDemo
 import carp.dsp.demo.demos.HrActivityRegisteredDemo
+import carp.dsp.demo.demos.MobgapTimedEvalRegisteredDemo
+import carp.dsp.demo.demos.PlannerDeterminismEvalRegisteredDemo
+import carp.dsp.demo.demos.RunAllEvalsRegisteredDemo
 
 /**
  * JVM actual: registers filesystem-backed demos before the shared dispatcher runs.
+ *
+ * See [DemoMain] for how to run demos and CLI arguments.
  */
 actual fun registerPlatformDemos() {
     DemoRegistry.register(StepExecutionRegisteredDemo)
@@ -14,5 +19,8 @@ actual fun registerPlatformDemos() {
     DemoRegistry.register(DbdpCovidRegisteredDemo)
     DemoRegistry.register(MobgapRegisteredDemo)
     DemoRegistry.register(HrActivityRegisteredDemo)
+    DemoRegistry.register(PlannerDeterminismEvalRegisteredDemo)
+    DemoRegistry.register(MobgapTimedEvalRegisteredDemo)
+    DemoRegistry.register(RunAllEvalsRegisteredDemo)
 }
 

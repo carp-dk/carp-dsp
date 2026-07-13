@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# --- eval timing (paper Fig D): prints script self-time to stderr ---
+import atexit as _ae, sys as _sys, time as _time
+_EVAL_T0 = _time.perf_counter()
+_ae.register(lambda: print(f"EVAL_SCRIPT_SECONDS={_time.perf_counter() - _EVAL_T0:.3f}", file=_sys.stderr))
+# --------------------------------------------------------------------
 """
 Step 4: Walking Bout Assembly (WBA)
 =====================================

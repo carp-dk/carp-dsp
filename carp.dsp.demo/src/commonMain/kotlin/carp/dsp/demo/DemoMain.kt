@@ -10,6 +10,17 @@ expect fun registerPlatformDemos()
 
 /**
  * Platform-agnostic entrypoint. Registers platform demos first, then dispatches.
+ *
+ * Usage:
+ *   ./gradlew :carp.dsp.demo:run --args "list"
+ *   ./gradlew :carp.dsp.demo:run --args "run <id>"
+ *   ./gradlew :carp.dsp.demo:run --args "run <id> [args... ]"
+ *
+ * Examples:
+ *   ./gradlew :carp.dsp.demo:run --args "list"
+ *   ./gradlew :carp.dsp.demo:run --args "run mobgap"
+ *   ./gradlew :carp.dsp.demo:run --args "run planner-determinism-eval 100"
+ *   ./gradlew :carp.dsp.demo:run --args "run mobgap-timed-eval 2"
  */
 fun main(args: Array<String>) {
     registerPlatformDemos()
@@ -56,8 +67,13 @@ fun runDemo(args: Array<String>) {
 }
 
 private fun listDemos() {
+    val grouped = DemoRegistry.demos.groupBy { it.category }.toSortedMap()
     println("Available demos:")
-    DemoRegistry.demos.forEach { println(" - ${it.id}: ${it.title}") }
+    grouped.forEach { (category, demos) ->
+        println()
+        println("$category:")
+        demos.forEach { println("  ${it.id}: ${it.title}") }
+    }
 }
 
 private fun printHelp() {
@@ -66,8 +82,15 @@ private fun printHelp() {
         CARP-DSP Demo Runner
 
         Usage:
-          demo list
-          demo run <id>
+          ./gradlew :carp.dsp.demo:run --args "list"
+          ./gradlew :carp.dsp.demo:run --args "run <id>"
+          ./gradlew :carp.dsp.demo:run --args "run <id> [args...]"
+
+        Examples:
+          ./gradlew :carp.dsp.demo:run --args "list"
+          ./gradlew :carp.dsp.demo:run --args "run mobgap"
+          ./gradlew :carp.dsp.demo:run --args "run planner-determinism-eval 100"
+          ./gradlew :carp.dsp.demo:run --args "run mobgap-timed-eval 2"
 
         """.trimIndent()
     )

@@ -99,3 +99,31 @@ tasks.register<JavaExec>("runWorkflow") {
     standardOutput = System.out
 }
 
+// Paper evaluation harnesses (Section: Evaluation)
+// ./gradlew :carp.dsp.demo:evalPlannerDeterminism [-Pargs="100"]
+// ./gradlew :carp.dsp.demo:evalMobgapTiming [-Pargs="2"]
+fun registerEvalTask(name: String, main: String, description: String) {
+    tasks.register<JavaExec>(name) {
+        group = "evaluation"
+        this.description = description
+        classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+                    kotlin.jvm().compilations.getByName("main").output.allOutputs
+        mainClass.set(main)
+        if (project.hasProperty("args")) {
+            args = (project.property("args") as String).trim().split(Regex("\\s+"))
+        }
+        standardOutput = System.out
+    }
+}
+
+registerEvalTask(
+    "evalPlannerDeterminism",
+    "carp.dsp.demo.eval.PlannerDeterminismEvalKt",
+    "Plan the mobgap workflow N times and verify plan determinism"
+)
+registerEvalTask(
+    "evalMobgapTiming",
+    "carp.dsp.demo.eval.MobgapTimedEvalKt",
+    "Instrumented UC1 run: phase + per-step timings, output hashes"
+)
+
