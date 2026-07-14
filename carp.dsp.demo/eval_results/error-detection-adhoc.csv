@@ -1,0 +1,6 @@
+fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,wasted_seconds,pipeline_seconds,outcome,measured
+type-mismatch,adhoc,True,runtime,8,7,0.875,19.47,21.84,runtime_crash,True
+missing-producer,adhoc,True,runtime,8,1,0.125,1.95,21.84,runtime_crash,True
+missing-output,adhoc,True,runtime,8,2,0.25,5.58,21.84,runtime_crash,True
+cycle,adhoc,True,runtime,8,0,0.0,0.0,21.84,unschedulable,False
+missing-env,adhoc,True,runtime,8,0,0.0,0.0,21.84,runtime_env_error,False

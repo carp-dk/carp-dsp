@@ -6,6 +6,7 @@ import carp.dsp.demo.demos.MobgapRegisteredDemo
 import carp.dsp.demo.demos.HrActivityRegisteredDemo
 import carp.dsp.demo.demos.MobgapTimedEvalRegisteredDemo
 import carp.dsp.demo.demos.PlannerDeterminismEvalRegisteredDemo
+import carp.dsp.demo.demos.ErrorDetectionEvalRegisteredDemo
 import carp.dsp.demo.demos.RunAllEvalsRegisteredDemo
 
 /**
@@ -21,6 +22,7 @@ actual fun registerPlatformDemos() {
     DemoRegistry.register(HrActivityRegisteredDemo)
     DemoRegistry.register(PlannerDeterminismEvalRegisteredDemo)
     DemoRegistry.register(MobgapTimedEvalRegisteredDemo)
+    DemoRegistry.register(ErrorDetectionEvalRegisteredDemo)
     DemoRegistry.register(RunAllEvalsRegisteredDemo)
 }
 

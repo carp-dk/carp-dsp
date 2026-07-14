@@ -1,0 +1,6 @@
+fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,plan_ms,outcome,codes
+type-mismatch,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_TYPE_MISMATCH
+missing-producer,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_PRODUCER_NOT_FOUND|MISSING_PRODUCER_STEP
+missing-output,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_OUTPUT_NOT_FOUND|MISSING_PRODUCER_OUTPUT
+cycle,carp,true,plan-time,8,0,0.0,7,caught_plan_time,WORKFLOW_CYCLE_DETECTED
+missing-env,carp,true,plan-time,8,0,0.0,7,caught_plan_time,MISSING_ENVIRONMENT_DEFINITION

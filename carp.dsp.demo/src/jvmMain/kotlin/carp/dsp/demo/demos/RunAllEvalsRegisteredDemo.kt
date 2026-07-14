@@ -17,6 +17,7 @@ object RunAllEvalsRegisteredDemo : CliDemo {
     override fun run(args: List<String>) {
         val evals = listOf(
             "planner-determinism-eval" to PlannerDeterminismEvalRegisteredDemo,
+            "error-detection-eval" to ErrorDetectionEvalRegisteredDemo,
             "mobgap-timed-eval" to MobgapTimedEvalRegisteredDemo
         )
 

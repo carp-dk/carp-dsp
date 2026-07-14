@@ -126,4 +126,41 @@ registerEvalTask(
     "carp.dsp.demo.eval.MobgapTimedEvalKt",
     "Instrumented UC1 run: phase + per-step timings, output hashes"
 )
+registerEvalTask(
+    "evalErrorDetection",
+    "carp.dsp.demo.eval.ErrorDetectionEvalKt",
+    "Plan 5 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
+)
+
+// End to end: CARP arm (Kotlin) -> ad-hoc baseline (Python) -> plot, one command.
+// The Python steps reuse the mobgap Pixi env CARP already provisioned under
+// ~/.carp-dsp/envs/pixi (matplotlib + mobgap are both in it), so there is no env id to
+// look up. Run a pipeline first (e.g. evalMobgapTiming) so that env exists.
+//   ./gradlew :carp.dsp.demo:evalErrorDetectionFull
+tasks.register("evalErrorDetectionFull") {
+    group = "evaluation"
+    description = "End to end: CARP arm, then ad-hoc baseline, then rebuild the figure"
+    dependsOn("evalErrorDetection")
+    doLast {
+        val evalDir = layout.projectDirectory.dir("src/jvmMain/resources/scripts/eval").asFile
+        val pixiEnvs = File(System.getProperty("user.home"), ".carp-dsp/envs/pixi")
+        val manifest = pixiEnvs.listFiles()?.sorted()
+            ?.map { File(it, "pixi.toml") }
+            ?.firstOrNull { it.exists() && it.readText().contains("mobgap") }
+            ?: throw GradleException(
+                "No CARP mobgap Pixi env found under $pixiEnvs. Run a pipeline first " +
+                "(e.g. ./gradlew :carp.dsp.demo:evalMobgapTiming) so the environment is provisioned."
+            )
+        fun pixi(vararg script: String) = project.exec {
+            workingDir = evalDir
+            commandLine(listOf("pixi", "run", "--manifest-path", manifest.absolutePath, "python") + script)
+        }
+        // ad-hoc arm (runs the eight mobgap steps in the provisioned env)
+        pixi("adhoc_baseline.py")
+        // rebuild Fig A; drop it straight into the paper repo if it sits beside this one
+        val paperFig = rootProject.projectDir.parentFile.resolve("carp-dsp-sys-paper/images/fig-error-detection.pdf")
+        if (paperFig.parentFile.exists()) pixi("plot_error_detection.py", "--out", paperFig.absolutePath)
+        else pixi("plot_error_detection.py")
+    }
+}
 

@@ -1,0 +1,39 @@
+# Self-contained environment for the CARP-DSP error-detection eval (Fig A).
+#
+# Mirrors the workflow's `env-pixi` spec (Python 3.12 + mobgap, seaborn, matplotlib on
+# conda-forge), so the ad-hoc baseline runs the eight mobgap steps in the same pinned
+# environment the pipeline uses - a fair comparison - without hunting for the env CARP
+# provisions under ~/.carp-dsp.
+#
+# Usage (from this directory):
+#   pixi run figure      # ad-hoc baseline + rebuild Fig A (needs the Kotlin CARP arm CSV)
+#   pixi run baseline    # just the ad-hoc arm  -> eval_results/error-detection-adhoc.csv
+#   pixi run plot        # just the figure      -> eval_results/fig-error-detection.pdf
+#   pixi run fixtures    # regenerate the 5 injected workflow YAMLs (only if the base changed)
+#
+# Override the figure output (e.g. straight into the paper repo):
+#   pixi run plot --out ../../../../../../../carp-dsp-sys-paper/images/fig-error-detection.pdf
+#
+# The CARP arm itself is the Kotlin eval, run separately:
+#   ./gradlew :carp.dsp.demo:evalErrorDetection
+
+[project]
+name = "carp-dsp-error-eval"
+version = "0.1.0"
+description = "Ad-hoc baseline and Fig A plot for the CARP-DSP error-detection evaluation"
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+mobgap = "*"
+seaborn = "*"
+matplotlib = "*"
+
+[tasks]
+fixtures = "python gen_injections.py"
+baseline = "python adhoc_baseline.py"
+plot = "python plot_error_detection.py"
+figure = { depends-on = ["baseline", "plot"] }
