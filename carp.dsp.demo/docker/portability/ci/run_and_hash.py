@@ -18,7 +18,11 @@ import sys
 
 
 def sha256(p: pathlib.Path) -> str:
-    return hashlib.sha256(p.read_bytes()).hexdigest()
+    # Normalise line endings before hashing: Windows writes CRLF in text mode, so raw
+    # bytes would differ from Linux/macOS on newline style alone. The portability claim is
+    # about the data being identical, not the newline encoding, so compare content.
+    data = p.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def main() -> None:

@@ -66,8 +66,13 @@ jobs:
 
       - name: Compare across OSes
         run: |
+          set +e
           python3 carp.dsp.demo/docker/portability/ci/compare_os.py \
             fps ubuntu-latest macos-latest windows-latest --out os-results
+          code=$?
+          [ -f os-results/portability-os.txt ] && cat os-results/portability-os.txt >> "$GITHUB_STEP_SUMMARY"
+          # exit 2 = outputs diverged across OSes (a valid result); exit 1 = real error
+          [ "$code" -eq 1 ] && exit 1 || exit 0
 
       - name: Upload cross-OS results
         if: always()

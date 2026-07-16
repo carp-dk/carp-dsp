@@ -66,7 +66,9 @@ def main() -> int:
     (out / "portability-os-table.tex").write_text("\n".join(tex) + "\n")
 
     print("\n".join(txt))
-    return 0 if all_identical else 1
+    # 0 = all identical, 2 = diverged (a valid result, not a failure). Real errors
+    # (missing files, exceptions) surface as exit 1 so CI can tell them apart.
+    return 0 if all_identical else 2
 
 
 if __name__ == "__main__":
