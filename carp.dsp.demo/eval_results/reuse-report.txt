@@ -1,0 +1,19 @@
+======================================================================
+Reuse eval - 2026-07-14T09:30:30.389256200Z
+UC1: mobgap-gait-analysis.yaml (MS cohort)
+UC2: mobgap-gait-analysis-ha.yaml (HA cohort)
+
+Authoring change:
+  Steps changed:            [import-data]
+  Downstream steps modified: 0 of 7 (expected 0)
+  YAML lines added:          4
+  YAML lines removed:        0
+
+Planner:
+  UC2 accepted (0 ERROR issues):     true
+  Resolved plan identical to UC1:    true  (same step UUIDs + topological order)
+  -> no manual DAG re-specification; downstream type compatibility re-verified automatically
+
+Reuse claim holds (only import-data changed, planner accepts, DAG unchanged): true
+======================================================================
+

@@ -131,6 +131,11 @@ registerEvalTask(
     "carp.dsp.demo.eval.ErrorDetectionEvalKt",
     "Plan 5 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
 )
+registerEvalTask(
+    "evalReuse",
+    "carp.dsp.demo.eval.ReuseEvalKt",
+    "Compare the MS and HA cohort workflows: authoring diff + planner acceptance (Use Case 2 / Reuse)"
+)
 
 // End to end: CARP arm (Kotlin) -> ad-hoc baseline (Python) -> plot, one command.
 // The Python steps reuse the mobgap Pixi env CARP already provisioned under
