@@ -1,0 +1,195 @@
+schemaVersion: "1.0"
+metadata:
+  id: "wf-anomaly-report"
+  name: "Anomaly Report"
+  description: "Adaptation of the activity-summary pipeline: same load/clean/daily-features steps, but flags anomalous participant-days and plots. Reuses shared library steps, adds detect-anomaly."
+  version: "1.0"
+  tags:
+    - "heart-rate"
+    - "activity"
+    - "anomaly"
+    - "reuse"
+
+environments:
+  env-hr:
+    name: "hr-lib"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+        - "pypi:matplotlib"
+
+steps:
+  - id: "load-hr-steps"
+    metadata:
+      name: "Load HR + Steps"
+      description: "Fetch the open Fitbit dataset and build an hourly HR + step table"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-load-hr-steps"
+      name: "load-hr-steps"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/load_hr_steps.py"
+      args:
+        - "--output"
+        - "output.0"
+    outputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Hourly wearable data: participant_id, timestamp, heart_rate_bpm, steps"
+
+  - id: "clean-resample"
+    metadata:
+      name: "Clean + Resample"
+      description: "QC heart rate, clip outliers, resample to a continuous hourly grid"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn:
+      - "load-hr-steps"
+    task:
+      type: "python"
+      id: "task-clean-resample"
+      name: "clean-resample"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/clean_resample.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Hourly wearable data"
+        source:
+          type: "step-output"
+          stepId: "load-hr-steps"
+          outputId: "hr-steps-csv"
+    outputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Cleaned hourly wearable data"
+
+  - id: "daily-features"
+    metadata:
+      name: "Daily Features"
+      description: "Aggregate hourly data to per-participant per-day features"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn:
+      - "clean-resample"
+    task:
+      type: "python"
+      id: "task-daily-features"
+      name: "daily-features"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/daily_features.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Cleaned hourly wearable data"
+        source:
+          type: "step-output"
+          stepId: "clean-resample"
+          outputId: "hr-steps-csv"
+    outputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily features: participant_id, date, mean_hr, resting_hr, peak_hr, total_steps, active_hours"
+
+  - id: "detect-anomaly"
+    metadata:
+      name: "Detect Anomaly"
+      description: "Flag participant-days with unusual activity or resting heart rate"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn:
+      - "daily-features"
+    task:
+      type: "python"
+      id: "task-detect-anomaly"
+      name: "detect-anomaly"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/detect_anomaly.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily features"
+        source:
+          type: "step-output"
+          stepId: "daily-features"
+          outputId: "daily-features-csv"
+    outputs:
+      - id: "anomaly-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Per participant-day anomaly flags"
+
+  - id: "visualise"
+    metadata:
+      name: "Visualise"
+      description: "Plot the daily features as a summary chart"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn:
+      - "daily-features"
+    task:
+      type: "python"
+      id: "task-visualise"
+      name: "visualise"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/visualise.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily features"
+        source:
+          type: "step-output"
+          stepId: "daily-features"
+          outputId: "daily-features-csv"
+    outputs:
+      - id: "plot-png"
+        descriptor:
+          type: "png"
+          format: "binary"
+          notes: "2x2 summary chart of daily HR and activity"

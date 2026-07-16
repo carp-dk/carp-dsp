@@ -1,0 +1,9 @@
+library_step,reuse_count,workflows,sloc
+load-hr-steps,3,activity-summary|anomaly-report|minimal-summary,40
+clean-resample,2,activity-summary|anomaly-report,26
+daily-features,3,activity-summary|anomaly-report|minimal-summary,21
+summarise,2,activity-summary|minimal-summary,22
+detect-anomaly,1,anomaly-report,25
+visualise,2,activity-summary|anomaly-report,25
+TOTAL,13,,159
+# distinct=6 references=13 redundant_copies=7 dup_sloc=195

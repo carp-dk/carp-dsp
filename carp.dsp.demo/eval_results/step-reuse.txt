@@ -1,0 +1,22 @@
+========================================================================
+Step-reuse eval - 2026-07-16T12:38:09.404870800Z
+Library: scripts/hr_lib (open Fitbit data, Zenodo 53894)
+
+Workflows planned (0 ERROR issues each): true  {activity-summary=true, anomaly-report=true, minimal-summary=true}
+
+  library step      reuse    workflows
+  load-hr-steps     x3      [activity-summary, anomaly-report, minimal-summary]
+  clean-resample    x2      [activity-summary, anomaly-report]
+  daily-features    x3      [activity-summary, anomaly-report, minimal-summary]
+  summarise         x2      [activity-summary, minimal-summary]
+  detect-anomaly    x1      [anomaly-report]
+  visualise         x2      [activity-summary, anomaly-report]
+
+Distinct library steps:        6
+References across workflows:   13
+Duplicated step bodies (CARP): 0  (workflows reference shared scripts)
+Monolithic build would inline: 13 copies -> 7 redundant (53% of inlined)
+Library size (written once):   159 SLOC across 6 steps
+Projected duplicated SLOC:     195 (monolithic)
+========================================================================
+

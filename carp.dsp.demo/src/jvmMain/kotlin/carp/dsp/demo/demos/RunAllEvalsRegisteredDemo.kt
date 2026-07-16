@@ -18,6 +18,7 @@ object RunAllEvalsRegisteredDemo : CliDemo {
         val evals = listOf(
             "planner-determinism-eval" to PlannerDeterminismEvalRegisteredDemo,
             "error-detection-eval" to ErrorDetectionEvalRegisteredDemo,
+            "step-reuse-eval" to StepReuseEvalRegisteredDemo,
             "mobgap-timed-eval" to MobgapTimedEvalRegisteredDemo
         )
 
