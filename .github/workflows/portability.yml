@@ -1,0 +1,68 @@
+name: portability
+
+# Cross-OS output determinism: run the HR/step pipeline natively on Linux, macOS, and
+# Windows runners under the same pinned env, then compare output hashes. Complements the
+# local Docker eval (which only varies Linux distros). Manual trigger to control CI minutes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Pixi env
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          manifest-path: carp.dsp.demo/docker/portability/ci/pixi.toml
+          locked: false
+
+      - name: Run pipeline + fingerprint outputs
+        run: |
+          pixi run --manifest-path carp.dsp.demo/docker/portability/ci/pixi.toml \
+            python carp.dsp.demo/docker/portability/ci/run_and_hash.py \
+              --hr-lib carp.dsp.demo/src/jvmMain/resources/scripts/hr_lib \
+              --workdir "${RUNNER_TEMP}/ws" \
+              --out "fingerprint-${{ matrix.os }}.txt"
+
+      - name: Upload fingerprint
+        uses: actions/upload-artifact@v4
+        with:
+          name: fingerprint-${{ matrix.os }}
+          path: fingerprint-${{ matrix.os }}.txt
+
+  compare:
+    needs: run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all fingerprints
+        uses: actions/download-artifact@v4
+        with:
+          path: fps
+          pattern: fingerprint-*
+          merge-multiple: true
+
+      - name: Compare across OSes
+        run: |
+          python3 carp.dsp.demo/docker/portability/ci/compare_os.py \
+            fps ubuntu-latest macos-latest windows-latest --out os-results
+
+      - name: Upload cross-OS results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portability-os-results
+          path: os-results/

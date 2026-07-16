@@ -1,0 +1,4 @@
+artifact,ubuntu:22.04,debian:12,fedora:40,identical
+daily-features.csv,46fe400d5aa5,46fe400d5aa5,46fe400d5aa5,True
+hr-steps.csv,be9e13538fbf,be9e13538fbf,be9e13538fbf,True
+summary.json,a24232fbd3bb,a24232fbd3bb,a24232fbd3bb,True

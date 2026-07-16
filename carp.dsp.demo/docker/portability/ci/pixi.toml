@@ -1,0 +1,14 @@
+# Multi-platform env for the cross-OS portability CI (GitHub Actions matrix).
+# Kept separate from ../pixi.toml (which is linux-64 only for the Docker distro eval) so
+# that eval's committed lock stays valid. CI solves per run (setup-pixi locked: false);
+# commit a generated pixi.lock here later for full reproducibility.
+
+[project]
+name = "carp-portability-ci"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.11.*"
+pandas = "*"

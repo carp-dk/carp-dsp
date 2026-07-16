@@ -142,6 +142,29 @@ registerEvalTask(
     "Measure step reuse across 3 HR/step workflows built from a shared 6-step library (Step reuse)"
 )
 
+// Portability eval: run the HR/step pipeline in several Linux distros (Docker) under one
+// pinned Pixi env and compare output hashes. Requires Docker running + Pixi on the host.
+//   ./gradlew :carp.dsp.demo:evalPortability
+tasks.register("evalPortability") {
+    group = "evaluation"
+    description = "Cross-distro output determinism via Docker: run the HR/step pipeline in N distros and compare hashes"
+    doLast {
+        // Use a forward-slash relative path so bash on Windows (Git Bash) doesn't eat the
+        // backslashes of an absolute Windows path.
+        val result = project.exec {
+            workingDir = layout.projectDirectory.asFile
+            commandLine("bash", "docker/portability/run-portability.sh")
+            isIgnoreExitValue = true
+        }
+        when (result.exitValue) {
+            0 -> println("Portability: all output artifacts identical across distros.")
+            1 -> println("Portability: outputs DIVERGED across distros - see eval_results/portability.txt")
+            3 -> throw GradleException("Docker is not running. Start Docker Desktop / the daemon and retry.")
+            else -> throw GradleException("Portability eval failed (exit ${result.exitValue}); see output above.")
+        }
+    }
+}
+
 // End to end: CARP arm (Kotlin) -> ad-hoc baseline (Python) -> plot, one command.
 // The Python steps reuse the mobgap Pixi env CARP already provisioned under
 // ~/.carp-dsp/envs/pixi (matplotlib + mobgap are both in it), so there is no env id to

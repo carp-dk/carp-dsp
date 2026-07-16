@@ -1,0 +1,16 @@
+# Pinned environment for the portability eval (Option B).
+#
+# The SAME pinned env (via the committed pixi.lock) is used in every distro image, so the
+# only thing that varies across containers is the operating system. Identical output
+# hashes then show the analysis is portable / OS-independent, isolating the numeric layer
+# (where cross-OS divergence, if any, would show up).
+
+[project]
+name = "carp-portability-env"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+pandas = "*"

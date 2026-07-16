@@ -1,0 +1,16 @@
+# Generates the shared pixi.lock inside a container, so no host Pixi install is needed.
+# The driver builds this, then `docker cp`s /work/pixi.lock out to be reused by every
+# distro image (guaranteeing an identical pinned env across them).
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://pixi.sh/install.sh | bash
+ENV PATH="/root/.pixi/bin:${PATH}"
+WORKDIR /work
+COPY pixi.toml /work/
+RUN pixi lock
+
+# Also fetch the dataset here (this image has curl) so no host download is needed; the
+# driver docker-cp's both /work/pixi.lock and /work/fitbit.zip out.
+ARG DATASET_URL="https://zenodo.org/records/53894/files/mturkfitbit_export_4.12.16-5.12.16.zip?download=1"
+RUN curl -fsSL "${DATASET_URL}" -o /work/fitbit.zip
