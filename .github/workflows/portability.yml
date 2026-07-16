@@ -2,9 +2,18 @@ name: portability
 
 # Cross-OS output determinism: run the HR/step pipeline natively on Linux, macOS, and
 # Windows runners under the same pinned env, then compare output hashes. Complements the
-# local Docker eval (which only varies Linux distros). Manual trigger to control CI minutes.
+# local Docker eval (which only varies Linux distros).
+#
+# workflow_dispatch only shows a Run button once this file is on the default branch. Until
+# then, the push trigger (scoped to the eval branch + relevant paths) runs it on push.
 on:
   workflow_dispatch:
+  push:
+    branches: [eval]
+    paths:
+      - 'carp.dsp.demo/docker/portability/ci/**'
+      - 'carp.dsp.demo/src/jvmMain/resources/scripts/hr_lib/**'
+      - '.github/workflows/portability.yml'
 
 permissions:
   contents: read
