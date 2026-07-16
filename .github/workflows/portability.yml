@@ -5,11 +5,11 @@ name: portability
 # local Docker eval (which only varies Linux distros).
 #
 # workflow_dispatch only shows a Run button once this file is on the default branch. Until
-# then, the push trigger (scoped to the eval branch + relevant paths) runs it on push.
+# then, the push trigger (scoped to the work branch + relevant paths) runs it on push.
 on:
   workflow_dispatch:
   push:
-    branches: [eval]
+    branches: [feature/eval-exp]
     paths:
       - 'carp.dsp.demo/docker/portability/ci/**'
       - 'carp.dsp.demo/src/jvmMain/resources/scripts/hr_lib/**'
