@@ -103,8 +103,6 @@ jobs:
               outs "$f" ubuntu-latest macos-latest windows-latest --out "os-results/$f-detail" \
               | tee -a "$GITHUB_STEP_SUMMARY" || true
           done
-          # collect the detail files next to the other results
-          find os-results -name divergence-detail.txt -exec cat {} \; > os-results/divergence-detail.txt || true
 
       - name: Upload cross-OS results
         if: always()
