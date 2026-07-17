@@ -64,9 +64,8 @@ tasks.register<JavaExec>("run") {
                 kotlin.jvm().compilations.getByName("main").output.allOutputs
     mainClass.set("carp.dsp.demo.DemoMainKt")
 
-    // Allow passing arguments to the demo
     if (project.hasProperty("args")) {
-        args = (project.property("args") as String).split("\\s+")
+        args = (project.property("args") as String).trim().split(Regex("\\s+"))
     }
 
     // Required to receive input from console

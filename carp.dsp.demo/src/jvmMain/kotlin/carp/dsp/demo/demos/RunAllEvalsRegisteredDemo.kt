@@ -19,7 +19,8 @@ object RunAllEvalsRegisteredDemo : CliDemo {
             "planner-determinism-eval" to PlannerDeterminismEvalRegisteredDemo,
             "error-detection-eval" to ErrorDetectionEvalRegisteredDemo,
             "step-reuse-eval" to StepReuseEvalRegisteredDemo,
-            "mobgap-timed-eval" to MobgapTimedEvalRegisteredDemo
+            "mobgap-timed-eval" to MobgapTimedEvalRegisteredDemo,
+            "dependency-drift-eval" to DriftEvalRegisteredDemo
         )
 
         println("Running all evaluations...\n")

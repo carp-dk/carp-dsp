@@ -1,0 +1,15 @@
+version,walking_speed_mps,stride_length_m,cadence_spm
+0.7.0,0.913727670984,,
+0.8.0,0.913574288642,1.117765953955,97.899882829553
+0.9.0,0.913574288642,,
+0.10.0,0.913574288642,1.117765953955,97.899882829553
+0.11.0,0.916170746207,1.119208905400,98.037622895051
+1.0.0,0.916170746207,,
+1.2.0,0.916170746207,1.119208905400,98.037622895051
+# Fig B: output drift under dependency change (NF1, NF5).
+# Same input (LabExampleDataset INDIP, HA/001/Test5/Trial1), same MobilisedPipelineHealthy code.
+# Only the mobgap version varies. Walking speed is stable across 0.8-0.10, then a single
+# minor release (0.11) silently shifts it by +0.002596 m/s (0.28%) and it persists through 1.2.
+# A smaller shift also occurs at 0.7->0.8. CARP pins the environment (Pixi lock) and records
+# the environment hash in the execution report, so a pinned re-run stays fixed and any change
+# is attributable. Pinned reference value = 0.913574288642 (v0.10.0, the authored version).
