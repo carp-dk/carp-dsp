@@ -1,0 +1,45 @@
+======================================================================
+Planner-scaling eval - 2026-07-18T20:24:50.790606500Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     1.75 ms  (plan+validate   0.37 ms)
+     5 steps: total median     2.77 ms  (plan+validate   0.41 ms)
+    10 steps: total median     3.94 ms  (plan+validate   0.46 ms)
+    20 steps: total median     5.35 ms  (plan+validate   0.64 ms)
+    50 steps: total median    10.30 ms  (plan+validate   0.96 ms)
+   100 steps: total median    15.56 ms  (plan+validate   1.30 ms)
+   200 steps: total median    25.49 ms  (plan+validate   2.02 ms)
+======================================================================
+
+======================================================================
+Planner-scaling eval - 2026-07-18T20:32:18.814556800Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     1.53 ms  (plan+validate   0.37 ms)
+     5 steps: total median     2.25 ms  (plan+validate   0.36 ms)
+    10 steps: total median     3.45 ms  (plan+validate   0.42 ms)
+    20 steps: total median     5.20 ms  (plan+validate   0.54 ms)
+    50 steps: total median     8.88 ms  (plan+validate   0.85 ms)
+   100 steps: total median    14.84 ms  (plan+validate   1.14 ms)
+   200 steps: total median    23.86 ms  (plan+validate   1.76 ms)
+======================================================================
+
+======================================================================
+Planner-scaling eval - 2026-07-18T20:34:13.859883200Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     1.61 ms  (plan+validate   0.40 ms)
+     5 steps: total median     2.87 ms  (plan+validate   0.45 ms)
+    10 steps: total median     4.83 ms  (plan+validate   0.55 ms)
+    20 steps: total median     6.48 ms  (plan+validate   0.65 ms)
+    50 steps: total median    11.70 ms  (plan+validate   1.06 ms)
+   100 steps: total median    15.72 ms  (plan+validate   1.37 ms)
+   200 steps: total median    24.28 ms  (plan+validate   2.02 ms)
+======================================================================
+

@@ -10,6 +10,8 @@
 #   pixi run baseline    # just the ad-hoc arm  -> eval_results/error-detection-adhoc.csv
 #   pixi run plot        # just the figure      -> eval_results/fig-error-detection.pdf
 #   pixi run fixtures    # regenerate the 5 injected workflow YAMLs (only if the base changed)
+#   pixi run plot-scaling  # Fig E figure       -> eval_results/fig-planner-scaling.pdf
+#                          (invoked automatically by the planner-scaling-eval Kotlin arm)
 #
 # Override the figure output (e.g. straight into the paper repo):
 #   pixi run plot --out ../../../../../../../carp-dsp-sys-paper/images/fig-error-detection.pdf
@@ -36,4 +38,5 @@ matplotlib = "*"
 fixtures = "python gen_injections.py"
 baseline = "python adhoc_baseline.py"
 plot = "python plot_error_detection.py"
+plot-scaling = "python plot_planner_scaling.py"
 figure = { depends-on = ["baseline", "plot"] }

@@ -140,6 +140,11 @@ registerEvalTask(
     "carp.dsp.demo.eval.StepReuseEvalKt",
     "Measure step reuse across 3 HR/step workflows built from a shared 6-step library (Step reuse)"
 )
+registerEvalTask(
+    "evalPlannerScaling",
+    "carp.dsp.demo.eval.PlannerScalingEvalKt",
+    "Time decode/import/plan/validate over synthetic chains of 2-200 steps (Fig E)"
+)
 
 // Portability eval: run the HR/step pipeline in several Linux distros (Docker) under one
 // pinned Pixi env and compare output hashes. Requires Docker running + Pixi on the host.
