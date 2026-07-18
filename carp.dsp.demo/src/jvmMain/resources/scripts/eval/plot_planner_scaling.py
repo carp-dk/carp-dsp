@@ -77,14 +77,14 @@ def main() -> int:
     ax.minorticks_off()
     ax.set_xlabel("Workflow size (steps, linear chain)")
     ax.set_ylabel("Median time (ms)")
-    largest = sizes[-1]
-    ax.set_title(
-        f"Plan-time gate cost vs workflow size "
-        f"({largest}-step chain: {statistics.median(by_size[largest]['total_ms']):.0f} ms total)",
-        fontsize=10,
-    )
     ax.grid(True, which="major", alpha=0.3, linewidth=0.5)
-    ax.legend(fontsize=8, frameon=False, ncol=2)
+    # Legend above the axes so it never overlaps the (monotonically rising) lines;
+    # the headline numbers belong in the paper caption, not a title.
+    ax.legend(
+        fontsize=8, frameon=False, ncol=3,
+        loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), mode="expand",
+        borderaxespad=0,
+    )
     fig.tight_layout()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

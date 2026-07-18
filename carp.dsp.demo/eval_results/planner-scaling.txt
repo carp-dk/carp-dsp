@@ -43,3 +43,18 @@ All workflows planned with zero ERROR issues.
    200 steps: total median    24.28 ms  (plan+validate   2.02 ms)
 ======================================================================
 
+======================================================================
+Planner-scaling eval - 2026-07-18T20:54:05.195624300Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     1.32 ms  (plan+validate   0.29 ms)
+     5 steps: total median     2.22 ms  (plan+validate   0.32 ms)
+    10 steps: total median     3.75 ms  (plan+validate   0.45 ms)
+    20 steps: total median     5.17 ms  (plan+validate   0.56 ms)
+    50 steps: total median     9.45 ms  (plan+validate   0.90 ms)
+   100 steps: total median    15.50 ms  (plan+validate   1.18 ms)
+   200 steps: total median    26.06 ms  (plan+validate   2.07 ms)
+======================================================================
+
