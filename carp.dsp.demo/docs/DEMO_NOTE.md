@@ -49,6 +49,25 @@ At runtime, the flow is:
     - `aggregate.py`: DMO Aggregation - computes summary statistics across bouts.
     - `plot_wb_params.py`: Visualizes walking bout metrics over time.
     - `plot_aggregated_dmos.py`: Generates bar charts of final aggregated DMOs.
+- `hr-activity`
+  - activity summary over the open Fitbit HR + steps dataset (Zenodo 53894), built from the shared `hr_lib` step library
+  - **Scripts** (`scripts/hr_lib/`): `load_hr_steps.py`, `clean_resample.py`, `daily_features.py`, `summarise.py`, `detect_anomaly.py`, `visualise.py`
+
+## Evaluation harnesses
+
+Paper evaluation harnesses (Section 8 of the system paper) also register in the demo menu under the `eval` category. Each writes its results to `carp.dsp.demo/eval_results/`.
+
+- `planner-determinism-eval`: plans the mobgap workflow N times (default 100) and verifies plan determinism (fixed namespace). Optional arg: iteration count.
+- `planner-scaling-eval`: times decode/import/plan/validate over synthetic linear chains of 2-200 steps (Fig E), then rebuilds `fig-planner-scaling.pdf` via the eval pixi env (`scripts/eval/pixi.toml`, task `plot-scaling`; system Python fallback). Optional args: comma-separated sizes, repeats.
+- `error-detection-eval`: plans 5 fault-injected mobgap workflows and records plan-time detection (Fig A, CARP arm). The ad-hoc arm and figure: `./gradlew :carp.dsp.demo:evalErrorDetectionFull`.
+- `step-reuse-eval`: measures step reuse across the 3 HR/step workflows built from the shared 6-step library.
+- `mobgap-timed-eval`: instrumented Use Case 1 run - phase and per-step timings, output hashes (Fig D). Optional arg: run count.
+- `dependency-drift-eval`: runs the walking-speed pipeline under 7 mobgap versions to measure output drift (Fig B). Slow on first run (pixi solves one env per version); requires pixi on PATH.
+- `run-all-evals`: runs all of the above in sequence.
+
+Gradle-only (not in the menu): `evalPortability` - cross-distro output determinism via Docker; requires Docker running.
+
+Each eval also has a direct gradle task (`evalPlannerDeterminism`, `evalPlannerScaling`, `evalErrorDetection`, `evalReuse`, `evalStepReuse`, `evalMobgapTiming`; args via `-Pargs="..."`).
 
 ## Inputs and resources
 
@@ -65,6 +84,9 @@ Persistent workflow demo results are written under:
 - `carp.dsp.demo/demo_results/diafocus/`
 - `carp.dsp.demo/demo_results/dbdp_covid/`
 - `carp.dsp.demo/demo_results/mobgap/`
+- `carp.dsp.demo/demo_results/hr_activity/`
+
+Evaluation results (CSVs, txt reports, figures) go to `carp.dsp.demo/eval_results/`.
 
 Inside each run, outputs follow a step-oriented layout similar to:
 - `<workflow-name>/run_<uuid>/steps/<step-index>_<step-name>/outputs/`
@@ -77,6 +99,8 @@ From repo root:
 ```powershell
 .\gradlew.bat :carp.dsp.demo:run -Pargs="list"
 .\gradlew.bat :carp.dsp.demo:run -Pargs="run mobgap"
+.\gradlew.bat :carp.dsp.demo:run -Pargs="run planner-scaling-eval"
+.\gradlew.bat :carp.dsp.demo:run -Pargs="run run-all-evals"
 ```
 
 Generic workflow runner:

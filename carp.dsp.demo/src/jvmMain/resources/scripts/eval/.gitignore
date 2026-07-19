@@ -1,0 +1,7 @@
+# Drift-experiment environment caches. Never commit or package these (they are large and
+# machine-specific). The DriftEval demo builds them under build/ instead; these entries guard
+# against direct runs that used a default work dir here.
+.drift-venvs/
+.drift-pixi/
+.pixi/
+pixi.lock

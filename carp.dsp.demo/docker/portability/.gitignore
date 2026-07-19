@@ -1,0 +1,4 @@
+# Large dataset copy and per-run outputs (regenerated). Keep pixi.lock committed.
+data/
+results/
+__pycache__/

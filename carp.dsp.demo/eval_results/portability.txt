@@ -1,0 +1,8 @@
+Portability eval - output determinism across 3 Linux distros
+Distros: ubuntu:22.04, debian:12, fedora:40
+
+  daily-features.csv       IDENTICAL  46fe400d5aa5
+  hr-steps.csv             IDENTICAL  be9e13538fbf
+  summary.json             IDENTICAL  a24232fbd3bb
+
+All 3 output artifacts identical across all distros: True

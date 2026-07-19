@@ -1,0 +1,13 @@
+Dependency-drift sweep - walking speed across 7 mobgap versions
+Dataset: LabExample (INDIP), 9 recordings; baseline = v0.10.0 (pinned)
+A recording 'changes' if its walking speed moves by > 1e-09 m/s.
+
+  version    changed   rate  mean|d|mm/s  max|d|mm/s    max%
+  0.7.0        9/9    100%        0.149       0.190    0.02
+  0.8.0        0/9      0%        0.000       0.000    0.00
+  0.9.0        0/9      0%        0.000       0.000    0.00
+  0.11.0       7/9     78%       24.252     115.841   10.16
+  1.0.0        7/9     78%       24.252     115.841   10.16
+  1.2.0        7/9     78%       24.209     115.841   10.16
+
+Recordings that took >1 distinct value across 0.7.0->1.2.0: 9/9
