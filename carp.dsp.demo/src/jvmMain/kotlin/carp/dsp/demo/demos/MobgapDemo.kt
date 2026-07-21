@@ -1,5 +1,6 @@
 package carp.dsp.demo.demos
 
+import carp.dsp.demo.io.DemoIo
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
@@ -7,9 +8,7 @@ import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import dk.cachet.carp.common.application.UUID
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 /**
@@ -128,35 +127,16 @@ class MobgapDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String {
-            val resource = MobgapDemo::class.java.classLoader
-                .getResource("workflows/mobgap-gait-analysis.yaml")
-                ?: throw IllegalStateException(
-                    "Workflow YAML not found: workflows/mobgap-gait-analysis.yaml"
-                )
-            return resource.readText()
-        }
+        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml")
 
         @OptIn(ExperimentalPathApi::class)
-        private fun getDemoResultsDirectory(): Path {
-            val classPath = MobgapDemo::class.java.protectionDomain.codeSource.location.toURI().path
-            val projectRoot = java.io.File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-                ?: throw IllegalStateException("Cannot determine project root")
-            return projectRoot.toPath().resolve("demo_results").resolve("mobgap")
-        }
+        private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("mobgap").toPath()
 
         private fun setupWorkspaceFiles(tmpDir: Path) {
             // Copy workflow YAML
             val workflowsDir = tmpDir.resolve("resources/workflows")
             workflowsDir.createDirectories()
-            val workflowResource = MobgapDemo::class.java.classLoader
-                .getResource("workflows/mobgap-gait-analysis.yaml")
-                ?: throw IllegalStateException("Workflow YAML not found")
-            Files.copy(
-                workflowResource.openStream(),
-                workflowsDir.resolve("mobgap-gait-analysis.yaml"),
-                StandardCopyOption.REPLACE_EXISTING
-            )
+            copyResourceFile("workflows/mobgap-gait-analysis.yaml", workflowsDir.resolve("mobgap-gait-analysis.yaml"))
 
             // Copy mobgap scripts
             val scriptsDir = tmpDir.resolve("resources/scripts/mobgap")
@@ -189,15 +169,8 @@ class MobgapDemo {
             }
         }
 
-        private fun copyResourceFile(resourcePath: String, targetPath: Path) {
-            val resource = MobgapDemo::class.java.classLoader.getResource(resourcePath)
-                ?: throw IllegalStateException("Resource not found: $resourcePath")
-            Files.copy(
-                resource.openStream(),
-                targetPath,
-                StandardCopyOption.REPLACE_EXISTING
-            )
-        }
+        private fun copyResourceFile(resourcePath: String, targetPath: Path) =
+            DemoIo.copyResource(resourcePath, targetPath)
 
         private fun printDmoResults(csvText: String) {
             println("AGGREGATED DIGITAL MOBILITY OUTCOMES")
@@ -255,7 +228,7 @@ class MobgapDemo {
         }
 
         private fun printMetric(label: String, value: String?, unit: String) {
-            if (value != null && value.isNotEmpty()) {
+            if (!value.isNullOrEmpty()) {
                 val formatted = try { "%.3f".format(value.toDouble()) } catch (_: Exception) { value }
                 println("$label: $formatted $unit")
             }

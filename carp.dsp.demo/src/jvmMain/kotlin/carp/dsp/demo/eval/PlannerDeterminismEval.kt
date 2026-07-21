@@ -3,9 +3,9 @@ package carp.dsp.demo.eval
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.common.application.UUID
-import java.io.File
 
 /**
  * Planner determinism eval (paper: Evaluation / Reproducibility, plan determinism).
@@ -33,7 +33,7 @@ private val FIXED_NAMESPACE: UUID = UUID.parse("d3b7f2a0-0000-5000-8000-6d6f6267
 
 fun main(args: Array<String>) {
     val iterations = args.firstOrNull()?.toIntOrNull() ?: 100
-    val yaml = loadWorkflowResource()
+    val yaml = DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml")
     val codec = WorkflowYamlCodec()
 
     // Part 1: fixed namespace (the reproducible path)
@@ -83,7 +83,7 @@ fun main(args: Array<String>) {
     }
 
     println(report)
-    val outFile = evalResultsDir().resolve("planner-determinism.txt")
+    val outFile = DemoIo.evalResultsDir().resolve("planner-determinism.txt")
     outFile.appendText(report + "\n")
     println("Appended results to: ${outFile.absolutePath}")
 }
@@ -100,17 +100,3 @@ private fun fingerprint(plan: ExecutionPlan): String {
     return steps + "\n  envRefs=$envRefs\n  issues=${plan.issues.size}"
 }
 
-private object EvalResourceAnchor
-
-private fun loadWorkflowResource(): String =
-    EvalResourceAnchor::class.java.classLoader
-        .getResource("workflows/mobgap-gait-analysis.yaml")
-        ?.readText()
-        ?: throw IllegalStateException("Workflow YAML not found: workflows/mobgap-gait-analysis.yaml")
-
-private fun evalResultsDir(): File {
-    val classPath = EvalResourceAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    val projectRoot = File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-    return projectRoot.resolve("eval_results").apply { mkdirs() }
-}

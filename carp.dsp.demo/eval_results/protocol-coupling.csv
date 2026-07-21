@@ -1,0 +1,4 @@
+scenario,protocol,expected_code,codes,steps_planned,plan_errors,runnable,as_expected
+protocol collects heart rate,protocols/hr-study-protocol.json,,,2,0,true,true
+protocol collects step count only,protocols/steps-only-protocol.json,PROTOCOL_DATA_NOT_COLLECTED,PROTOCOL_DATA_NOT_COLLECTED,2,1,false,true
+no protocol supplied,none,PROTOCOL_NOT_VALIDATED,PROTOCOL_NOT_VALIDATED,2,0,true,true

@@ -1,0 +1,111 @@
+schemaVersion: "1.0"
+metadata:
+  id: "protocol-coupling-mixed"
+  name: "Mixed protocol + open data"
+  description: >-
+    Acceptance case for protocol coupling. The pipeline joins data collected
+    by a CARP study protocol with an open reference dataset. The protocol-bound
+    input is validated at plan time against the linked protocol; the external
+    input is never protocol-checked, only attributed.
+  version: "1.0"
+  tags:
+    - "protocol-coupling"
+    - "heart-rate"
+    - "eval"
+
+environments:
+  env-hr:
+    name: "hr-lib"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  # Boundary step: one input from the study protocol, one from open data.
+  - id: "load-participant-hr"
+    metadata:
+      name: "Load participant heart rate"
+      description: "Heart rate collected by the study protocol, plus an open reference dataset"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-load-participant-hr"
+      name: "load-participant-hr"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/load_hr_steps.py"
+      args:
+        - "--output"
+        - "output.0"
+    inputs:
+      # Collected by the study protocol - checked at plan time (F5.4).
+      - id: "participant-hr"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Heart rate measured on participants by the linked study protocol"
+        source:
+          type: "protocol"
+          protocol:
+            id: "aabbccdd-0000-4000-8000-000000000001"
+            name: "HR study protocol"
+          dataType: "dk.cachet.carp.heartrate"
+      # Open reference data - never protocol-checked, but attributed (F5.5).
+      - id: "reference-cohort"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Open Fitbit reference cohort"
+        source:
+          type: "external"
+          uri: "https://zenodo.org/record/53894"
+          citation: "Furberg, R., Brinton, J., Keating, M., & Ortiz, A. (2016). Crowd-sourced Fitbit datasets. Zenodo."
+    outputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Joined hourly heart rate and step table"
+
+  # Downstream step: ordinary step-output wiring, not protocol-checked.
+  - id: "daily-features"
+    metadata:
+      name: "Daily Features"
+      description: "Aggregate hourly data to per-participant per-day features"
+      version: "1.0"
+    environmentId: "env-hr"
+    dependsOn:
+      - "load-participant-hr"
+    task:
+      type: "python"
+      id: "task-daily-features"
+      name: "daily-features"
+      entryPoint:
+        type: "script"
+        scriptPath: "scripts/hr_lib/daily_features.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Hourly wearable data"
+        source:
+          type: "step-output"
+          stepId: "load-participant-hr"
+          outputId: "hr-steps-csv"
+    outputs:
+      - id: "daily-features-csv"
+        descriptor:
+          type: "csv"
+          format: "utf-8"
+          notes: "Daily features per participant"

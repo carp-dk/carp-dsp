@@ -103,6 +103,7 @@ if (useLocalCore && corePath != null) {
                     "carp-core-common" to ":carp.common",
                     "carp-core-data" to ":carp.data.core",
                     "carp-core-analytics" to ":carp.analytics.core",
+                    "carp-core-protocols" to ":carp.protocols.core",
                 )
                 val group = "dk.cachet.carp"
 

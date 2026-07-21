@@ -1,5 +1,6 @@
 package carp.dsp.demo.demos
 
+import carp.dsp.demo.io.DemoIo
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
@@ -7,9 +8,7 @@ import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import dk.cachet.carp.common.application.UUID
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -126,38 +125,17 @@ class DiafocusDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String {
-            val resource = DiafocusDemo::class.java.classLoader
-                .getResource("workflows/diafocus-bgm-steps.yaml")
-                ?: throw IllegalStateException(
-                    "Workflow YAML not found: workflows/diafocus-bgm-steps.yaml"
-                )
-            return resource.readText()
-        }
+        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/diafocus-bgm-steps.yaml")
 
         @OptIn(ExperimentalPathApi::class)
-        private fun getDemoResultsDirectory(): Path {
-            // Get the project root by locating the carp.dsp.demo directory
-            val classPath = DiafocusDemo::class.java.protectionDomain.codeSource.location.toURI().path
-            val projectRoot = java.io.File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-                ?: throw IllegalStateException("Cannot determine project root")
-
-            return projectRoot.toPath().resolve("demo_results").resolve("diafocus")
-        }
+        private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("diafocus").toPath()
 
         @OptIn(ExperimentalPathApi::class)
         private fun setupWorkspaceFiles(tmpDir: Path) {
             // Copy workflow YAML
             val workflowsDir = tmpDir.resolve("resources/workflows")
             workflowsDir.createDirectories()
-            val workflowResource = DiafocusDemo::class.java.classLoader
-                .getResource("workflows/diafocus-bgm-steps.yaml")
-                ?: throw IllegalStateException("Workflow YAML not found")
-            Files.copy(
-                workflowResource.openStream(),
-                workflowsDir.resolve("diafocus-bgm-steps.yaml"),
-                StandardCopyOption.REPLACE_EXISTING
-            )
+            copyResourceFile("workflows/diafocus-bgm-steps.yaml", workflowsDir.resolve("diafocus-bgm-steps.yaml"))
 
             // Copy data files
             val dataDir = tmpDir.resolve("resources/data")
@@ -172,15 +150,8 @@ class DiafocusDemo {
             copyResourceFile("scripts/bgm_steps_analysis.py", scriptsDir.resolve("bgm_steps_analysis.py"))
         }
 
-        private fun copyResourceFile(resourcePath: String, targetPath: Path) {
-            val resource = DiafocusDemo::class.java.classLoader.getResource(resourcePath)
-                ?: throw IllegalStateException("Resource not found: $resourcePath")
-            Files.copy(
-                resource.openStream(),
-                targetPath,
-                StandardCopyOption.REPLACE_EXISTING
-            )
-        }
+        private fun copyResourceFile(resourcePath: String, targetPath: Path) =
+            DemoIo.copyResource(resourcePath, targetPath)
 
         private fun printAnalysisSummary(summaryJson: String) {
             try {

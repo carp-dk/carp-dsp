@@ -8,10 +8,9 @@ import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
 import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.common.application.UUID
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
@@ -64,7 +63,7 @@ fun main(args: Array<String>) {
     val runs = args.firstOrNull()?.toIntOrNull() ?: 2
     val results = (1..runs).map { executeTimedRun(it) }
 
-    val outFile = timedEvalResultsDir().resolve("mobgap-timing.txt")
+    val outFile = DemoIo.evalResultsDir().resolve("mobgap-timing.txt")
     val report = buildString {
         results.forEach { appendLine(formatRun(it)) }
         appendLine(formatHashComparison(results))
@@ -86,7 +85,7 @@ private fun executeTimedRun(runIndex: Int): RunResult {
     demoResultsDir.mkdirs()
 
     // Author-time + plan-time phases
-    val yaml = loadTimedWorkflowResource()
+    val yaml = DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml")
     val codec = WorkflowYamlCodec()
     val descriptor = timed(phaseMs, "decode-yaml") { codec.decodeOrThrow(yaml) }
     val definition = timed(phaseMs, "import") { WorkflowDescriptorImporter(EVAL_NAMESPACE).import(descriptor) }
@@ -226,38 +225,14 @@ private fun sha256(f: File): String =
 
 // --- Workspace setup (mirrors MobgapDemo) ---
 
-private object TimedEvalAnchor
-
-private fun loadTimedWorkflowResource(): String =
-    TimedEvalAnchor::class.java.classLoader
-        .getResource("workflows/mobgap-gait-analysis.yaml")
-        ?.readText()
-        ?: throw IllegalStateException("Workflow YAML not found")
-
 private fun setupWorkspace(demoResultsDir: File) {
     val workflowsDir = demoResultsDir.resolve("resources/workflows").apply { mkdirs() }
-    copyResource("workflows/mobgap-gait-analysis.yaml", workflowsDir.resolve("mobgap-gait-analysis.yaml"))
+    DemoIo.copyResource("workflows/mobgap-gait-analysis.yaml", workflowsDir.resolve("mobgap-gait-analysis.yaml").toPath())
     val scriptsDir = demoResultsDir.resolve("resources/scripts/mobgap").apply { mkdirs() }
     listOf(
         "import_data.py", "gsd.py", "icd.py", "per_sec_params.py",
         "wba.py", "aggregate.py", "plot_wb_params.py", "plot_aggregated_dmos.py"
-    ).forEach { copyResource("scripts/mobgap/$it", scriptsDir.resolve(it)) }
+    ).forEach { DemoIo.copyResource("scripts/mobgap/$it", scriptsDir.resolve(it).toPath()) }
 }
 
-private fun copyResource(resourcePath: String, target: File) {
-    val resource = TimedEvalAnchor::class.java.classLoader.getResource(resourcePath)
-        ?: throw IllegalStateException("Resource not found: $resourcePath")
-    Files.copy(resource.openStream(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-}
-
-private fun timedEvalProjectRoot(): File {
-    val classPath = TimedEvalAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    return File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-}
-
-private fun timedEvalResultsDir(): File =
-    timedEvalProjectRoot().resolve("eval_results").apply { mkdirs() }
-
-private fun timedEvalDemoResultsDir(): File =
-    timedEvalProjectRoot().resolve("demo_results").resolve("mobgap_timed")
+private fun timedEvalDemoResultsDir(): File = DemoIo.demoResultsDir("mobgap_timed")

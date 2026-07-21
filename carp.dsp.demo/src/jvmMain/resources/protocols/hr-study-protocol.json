@@ -1,0 +1,32 @@
+{
+  "id": "aabbccdd-0000-4000-8000-000000000001",
+  "createdOn": "2026-01-15T09:00:00Z",
+  "version": 1,
+  "ownerId": "11112222-0000-4000-8000-000000000001",
+  "name": "HR study protocol",
+  "description": "Collects heart rate and step count on a wrist-worn device. Satisfies the protocol-bound input of the mixed workflow.",
+  "primaryDevices": [
+    {
+      "__type": "dk.cachet.carp.common.application.devices.Smartphone",
+      "isPrimaryDevice": true,
+      "roleName": "Participant phone"
+    }
+  ],
+  "tasks": [
+    {
+      "__type": "dk.cachet.carp.common.application.tasks.BackgroundTask",
+      "name": "Collect wearable data",
+      "measures": [
+        {
+          "__type": "dk.cachet.carp.common.application.tasks.Measure.DataStream",
+          "type": "dk.cachet.carp.heartrate"
+        },
+        {
+          "__type": "dk.cachet.carp.common.application.tasks.Measure.DataStream",
+          "type": "dk.cachet.carp.stepcount"
+        }
+      ],
+      "description": "Passively collect heart rate and step count"
+    }
+  ]
+}

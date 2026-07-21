@@ -71,3 +71,82 @@ data class StepOutputInputSource(
 @Serializable
 @SerialName("env-var")
 data class EnvironmentVariableInputSource(val variableName: String) : InputSource
+
+/**
+ * Reference to a study protocol, used by [ProtocolInputSource].
+ *
+ * A protocol is identified by its id ([dk.cachet.carp.protocols.domain.StudyProtocol] `id`);
+ * the name is a human-readable label only, never a key (protocol names are unique
+ * only per owner). Protocols are versioned; when [version] is omitted the latest
+ * version is assumed.
+ *
+ * @property id UUID string of the study protocol.
+ * @property version Optional protocol version; defaults to latest.
+ * @property name Optional human-readable label, for documentation only.
+ */
+@Serializable
+data class ProtocolRefDescriptor(
+    val id: String,
+    val version: Int? = null,
+    val name: String? = null,
+)
+
+/**
+ * Study-protocol source for a boundary input: data collected by a CARP study protocol.
+ *
+ * Declares that this input's data comes from a study protocol's data collection.
+ * At plan time the planner verifies the [dataType] is collected by the referenced
+ * protocol and rejects the workflow otherwise.
+ * Because binding is per input, different inputs may reference different
+ * protocols in the same workflow.
+ *
+ * @property protocol Reference to the study protocol collecting this data.
+ * @property dataType Fully namespaced CARP data type expected from the protocol
+ *   (e.g. `"dk.cachet.carp.heartrate"`). This is the domain data type, distinct
+ *   from the port's file-format `descriptor.type` (e.g. `"csv"`).
+ *
+ * Example YAML:
+ * ```yaml
+ * source:
+ *   type: "protocol"
+ *   protocol:
+ *     id: "aabbccdd-0000-0000-0000-000000000000"
+ *     version: 2
+ *     name: "Gait study"
+ *   dataType: "dk.cachet.carp.heartrate"
+ * ```
+ */
+@Serializable
+@SerialName("protocol")
+data class ProtocolInputSource(
+    val protocol: ProtocolRefDescriptor,
+    val dataType: String,
+) : InputSource
+
+/**
+ * External source for a boundary input: open data, an upload, or a prior export -
+ * anything not collected by a study protocol.
+ *
+ * External data is a designed affordance, not a gap: it is never validated against
+ * a protocol, and may be mixed freely with [ProtocolInputSource] inputs in one
+ * workflow. Best practice is to attribute it via [uri] and [citation]; when both
+ * are absent the linter emits a warning (unattributed external data), never an
+ * error. A boundary input with no `source` at all is treated as an empty external.
+ *
+ * @property uri Optional public URL/URI of the dataset.
+ * @property citation Optional citation for the dataset.
+ *
+ * Example YAML:
+ * ```yaml
+ * source:
+ *   type: "external"
+ *   uri: "https://zenodo.org/record/53894"
+ *   citation: "Furberg et al. 2016"
+ * ```
+ */
+@Serializable
+@SerialName("external")
+data class ExternalInputSource(
+    val uri: String? = null,
+    val citation: String? = null,
+) : InputSource

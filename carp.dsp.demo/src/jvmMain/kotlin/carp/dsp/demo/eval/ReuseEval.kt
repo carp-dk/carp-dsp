@@ -3,10 +3,10 @@ package carp.dsp.demo.eval
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
-import java.io.File
 
 /**
  * Reuse eval.
@@ -38,8 +38,8 @@ private const val STEP_ANCHOR = "\n  - id: \""
 
 fun main() {
     val codec = WorkflowYamlCodec()
-    val uc1Yaml = loadResource(UC1)
-    val uc2Yaml = loadResource(UC2)
+    val uc1Yaml = DemoIo.loadResource(UC1)
+    val uc2Yaml = DemoIo.loadResource(UC2)
 
     // ── Text-level reuse metrics (per-step scoped diff) ──────────────────────────
     val uc1Steps = stepBlocks(uc1Yaml)
@@ -80,7 +80,7 @@ fun main() {
     }
     println(report)
 
-    val dir = evalResultsDir()
+    val dir = DemoIo.evalResultsDir()
     dir.resolve("reuse-report.txt").appendText(report + "\n")
     dir.resolve("reuse.csv").writeText(
         buildString {
@@ -137,15 +137,3 @@ private fun planWorkflow(codec: WorkflowYamlCodec, yaml: String): ExecutionPlan 
 private fun fingerprint(plan: ExecutionPlan): String =
     plan.steps.withIndex().joinToString("\n") { (i, s) -> "$i|${s.metadata.id}|${s.environmentRef}" }
 
-private object ReuseResourceAnchor
-
-private fun loadResource(path: String): String =
-    ReuseResourceAnchor::class.java.classLoader.getResource(path)?.readText()
-        ?: throw IllegalStateException("Resource not found: $path")
-
-private fun evalResultsDir(): File {
-    val classPath = ReuseResourceAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    val projectRoot = File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-    return projectRoot.resolve("eval_results").apply { mkdirs() }
-}

@@ -63,11 +63,24 @@ Paper evaluation harnesses (Section 8 of the system paper) also register in the 
 - `step-reuse-eval`: measures step reuse across the 3 HR/step workflows built from the shared 6-step library.
 - `mobgap-timed-eval`: instrumented Use Case 1 run - phase and per-step timings, output hashes (Fig D). Optional arg: run count.
 - `dependency-drift-eval`: runs the walking-speed pipeline under 7 mobgap versions to measure output drift (Fig B). Slow on first run (pixi solves one env per version); requires pixi on PATH.
+- `protocol-coupling-eval`: plans `protocol-coupling-mixed.yaml` - one input collected by a study protocol, one open dataset - against two protocol snapshots and with no protocol at all, showing plan-time `PROTOCOL_DATA_NOT_COLLECTED` rejection, a clean pass, and the `PROTOCOL_NOT_VALIDATED` warning (F5). Fixtures: `resources/workflows/protocol-coupling-mixed.yaml`, `resources/protocols/*.json`. No live study or protocol service needed.
 - `run-all-evals`: runs all of the above in sequence.
 
 Gradle-only (not in the menu): `evalPortability` - cross-distro output determinism via Docker; requires Docker running.
 
-Each eval also has a direct gradle task (`evalPlannerDeterminism`, `evalPlannerScaling`, `evalErrorDetection`, `evalReuse`, `evalStepReuse`, `evalMobgapTiming`; args via `-Pargs="..."`).
+Each eval also has a direct gradle task (`evalPlannerDeterminism`, `evalPlannerScaling`, `evalErrorDetection`, `evalReuse`, `evalStepReuse`, `evalMobgapTiming`, `evalProtocolCoupling`; args via `-Pargs="..."`).
+
+## Shared IO helpers
+
+Demos and evals share `carp.dsp.demo.io.DemoIo` for filesystem and classpath access:
+
+- `projectRoot()` - the `carp.dsp.demo` module root on disk
+- `loadResource(path)` - read a bundled resource as text
+- `copyResource(resourcePath, target)` - copy a resource into a workspace
+- `evalResultsDir()` - `<module>/eval_results`, created if absent
+- `demoResultsDir(name)` - `<module>/demo_results/<name>`
+
+Use these rather than re-deriving paths from `protectionDomain`/`classLoader`. Because all output paths resolve from the module root, results land in the same place regardless of the working directory a demo is launched from.
 
 ## Inputs and resources
 

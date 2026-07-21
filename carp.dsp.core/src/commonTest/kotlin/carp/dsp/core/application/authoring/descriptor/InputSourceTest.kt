@@ -10,10 +10,12 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
 /**
- * Tests for [InputSource] and its three concrete subtypes:
+ * Tests for [InputSource] and its concrete subtypes:
  * - [FileInputSource]
  * - [StepOutputInputSource]
  * - [EnvironmentVariableInputSource]
+ * - [ProtocolInputSource]
+ * - [ExternalInputSource]
  *
  * Covers:
  * - Data class equality and copy semantics
@@ -192,6 +194,127 @@ class InputSourceTest
     {
         val encoded = """{"type":"env-var","variableName":"SOME_VAR"}"""
         assertIs<EnvironmentVariableInputSource>( json.decodeFromString<InputSource>( encoded ) )
+    }
+
+    // ── ProtocolInputSource ───────────────────────────────────────────────────
+
+    @Test
+    fun `ProtocolInputSource stores protocol ref and dataType`()
+    {
+        val source = ProtocolInputSource(
+            protocol = ProtocolRefDescriptor( id = "aabbccdd-0000-0000-0000-000000000000", version = 2, name = "Gait study" ),
+            dataType = "dk.cachet.carp.heartrate"
+        )
+        assertEquals( "aabbccdd-0000-0000-0000-000000000000", source.protocol.id )
+        assertEquals( 2, source.protocol.version )
+        assertEquals( "Gait study", source.protocol.name )
+        assertEquals( "dk.cachet.carp.heartrate", source.dataType )
+    }
+
+    @Test
+    fun `ProtocolInputSource version and name default to null`()
+    {
+        val source = ProtocolInputSource(
+            protocol = ProtocolRefDescriptor( id = "some-id" ),
+            dataType = "dk.cachet.carp.stepcount"
+        )
+        assertEquals( null, source.protocol.version )
+        assertEquals( null, source.protocol.name )
+    }
+
+    @Test
+    fun `ProtocolInputSource serializes with type discriminator protocol`()
+    {
+        val encoded = json.encodeToString<InputSource>(
+            ProtocolInputSource( ProtocolRefDescriptor( id = "p-1" ), dataType = "dk.cachet.carp.heartrate" )
+        )
+        assert( encoded.contains("\"type\":\"protocol\"") ) { "Missing discriminator: $encoded" }
+        assert( encoded.contains("\"dataType\":\"dk.cachet.carp.heartrate\"") ) { "Missing dataType: $encoded" }
+    }
+
+    @Test
+    fun `ProtocolInputSource roundtrips through JSON`()
+    {
+        val original = ProtocolInputSource(
+            protocol = ProtocolRefDescriptor( id = "p-1", version = 3 ),
+            dataType = "dk.cachet.carp.geolocation"
+        )
+        val decoded = json.decodeFromString<InputSource>( json.encodeToString<InputSource>( original ) )
+        assertEquals( original, decoded )
+    }
+
+    @Test
+    fun `ProtocolInputSource decoded type is ProtocolInputSource`()
+    {
+        val encoded = """{"type":"protocol","protocol":{"id":"p-1"},"dataType":"dk.cachet.carp.heartrate"}"""
+        assertIs<ProtocolInputSource>( json.decodeFromString<InputSource>( encoded ) )
+    }
+
+    @Test
+    fun `decoding ProtocolInputSource with missing dataType throws SerializationException`()
+    {
+        assertFailsWith<SerializationException> {
+            json.decodeFromString<InputSource>("""{"type":"protocol","protocol":{"id":"p-1"}}""")
+        }
+    }
+
+    @Test
+    fun `decoding ProtocolInputSource with missing protocol throws SerializationException`()
+    {
+        assertFailsWith<SerializationException> {
+            json.decodeFromString<InputSource>("""{"type":"protocol","dataType":"dk.cachet.carp.heartrate"}""")
+        }
+    }
+
+    // ── ExternalInputSource ───────────────────────────────────────────────────
+
+    @Test
+    fun `ExternalInputSource stores uri and citation`()
+    {
+        val source = ExternalInputSource( uri = "https://zenodo.org/record/53894", citation = "Furberg et al. 2016" )
+        assertEquals( "https://zenodo.org/record/53894", source.uri )
+        assertEquals( "Furberg et al. 2016", source.citation )
+    }
+
+    @Test
+    fun `ExternalInputSource all fields default to null`()
+    {
+        val source = ExternalInputSource()
+        assertEquals( null, source.uri )
+        assertEquals( null, source.citation )
+    }
+
+    @Test
+    fun `ExternalInputSource serializes with type discriminator external`()
+    {
+        val encoded = json.encodeToString<InputSource>(
+            ExternalInputSource( uri = "https://example.org/data" )
+        )
+        assert( encoded.contains("\"type\":\"external\"") ) { "Missing discriminator: $encoded" }
+        assert( encoded.contains("\"uri\":\"https://example.org/data\"") ) { "Missing uri: $encoded" }
+    }
+
+    @Test
+    fun `ExternalInputSource roundtrips through JSON`()
+    {
+        val original = ExternalInputSource( uri = "https://zenodo.org/record/53894", citation = "Furberg et al. 2016" )
+        val decoded = json.decodeFromString<InputSource>( json.encodeToString<InputSource>( original ) )
+        assertEquals( original, decoded )
+    }
+
+    @Test
+    fun `empty ExternalInputSource roundtrips through JSON`()
+    {
+        val original = ExternalInputSource()
+        val decoded = json.decodeFromString<InputSource>( json.encodeToString<InputSource>( original ) )
+        assertEquals( original, decoded )
+    }
+
+    @Test
+    fun `ExternalInputSource decoded type is ExternalInputSource`()
+    {
+        val encoded = """{"type":"external"}"""
+        assertIs<ExternalInputSource>( json.decodeFromString<InputSource>( encoded ) )
     }
 
     // ── Polymorphic exhaustiveness ────────────────────────────────────────────

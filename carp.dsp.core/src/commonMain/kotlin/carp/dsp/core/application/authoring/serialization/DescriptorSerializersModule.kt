@@ -38,6 +38,8 @@ val descriptorSerializersModule: SerializersModule = SerializersModule {
         subclass(FileInputSource::class)
         subclass(StepOutputInputSource::class)
         subclass(EnvironmentVariableInputSource::class)
+        subclass(ProtocolInputSource::class)
+        subclass(ExternalInputSource::class)
     }
     polymorphic(OutputDestination::class) {
         subclass(FileOutputDestination::class)

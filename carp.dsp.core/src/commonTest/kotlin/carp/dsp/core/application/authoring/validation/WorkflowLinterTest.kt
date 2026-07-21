@@ -3,8 +3,12 @@ package carp.dsp.core.application.authoring.validation
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
+import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
+import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
+import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepMetadataDescriptor
+import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
 import dk.cachet.carp.analytics.domain.validation.ValidationErrorCode
@@ -408,6 +412,108 @@ class WorkflowLinterTest
         val result = WorkflowLinter.lint(workflow)
         val cycles = result.issues.filter { it.severity == ValidationSeverity.ERROR && it.message.contains("Circular") }
         assertEquals(0, cycles.size)
+    }
+
+    // ── Check 9: Unattributed External Boundary Inputs ────────────────────────
+
+    private fun externalProvenanceIssues(result: dk.cachet.carp.analytics.domain.validation.ValidationResult) =
+        result.issues.filter { it.code == ValidationErrorCode.EXTERNAL_DATA_UNATTRIBUTED }
+
+    @Test
+    fun `lint warns for external input with no uri or citation`()
+    {
+        val workflow = minimalWorkflow(
+            steps = listOf(
+                minimalStep(
+                    id = "import-data",
+                    inputs = listOf(DataPortDescriptor(id = "raw-data", source = ExternalInputSource()))
+                )
+            ),
+            environments = mapOf("env-1" to minimalEnvironment())
+        )
+        val result = WorkflowLinter.lint(workflow)
+        val warnings = externalProvenanceIssues(result)
+
+        assertEquals(1, warnings.size)
+        assertEquals(ValidationSeverity.WARNING, warnings[0].severity)
+        assertTrue(result.isValid, "Unattributed external data is a warning, never an error")
+    }
+
+    @Test
+    fun `lint warns for input with no source as empty external`()
+    {
+        val workflow = minimalWorkflow(
+            steps = listOf(
+                minimalStep(
+                    id = "import-data",
+                    inputs = listOf(DataPortDescriptor(id = "raw-data"))
+                )
+            ),
+            environments = mapOf("env-1" to minimalEnvironment())
+        )
+        val result = WorkflowLinter.lint(workflow)
+        val warnings = externalProvenanceIssues(result)
+
+        assertEquals(1, warnings.size)
+        assertEquals(ValidationSeverity.WARNING, warnings[0].severity)
+        assertTrue(result.isValid)
+    }
+
+    @Test
+    fun `lint does not warn for attributed external input`()
+    {
+        val attributions = listOf(
+            ExternalInputSource(uri = "https://zenodo.org/record/53894"),
+            ExternalInputSource(citation = "Furberg et al. 2016"),
+            ExternalInputSource(uri = "https://zenodo.org/record/53894", citation = "Furberg et al. 2016"),
+        )
+        attributions.forEach { source ->
+            val workflow = minimalWorkflow(
+                steps = listOf(
+                    minimalStep(
+                        id = "import-data",
+                        inputs = listOf(DataPortDescriptor(id = "raw-data", source = source))
+                    )
+                ),
+                environments = mapOf("env-1" to minimalEnvironment())
+            )
+            val warnings = externalProvenanceIssues(WorkflowLinter.lint(workflow))
+            assertEquals(0, warnings.size, "Should not warn for $source")
+        }
+    }
+
+    @Test
+    fun `lint does not warn for protocol or step-output sourced inputs`()
+    {
+        val workflow = minimalWorkflow(
+            steps = listOf(
+                minimalStep(
+                    id = "import-data",
+                    inputs = listOf(
+                        DataPortDescriptor(
+                            id = "hr-data",
+                            source = ProtocolInputSource(
+                                protocol = ProtocolRefDescriptor(id = "p-1"),
+                                dataType = "dk.cachet.carp.heartrate"
+                            )
+                        )
+                    )
+                ),
+                minimalStep(
+                    id = "analyse",
+                    dependsOn = listOf("import-data"),
+                    inputs = listOf(
+                        DataPortDescriptor(
+                            id = "hr-data",
+                            source = StepOutputInputSource(stepId = "import-data", outputId = "hr-data")
+                        )
+                    )
+                )
+            ),
+            environments = mapOf("env-1" to minimalEnvironment())
+        )
+        val result = WorkflowLinter.lint(workflow)
+        assertEquals(0, externalProvenanceIssues(result).size)
     }
 
     // ── Combined Error Cases ──────────────────────────────────────────────────
