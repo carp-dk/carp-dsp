@@ -1,6 +1,6 @@
 package carp.dsp.demo.eval
 
-import java.io.File
+import carp.dsp.demo.io.DemoIo
 
 /**
  * Dependency-drift eval.
@@ -20,10 +20,8 @@ import java.io.File
  * later runs reuse the cached envs under build/drift-pixi.
  */
 
-private object DriftAnchor
-
 fun main() {
-    val projectRoot = driftProjectRoot()
+    val projectRoot = DemoIo.projectRoot()
     val scriptsDir = projectRoot.resolve("src/jvmMain/resources/scripts/eval")
     val driver = scriptsDir.resolve("drift_experiment.py")
     val evalResults = projectRoot.resolve("eval_results").apply { mkdirs() }
@@ -82,8 +80,3 @@ private fun detectPython(): String? =
         }
     }
 
-private fun driftProjectRoot(): File {
-    val classPath = DriftAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    return File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-}

@@ -3,8 +3,10 @@
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
+import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
+import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.FileFormat
@@ -22,6 +24,8 @@ import dk.cachet.carp.common.application.UUID
  * - FileInputSource → FileLocation
  * - StepOutputInputSource → FileLocation (with empty path) + stepRef
  * - EnvironmentVariableInputSource → InMemoryLocation
+ * - ProtocolInputSource → FileLocation (empty path) + protocol provenance metadata
+ * - ExternalInputSource → FileLocation (uri as path) + external provenance metadata
  * - FileOutputDestination → FileLocation
  * - EnvironmentVariableOutputDestination → InMemoryLocation
  */
@@ -70,58 +74,80 @@ internal object PortImporter
         portDescriptor: DataPortDescriptor
     ): Pair<dk.cachet.carp.analytics.domain.data.DataLocation, String?>
     {
+        val declaredFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+
         return when ( val inputSource = portDescriptor.source )
         {
-            is FileInputSource ->
-            {
-                val fileFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
-                    ?: inferFormatFromPath( inputSource.path )
-                Pair(
-                    FileLocation(
-                        path = inputSource.path,
-                        format = fileFormat,
-                        metadata = mapOf( "source" to "file" )
-                    ),
-                    null
-                )
-            }
-
-            is StepOutputInputSource ->
-            {
-                Pair(
-                    FileLocation(
-                        path = "",
-                        format = FileFormat.UNKNOWN,
-                        metadata = mapOf( "source" to "step-output" )
-                    ),
-                    inputSource.stepId
-                )
-            }
-
-            is EnvironmentVariableInputSource ->
-            {
-                Pair(
-                    InMemoryLocation(
-                        registryKey = inputSource.variableName,
-                        metadata = mapOf( "source" to "environment" )
-                    ),
-                    null
-                )
-            }
-
-            null ->
-            {
-                Pair(
-                    FileLocation(
-                        path = "",
-                        format = FileFormat.UNKNOWN,
-                        metadata = emptyMap()
-                    ),
-                    null
-                )
-            }
+            is FileInputSource -> fileLocationFor( inputSource, declaredFormat ) to null
+            is StepOutputInputSource -> stepOutputLocation() to inputSource.stepId
+            is EnvironmentVariableInputSource -> environmentLocationFor( inputSource ) to null
+            is ProtocolInputSource -> protocolLocationFor( inputSource, declaredFormat ) to null
+            is ExternalInputSource -> externalLocationFor( inputSource, declaredFormat ) to null
+            null -> unresolvedLocation() to null
         }
     }
+
+    /** [FileInputSource]: a concrete path; format falls back to the file extension. */
+    private fun fileLocationFor( source: FileInputSource, declaredFormat: FileFormat? ) =
+        FileLocation(
+            path = source.path,
+            format = declaredFormat ?: inferFormatFromPath( source.path ),
+            metadata = mapOf( "source" to "file" )
+        )
+
+    /** [StepOutputInputSource]: path and format are resolved later by BindingsResolver. */
+    private fun stepOutputLocation() =
+        FileLocation(
+            path = "",
+            format = FileFormat.UNKNOWN,
+            metadata = mapOf( "source" to "step-output" )
+        )
+
+    /** [EnvironmentVariableInputSource]: a registry key rather than a file. */
+    private fun environmentLocationFor( source: EnvironmentVariableInputSource ) =
+        InMemoryLocation(
+            registryKey = source.variableName,
+            metadata = mapOf( "source" to "environment" )
+        )
+
+    /**
+     * [ProtocolInputSource]: data collected by a study protocol. The path is resolved at
+     * execution time; the protocol reference and expected CARP data type are carried in
+     * metadata so the planner can validate the binding (F5).
+     */
+    private fun protocolLocationFor( source: ProtocolInputSource, declaredFormat: FileFormat? ) =
+        FileLocation(
+            path = "",
+            format = declaredFormat ?: FileFormat.UNKNOWN,
+            metadata = buildMap {
+                put( "source", "protocol" )
+                put( "protocolId", source.protocol.id )
+                put( "dataType", source.dataType )
+                source.protocol.version?.let { put( "protocolVersion", it.toString() ) }
+                source.protocol.name?.let { put( "protocolName", it ) }
+            }
+        )
+
+    /**
+     * [ExternalInputSource]: open or externally supplied data. The uri doubles as the path
+     * and as a format hint; attribution is carried in metadata.
+     */
+    private fun externalLocationFor( source: ExternalInputSource, declaredFormat: FileFormat? ) =
+        FileLocation(
+            path = source.uri ?: "",
+            format = declaredFormat
+                ?: source.uri?.let { inferFormatFromPath( it ) }
+                ?: FileFormat.UNKNOWN,
+            metadata = buildMap {
+                put( "source", "external" )
+                source.uri?.let { put( "uri", it ) }
+                source.citation?.let { put( "citation", it ) }
+            }
+        )
+
+    /** No source declared: an empty placeholder resolved later. */
+    private fun unresolvedLocation() =
+        FileLocation( path = "", format = FileFormat.UNKNOWN, metadata = emptyMap() )
 
     /**
      * Maps a data port descriptor to an output data spec.

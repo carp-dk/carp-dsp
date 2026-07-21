@@ -3,6 +3,7 @@ package carp.dsp.demo.eval
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
 import java.io.File
@@ -93,7 +94,7 @@ fun main(args: Array<String>) {
     }
     println(report)
 
-    val dir = psEvalResultsDir()
+    val dir = DemoIo.evalResultsDir()
     val csvFile = dir.resolve("planner-scaling.csv")
     csvFile.writeText(csv.toString())
     dir.resolve("planner-scaling.txt").appendText(report + "\n")
@@ -108,7 +109,7 @@ fun main(args: Array<String>) {
  * system Python if pixi is not on PATH.
  */
 private fun plotFigure(csvFile: File, figFile: File) {
-    val scriptsDir = psProjectRoot().resolve("src/jvmMain/resources/scripts/eval")
+    val scriptsDir = DemoIo.projectRoot().resolve("src/jvmMain/resources/scripts/eval")
     val script = scriptsDir.resolve("plot_planner_scaling.py")
     if (!script.exists()) {
         System.err.println("Plot script not found at ${script.absolutePath} - skipping figure.")
@@ -287,12 +288,3 @@ private fun median(values: List<Double>): Double {
     return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2.0
 }
 
-private object PsResourceAnchor
-
-private fun psProjectRoot(): File {
-    val classPath = PsResourceAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    return File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-}
-
-private fun psEvalResultsDir(): File = psProjectRoot().resolve("eval_results").apply { mkdirs() }

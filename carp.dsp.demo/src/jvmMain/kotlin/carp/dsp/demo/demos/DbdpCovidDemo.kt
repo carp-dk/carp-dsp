@@ -1,5 +1,6 @@
 package carp.dsp.demo.demos
 
+import carp.dsp.demo.io.DemoIo
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
@@ -7,9 +8,7 @@ import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import dk.cachet.carp.common.application.UUID
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -128,38 +127,17 @@ class DbdpCovidDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String {
-            val resource = DbdpCovidDemo::class.java.classLoader
-                .getResource("workflows/dbdp-covid-hr-steps.yaml")
-                ?: throw IllegalStateException(
-                    "Workflow YAML not found: workflows/dbdp-covid-hr-steps.yaml"
-                )
-            return resource.readText()
-        }
+        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/dbdp-covid-hr-steps.yaml")
 
         @OptIn(ExperimentalPathApi::class)
-        private fun getDemoResultsDirectory(): Path {
-            // Get the project root by locating the carp.dsp.demo directory
-            val classPath = DbdpCovidDemo::class.java.protectionDomain.codeSource.location.toURI().path
-            val projectRoot = java.io.File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-                ?: throw IllegalStateException("Cannot determine project root")
-
-            return projectRoot.toPath().resolve("demo_results").resolve("dbdp_covid")
-        }
+        private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("dbdp_covid").toPath()
 
         @OptIn(ExperimentalPathApi::class)
         private fun setupWorkspaceFiles(workspaceDir: Path) {
             // Copy workflow YAML
             val workflowsDir = workspaceDir.resolve("resources/workflows")
             workflowsDir.createDirectories()
-            val workflowResource = DbdpCovidDemo::class.java.classLoader
-                .getResource("workflows/dbdp-covid-hr-steps.yaml")
-                ?: throw IllegalStateException("Workflow YAML not found")
-            Files.copy(
-                workflowResource.openStream(),
-                workflowsDir.resolve("dbdp-covid-hr-steps.yaml"),
-                StandardCopyOption.REPLACE_EXISTING
-            )
+            copyResourceFile("workflows/dbdp-covid-hr-steps.yaml", workflowsDir.resolve("dbdp-covid-hr-steps.yaml"))
 
             // Copy data files
             val dataDir = workspaceDir.resolve("resources/data")
@@ -174,15 +152,8 @@ class DbdpCovidDemo {
             copyResourceFile("scripts/report_biomarker.py", scriptsDir.resolve("report_biomarker.py"))
         }
 
-        private fun copyResourceFile(resourcePath: String, targetPath: Path) {
-            val resource = DbdpCovidDemo::class.java.classLoader.getResource(resourcePath)
-                ?: throw IllegalStateException("Resource not found: $resourcePath")
-            Files.copy(
-                resource.openStream(),
-                targetPath,
-                StandardCopyOption.REPLACE_EXISTING
-            )
-        }
+        private fun copyResourceFile(resourcePath: String, targetPath: Path) =
+            DemoIo.copyResource(resourcePath, targetPath)
 
         private fun printBiomarkerResults(biomarkerJson: String) {
             try {

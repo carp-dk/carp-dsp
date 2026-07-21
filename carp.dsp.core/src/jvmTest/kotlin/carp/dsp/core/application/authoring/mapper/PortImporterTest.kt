@@ -4,8 +4,11 @@ import carp.dsp.core.application.authoring.descriptor.DataDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
+import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
+import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
+import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
@@ -76,6 +79,71 @@ class PortImporterTest
             val fileLocation = result.location as FileLocation
             assertEquals( expectedFormat, fileLocation.format, "Format mismatch for $path" )
         }
+    }
+
+    @Test
+    fun `importInputPort maps ProtocolInputSource to FileLocation with provenance metadata`()
+    {
+        val descriptor = DataPortDescriptor(
+            id = "port-hr",
+            descriptor = DataDescriptor( type = "csv" ),
+            source = ProtocolInputSource(
+                protocol = ProtocolRefDescriptor( id = "aabbccdd-0000-0000-0000-000000000000", version = 2 ),
+                dataType = "dk.cachet.carp.heartrate"
+            )
+        )
+
+        val result = PortImporter.importInputPort( descriptor, workflowNamespace = workflowNamespace )
+
+        val location = assertIs<FileLocation>( result.location )
+        assertEquals( "", location.path ) // Resolved at execution time
+        assertEquals( FileFormat.CSV, location.format ) // From the port descriptor
+        assertEquals( "protocol", location.metadata["source"] )
+        assertEquals( "aabbccdd-0000-0000-0000-000000000000", location.metadata["protocolId"] )
+        assertEquals( "2", location.metadata["protocolVersion"] )
+        assertEquals( "dk.cachet.carp.heartrate", location.metadata["dataType"] )
+        assertNull( result.stepRef )
+    }
+
+    @Test
+    fun `importInputPort maps ExternalInputSource uri to path and metadata`()
+    {
+        val descriptor = DataPortDescriptor(
+            id = "port-open-data",
+            source = ExternalInputSource(
+                uri = "https://zenodo.org/record/53894/data.csv",
+                citation = "Furberg et al. 2016"
+            )
+        )
+
+        val result = PortImporter.importInputPort( descriptor, workflowNamespace = workflowNamespace )
+
+        val location = assertIs<FileLocation>( result.location )
+        assertEquals( "https://zenodo.org/record/53894/data.csv", location.path )
+        assertEquals( FileFormat.CSV, location.format ) // Inferred from uri
+        assertEquals( "external", location.metadata["source"] )
+        assertEquals( "https://zenodo.org/record/53894/data.csv", location.metadata["uri"] )
+        assertEquals( "Furberg et al. 2016", location.metadata["citation"] )
+        assertNull( result.stepRef )
+    }
+
+    @Test
+    fun `importInputPort maps empty ExternalInputSource to empty FileLocation`()
+    {
+        val descriptor = DataPortDescriptor(
+            id = "port-unattributed",
+            source = ExternalInputSource()
+        )
+
+        val result = PortImporter.importInputPort( descriptor, workflowNamespace = workflowNamespace )
+
+        val location = assertIs<FileLocation>( result.location )
+        assertEquals( "", location.path )
+        assertEquals( FileFormat.UNKNOWN, location.format )
+        assertEquals( "external", location.metadata["source"] )
+        assertNull( location.metadata["uri"] )
+        assertNull( location.metadata["citation"] )
+        assertNull( result.stepRef )
     }
 
     @Test

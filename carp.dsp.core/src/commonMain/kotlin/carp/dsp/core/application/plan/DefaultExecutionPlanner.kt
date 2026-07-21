@@ -18,11 +18,31 @@ import io.github.oshai.kotlinlogging.KotlinLogging
  * 1. Flatten workflow steps preserving declaration order
  * 2. Validate environment references
  * 3. Build dependency graph
- * 4. Topologically sort steps
- * 5. Plan steps in sorted order using bindings resolution and compilation
- * 6. Construct final ExecutionPlan
+ * 4. Validate protocol-bound inputs, when a protocol source is supplied
+ * 5. Topologically sort steps
+ * 6. Plan steps in sorted order using bindings resolution and compilation
+ * 7. Construct final ExecutionPlan
+ *
+ * Validation is part of planning, not a separate pass: each stage accumulates
+ * [PlanIssue]s into the resulting plan, and the executor refuses any plan where
+ * [ExecutionPlan.isRunnable] is false. Protocol-bound inputs must therefore be
+ * checked here - validating them outside the planner would leave the errors out
+ * of `plan.issues` and reduce that guarantee to caller convention.
+ *
+ * Known trade-off: [protocolDataTypeProvider] is a constructor parameter because,
+ * unlike the other collaborators, this check needs an external data source. A
+ * second such check should not become a second parameter - at that point extract
+ * a `PlanValidator` interface and take a list, so new validation kinds no longer
+ * modify this class.
+ *
+ * @param protocolDataTypeProvider Optional source of study-protocol collected data
+ *   types (e.g. [StudyProtocolSnapshotDataTypeProvider]). When present, every
+ *   protocol-bound input is validated at plan time; when absent and the workflow
+ *   has protocol-bound inputs, a `PROTOCOL_NOT_VALIDATED` warning is emitted.
  */
-class DefaultExecutionPlanner : ExecutionPlanner {
+class DefaultExecutionPlanner(
+    private val protocolDataTypeProvider: ProtocolDataTypeProvider? = null
+) : ExecutionPlanner {
 
     private val logger = KotlinLogging.logger {}
     private val graphBuilder = DependencyGraphBuilder()
@@ -30,6 +50,7 @@ class DefaultExecutionPlanner : ExecutionPlanner {
     private val bindingsResolver = BindingsResolver()
     private val stepCompiler = StepCompiler()
     private val envRefResolver = EnvironmentRefResolver()
+    private val protocolValidator = ProtocolCouplingValidator()
 
     /**
      * Transforms a WorkflowDefinition into an ExecutionPlan.
@@ -57,6 +78,9 @@ class DefaultExecutionPlanner : ExecutionPlanner {
         // Build Dependency Graph
         val dag = graphBuilder.build(steps)
         issues.addAll(dag.issues)
+
+        // Validate protocol-bound inputs against the study protocol(s) (F5)
+        issues.addAll(protocolValidator.validate(steps, protocolDataTypeProvider))
 
         // Topological Sort
         val declarationOrder = steps.map { it.metadata.id }

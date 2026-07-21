@@ -1,5 +1,6 @@
 package carp.dsp.core.application.authoring.validation
 
+import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import dk.cachet.carp.analytics.domain.validation.ValidationErrorCode
 import dk.cachet.carp.analytics.domain.validation.ValidationIssue
@@ -38,7 +39,7 @@ object WorkflowLinter
      * Validates a workflow descriptor and returns all linting issues.
      *
      * @param descriptor The workflow to validate
-     * @param config Optional configuration to customize linter behavior
+     * @param config Optional configuration to customize linter behaviour
      * @return [ValidationResult] containing all issues found (or ValidationResult.OK if none)
      */
     fun lint(descriptor: WorkflowDescriptor, config: LinterConfiguration = LinterConfiguration()): ValidationResult
@@ -70,6 +71,9 @@ object WorkflowLinter
 
         // Check 8: Cycle in step dependencies
         issues += checkDependencyCycles(descriptor)
+
+        // Check 9: Unattributed external boundary inputs
+        issues += checkExternalProvenance(descriptor)
 
         // Optional checks (configurable)
         issues += checkNamingConventions(descriptor, config)
@@ -325,6 +329,65 @@ object WorkflowLinter
                             subjectId = step.id
                         )
                     )
+                }
+            }
+        }
+
+        return issues
+    }
+
+    // ── Check 9: Unattributed External Boundary Inputs ────────────────────────
+
+    /**
+     * Warns for external data inputs that have no attribution.
+     *
+     * Two cases, both WARNING:
+     * - an `external` source with neither `uri` nor `citation`
+     * - an input with no `source` at all, which is treated as an empty external
+     *
+     * Inputs sourced from a step output, file, environment variable, or study
+     * protocol carry their provenance in the source itself and are not checked here.
+     */
+    private fun checkExternalProvenance(descriptor: WorkflowDescriptor): List<ValidationIssue>
+    {
+        val issues = mutableListOf<ValidationIssue>()
+
+        descriptor.steps.forEach { step ->
+            step.inputs.forEachIndexed { index, port ->
+                val portLabel = port.id ?: "inputs[$index]"
+                when (val source = port.source)
+                {
+                    is ExternalInputSource ->
+                        if (source.uri.isNullOrBlank() && source.citation.isNullOrBlank())
+                        {
+                            issues.add(
+                                ValidationIssue(
+                                    severity = ValidationSeverity.WARNING,
+                                    code = ValidationErrorCode.EXTERNAL_DATA_UNATTRIBUTED,
+                                    message = "External input '$portLabel' in step '${step.id}' has no uri " +
+                                        "or citation. Attribute the dataset so the workflow's data " +
+                                        "provenance is documented.",
+                                    path = "steps[${step.id}].inputs[$portLabel].source",
+                                    subjectId = step.id
+                                )
+                            )
+                        }
+
+                    null ->
+                        issues.add(
+                            ValidationIssue(
+                                severity = ValidationSeverity.WARNING,
+                                code = ValidationErrorCode.EXTERNAL_DATA_UNATTRIBUTED,
+                                message = "Input '$portLabel' in step '${step.id}' declares no source; " +
+                                    "it is treated as unattributed external data. Declare a " +
+                                    "'protocol' or 'external' source to document where the data " +
+                                    "comes from.",
+                                path = "steps[${step.id}].inputs[$portLabel]",
+                                subjectId = step.id
+                            )
+                        )
+
+                    else -> { /* provenance is the source */ }
                 }
             }
         }

@@ -1,5 +1,6 @@
 package carp.dsp.demo.demos
 
+import carp.dsp.demo.io.DemoIo
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.packaging.PackageBuilder
 import carp.dsp.core.application.translation.snakemake.DspToSnakemakeExporter
@@ -18,9 +19,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 import kotlin.math.abs
 
@@ -367,18 +366,9 @@ class HrActivityDemo {
 
         // -- General helpers ------------------------------------------------
 
-        private fun loadWorkflowYaml(): String =
-            (HrActivityDemo::class.java.classLoader
-                .getResource("workflows/hr-activity-summary.yaml")
-                ?: error("Workflow YAML not found"))
-                .readText()
+        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/hr-activity-summary.yaml")
 
-        private fun getDemoResultsDirectory(): Path {
-            val cp = HrActivityDemo::class.java.protectionDomain.codeSource.location.toURI().path
-            val root = java.io.File(cp).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-                ?: error("Cannot determine project root")
-            return root.toPath().resolve("demo_results").resolve("hr_activity")
-        }
+        private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("hr_activity").toPath()
 
         private fun setupWorkspaceFiles(dir: Path) {
             val scriptsDir = dir.resolve("scripts/hr_activity")
@@ -388,11 +378,8 @@ class HrActivityDemo {
             }
         }
 
-        private fun copyResource(resource: String, target: Path) {
-            val url = HrActivityDemo::class.java.classLoader.getResource(resource)
-                ?: error("Resource not found: $resource")
-            Files.copy(url.openStream(), target, StandardCopyOption.REPLACE_EXISTING)
-        }
+        private fun copyResource(resourcePath: String, target: Path) =
+            DemoIo.copyResource(resourcePath, target)
 
         private fun parseCsvRows(text: String): List<Map<String, String>> {
             val lines = text.trim().lines()

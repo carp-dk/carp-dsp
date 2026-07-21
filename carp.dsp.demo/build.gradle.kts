@@ -23,6 +23,7 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-common")
                 implementation("dk.cachet.carp:carp-core-data")
                 implementation("dk.cachet.carp:carp-core-analytics")
+                implementation("dk.cachet.carp:carp-core-protocols")
 
                 // For coroutines support
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
@@ -144,6 +145,11 @@ registerEvalTask(
     "evalPlannerScaling",
     "carp.dsp.demo.eval.PlannerScalingEvalKt",
     "Time decode/import/plan/validate over synthetic chains of 2-200 steps (Fig E)"
+)
+registerEvalTask(
+    "evalProtocolCoupling",
+    "carp.dsp.demo.eval.ProtocolCouplingEvalKt",
+    "Plan a mixed protocol + open-data workflow against two study protocols (F5)"
 )
 
 // Portability eval: run the HR/step pipeline in several Linux distros (Docker) under one

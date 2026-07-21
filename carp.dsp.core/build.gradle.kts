@@ -29,6 +29,7 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-common")
                 implementation("dk.cachet.carp:carp-core-data")
                 implementation("dk.cachet.carp:carp-core-analytics")
+                implementation("dk.cachet.carp:carp-core-protocols")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("com.charleskorn.kaml:kaml:0.61.0")
                 implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")

@@ -3,10 +3,10 @@ package carp.dsp.demo.eval
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
-import java.io.File
 
 /**
  * Error-detection eval.
@@ -65,11 +65,11 @@ fun main() {
     val codec = WorkflowYamlCodec()
 
     // Control: the clean workflow should plan with zero ERROR issues.
-    val cleanPlan = planWorkflow(codec, loadResource("workflows/mobgap-gait-analysis.yaml"))
+    val cleanPlan = planWorkflow(codec, DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml"))
     val cleanErrors = errorIssues(cleanPlan)
 
     val results = INJECTIONS.map { inj ->
-        val plan = planWorkflow(codec, loadResource(inj.resource))
+        val plan = planWorkflow(codec, DemoIo.loadResource(inj.resource))
         val codes = errorIssues(plan).map { it.code }
         CarpResult(
             fault = inj.fault,
@@ -111,10 +111,10 @@ fun main() {
     // Cost of the plan-time gate: median wall time of decode+import+plan over the clean
     // workflow, after warm-up. Measured on this machine so the figure never hardcodes a
     // timing (the ad-hoc arm measures its own seconds the same way).
-    val planMs = measurePlanMs(codec, loadResource("workflows/mobgap-gait-analysis.yaml"))
+    val planMs = measurePlanMs(codec, DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml"))
     println("Plan-time gate cost (median decode+import+plan, warm): $planMs ms")
 
-    val dir = evalResultsDir()
+    val dir = DemoIo.evalResultsDir()
     dir.resolve("error-detection.txt").appendText(report + "\nPlan-time gate cost: $planMs ms\n")
 
     // Machine-readable CSV for the plot (CARP arm). plan_ms is this machine's measured
@@ -152,17 +152,3 @@ private fun measurePlanMs(codec: WorkflowYamlCodec, yaml: String, warmup: Int = 
 private fun errorIssues(plan: ExecutionPlan) =
     plan.issues.filter { it.severity == PlanIssueSeverity.ERROR }
 
-private object EdResourceAnchor
-
-private fun loadResource(path: String): String =
-    EdResourceAnchor::class.java.classLoader
-        .getResource(path)
-        ?.readText()
-        ?: throw IllegalStateException("Resource not found: $path")
-
-private fun evalResultsDir(): File {
-    val classPath = EdResourceAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    val projectRoot = File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-    return projectRoot.resolve("eval_results").apply { mkdirs() }
-}

@@ -78,6 +78,70 @@ class DefaultPlanExecutorTest
         )
 
 
+    // ── Plan-time check: plans with ERROR issues never execute ─────────────────
+
+    private fun erroredPlan( vararg steps: PlannedStep ): ExecutionPlan =
+        ExecutionPlan(
+            workflowName = "wf-errored",
+            planId = UUID.randomUUID().toString(),
+            steps = steps.toList(),
+            issues = listOf(
+                PlanIssue(
+                    severity = PlanIssueSeverity.ERROR,
+                    code = "PROTOCOL_DATA_NOT_COLLECTED",
+                    message = "Input 'hr' expects a data type the protocol does not collect."
+                )
+            )
+        )
+
+    @Test
+    fun `execute refuses a plan with ERROR issues and runs no step`()
+    {
+        val manager = RecordingWorkspaceManager()
+        val p = erroredPlan( plannedStep( "a" ), plannedStep( "b" ) )
+
+        val report = executor( manager = manager ).execute( p, UUID.randomUUID() )
+
+        assertEquals( ExecutionStatus.FAILED, report.status )
+        assertTrue( report.stepResults.isEmpty(), "No step should run for a non-runnable plan" )
+        assertTrue( manager.createCalls.isEmpty(), "No workspace should be created" )
+    }
+
+    @Test
+    fun `refused plan reports a policy violation naming the plan errors`()
+    {
+        val p = erroredPlan( plannedStep( "a" ) )
+
+        val report = executor().execute( p, UUID.randomUUID() )
+
+        val issue = report.issues.single { it.kind == ExecutionIssueKind.POLICY_VIOLATION }
+        assertTrue( issue.message.contains( "PROTOCOL_DATA_NOT_COLLECTED" ) )
+        assertTrue( issue.message.contains( "not runnable" ) )
+    }
+
+    @Test
+    fun `execute proceeds for a plan whose issues are only warnings`()
+    {
+        val manager = RecordingWorkspaceManager()
+        val p = ExecutionPlan(
+            workflowName = "wf-warned",
+            planId = UUID.randomUUID().toString(),
+            steps = listOf( plannedStep( "a" ) ),
+            issues = listOf(
+                PlanIssue(
+                    severity = PlanIssueSeverity.WARNING,
+                    code = "PROTOCOL_NOT_VALIDATED",
+                    message = "Protocol bindings could not be validated."
+                )
+            )
+        )
+
+        val report = executor( manager = manager ).execute( p, UUID.randomUUID() )
+
+        assertEquals( 1, report.stepResults.size, "Warnings must not block execution" )
+        assertEquals( 1, manager.createCalls.size )
+    }
+
     @Test
     fun `execute calls workspaceManager_create exactly once with plan and runId`()
     {

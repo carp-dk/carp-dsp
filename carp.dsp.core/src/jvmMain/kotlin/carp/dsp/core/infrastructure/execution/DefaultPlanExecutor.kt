@@ -46,6 +46,10 @@ class DefaultPlanExecutor(
     /**
      * Executes all steps in [plan] and returns a completed [ExecutionReport].
      *
+     * 0. Refuses plans that are not runnable ([ExecutionPlan.isRunnable] is false, i.e. the
+     *    planner reported at least one ERROR). Nothing is created and no step runs; the
+     *    returned report has status [ExecutionStatus.FAILED], no step results, and a single
+     *    [ExecutionIssueKind.POLICY_VIOLATION] issue naming the plan errors.
      * 1. Creates a workspace via [workspaceManager].
      * 2. Resolves execution order via [StepOrderStrategy] (default: planner order).
      * 3. Runs each step via [CommandStepRunner], collecting [StepRunResult]s and [ExecutionIssue]s.
@@ -59,6 +63,11 @@ class DefaultPlanExecutor(
         runId: UUID,
         policy: RunPolicy
     ): ExecutionReport {
+        // Plan-time check: a plan carrying ERROR issues is never executed
+        if (!plan.isRunnable()) {
+            return refuseToExecute(plan, runId)
+        }
+
         logger.info { "Executing plan '${plan.workflowName}' (${plan.steps.size} step(s), runId=$runId)" }
         val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy)
 
@@ -345,6 +354,41 @@ class DefaultPlanExecutor(
             startedAt = Clock.System.now(),
             finishedAt = Clock.System.now(),
             outputs = emptyList()
+        )
+    }
+
+    /**
+     * Builds the report for a plan refused at the plan-time check.
+     *
+     * No workspace is created and no step runs, so the report carries no step results;
+     * the status is set to [ExecutionStatus.FAILED] explicitly rather than derived, since
+     * deriving from an empty result list would vacuously report success.
+     */
+    private fun refuseToExecute(plan: ExecutionPlan, runId: UUID): ExecutionReport {
+        val errors = plan.issues.filter { it.severity == PlanIssueSeverity.ERROR }
+        val summary = errors.joinToString( "; " ) { "${it.code}: ${it.message}" }
+        logger.error {
+            "Refusing to execute plan '${plan.workflowName}' (runId=$runId): " +
+                "${errors.size} plan error(s). $summary"
+        }
+
+        val now = Clock.System.now()
+        return ExecutionReport(
+            runId = runId,
+            planId = UUID.parse(plan.planId),
+            startedAt = now,
+            finishedAt = now,
+            status = ExecutionStatus.FAILED,
+            stepResults = emptyList(),
+            issues = listOf(
+                ExecutionIssue(
+                    stepMetadata = null,
+                    kind = ExecutionIssueKind.POLICY_VIOLATION,
+                    message = "Plan is not runnable: ${errors.size} plan-time error(s) must be " +
+                        "resolved before execution. $summary"
+                )
+            ),
+            environmentLogs = EnvironmentExecutionLogs()
         )
     }
 

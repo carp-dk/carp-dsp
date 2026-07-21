@@ -3,9 +3,9 @@ package carp.dsp.demo.eval
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
-import java.io.File
 import java.time.Instant
 
 /**
@@ -52,7 +52,7 @@ fun main() {
     val scriptOf = LinkedHashMap<String, String>()                // stepId -> script file
     val accepted = LinkedHashMap<String, Boolean>()
     for ((label, resource) in WORKFLOWS) {
-        val yaml = loadResource(resource)
+        val yaml = DemoIo.loadResource(resource)
         val plan = DefaultExecutionPlanner().plan(
             WorkflowDescriptorImporter(SR_NAMESPACE).import(codec.decodeOrThrow(yaml))
         )
@@ -70,7 +70,7 @@ fun main() {
 
     // Library size (SLOC of each step script, written once): non-blank, non-comment lines.
     val slocOf = STEP_ORDER.associateWith { id ->
-        scriptOf[id]?.let { sloc(loadResource("scripts/hr_lib/$it")) } ?: 0
+        scriptOf[id]?.let { sloc(DemoIo.loadResource("scripts/hr_lib/$it")) } ?: 0
     }
     val librarySloc = slocOf.values.sum()
     val projectedDupSloc = STEP_ORDER.sumOf { id -> slocOf[id]!! * ((incidence[id]?.size ?: 0) - 1).coerceAtLeast(0) }
@@ -98,7 +98,7 @@ fun main() {
     }
     println(report)
 
-    val dir = evalResultsDir()
+    val dir = DemoIo.evalResultsDir()
     dir.resolve("step-reuse.txt").writeText(report + "\n")
     dir.resolve("step-reuse.csv").writeText(
         buildString {
@@ -169,15 +169,3 @@ private fun stepBlocks(yaml: String): Map<String, String> {
     return blocks
 }
 
-private object StepReuseAnchor
-
-private fun loadResource(path: String): String =
-    StepReuseAnchor::class.java.classLoader.getResource(path)?.readText()
-        ?: throw IllegalStateException("Resource not found: $path")
-
-private fun evalResultsDir(): File {
-    val classPath = StepReuseAnchor::class.java.protectionDomain.codeSource.location.toURI().path
-    val projectRoot = File(classPath).parentFile?.parentFile?.parentFile?.parentFile?.parentFile
-        ?: throw IllegalStateException("Cannot determine project root")
-    return projectRoot.resolve("eval_results").apply { mkdirs() }
-}
