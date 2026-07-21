@@ -112,7 +112,7 @@ class PortImporterTest
             id = "port-open-data",
             source = ExternalInputSource(
                 uri = "https://zenodo.org/record/53894/data.csv",
-                citation = "Guy et al. 2016"
+                citation = "Furberg et al. 2016"
             )
         )
 
