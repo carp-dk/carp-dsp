@@ -1,5 +1,6 @@
 package carp.dsp.core.application.packaging
 
+import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.translation.cwl.DspToCwlExporter
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
@@ -7,6 +8,7 @@ import health.workflows.interfaces.model.CwlTranslationAsset
 import health.workflows.interfaces.model.DataSensitivity
 import health.workflows.interfaces.model.NativeWorkflowAsset
 import health.workflows.interfaces.model.PackageMetadata
+import health.workflows.interfaces.model.ProtocolReference
 import health.workflows.interfaces.model.ValidationAssets
 import health.workflows.interfaces.model.WorkflowArtifactPackage
 import health.workflows.interfaces.model.WorkflowFormat
@@ -66,6 +68,7 @@ object PackageBuilder {
                 description = descriptor.metadata.description,
                 tags = descriptor.metadata.tags.ifEmpty { null },
                 sensitivityClass = DataSensitivity.PUBLIC,
+                protocols = descriptor.protocolReferences(),
             ),
             native = NativeWorkflowAsset(
                 format = WorkflowFormat.CARP_DSP,
@@ -77,6 +80,27 @@ object PackageBuilder {
         )
     }
 }
+
+/**
+ * Returns a list of [ProtocolReference] this workflow draws data from, derived from its protocol-bound inputs.
+ */
+internal fun WorkflowDescriptor.protocolReferences(): List<ProtocolReference> =
+    steps
+        .asSequence()
+        .flatMap { it.inputs }
+        .mapNotNull { it.source as? ProtocolInputSource }
+        .groupBy { it.protocol.id to it.protocol.version }
+        .map { (key, sources) ->
+            val (protocolId, version) = key
+            ProtocolReference(
+                id = protocolId,
+                version = version,
+                name = sources.firstNotNullOfOrNull { it.protocol.name },
+                dataTypes = sources.map { it.dataType }.distinct().sorted(),
+            )
+        }
+        .sortedWith(compareBy({ it.id }, { it.version }))
+        .toList()
 
 /**
  * Derives a stable package id from this descriptor.

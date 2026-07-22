@@ -1,6 +1,10 @@
 package carp.dsp.core.application.packaging
 
+import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
+import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
+import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
+import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
@@ -198,6 +202,132 @@ class PackageBuilderTest {
             metadata = descriptor.metadata.copy(name = "My Workflow: (v2)"),
         )
         assertEquals("my-workflow-v2", d.toPackageId())
+    }
+
+    // -- protocol references ---------------------------------------------------
+
+    private val heartRate = "dk.cachet.carp.heartrate"
+    private val stepCount = "dk.cachet.carp.stepcount"
+    private val protocolA = "aabbccdd-0000-4000-8000-000000000001"
+    private val protocolB = "aabbccdd-0000-4000-8000-000000000002"
+
+    private fun protocolInput(
+        portId: String,
+        dataType: String,
+        protocolId: String = protocolA,
+        version: Int? = null,
+        name: String? = null,
+    ) = DataPortDescriptor(
+        id = portId,
+        source = ProtocolInputSource(
+            protocol = ProtocolRefDescriptor(id = protocolId, version = version, name = name),
+            dataType = dataType,
+        ),
+    )
+
+    private fun stepWithInputs(id: String, vararg inputs: DataPortDescriptor) = StepDescriptor(
+        id = id,
+        environmentId = "conda-env",
+        task = PythonTaskDescriptor(
+            name = id,
+            entryPoint = ScriptEntryPointDescriptor("scripts/$id.py"),
+        ),
+        inputs = inputs.toList(),
+    )
+
+    private fun workflowWith(vararg steps: StepDescriptor) = descriptor.copy(steps = steps.toList())
+
+    @Test
+    fun `protocol-bound input yields a reference, external input contributes none`() {
+        val pkg = PackageBuilder.build(
+            workflowWith(
+                stepWithInputs(
+                    "import",
+                    protocolInput("hr", heartRate, name = "HR study protocol"),
+                    DataPortDescriptor(
+                        id = "open-data",
+                        source = ExternalInputSource(uri = "https://zenodo.org/record/53894"),
+                    ),
+                ),
+            ),
+        )
+
+        val protocol = pkg.metadata.protocols.single()
+        assertEquals(protocolA, protocol.id)
+        assertEquals("HR study protocol", protocol.name)
+        assertEquals(listOf(heartRate), protocol.dataTypes)
+    }
+
+    @Test
+    fun `inputs bound to the same protocol merge into one reference with sorted data types`() {
+        val pkg = PackageBuilder.build(
+            workflowWith(
+                stepWithInputs(
+                    "import",
+                    protocolInput("steps", stepCount),
+                    protocolInput("hr", heartRate),
+                ),
+            ),
+        )
+
+        val protocol = pkg.metadata.protocols.single()
+        assertEquals(listOf(heartRate, stepCount), protocol.dataTypes, "Data types should be sorted")
+    }
+
+    @Test
+    fun `inputs bound to different protocols yield references ordered deterministically`() {
+        val pkg = PackageBuilder.build(
+            workflowWith(
+                stepWithInputs("b", protocolInput("hr", heartRate, protocolId = protocolB)),
+                stepWithInputs("a", protocolInput("steps", stepCount, protocolId = protocolA)),
+            ),
+        )
+
+        assertEquals(listOf(protocolA, protocolB), pkg.metadata.protocols.map { it.id })
+    }
+
+    @Test
+    fun `same protocol at different versions yields separate references`() {
+        val pkg = PackageBuilder.build(
+            workflowWith(
+                stepWithInputs(
+                    "import",
+                    protocolInput("hr", heartRate, version = 2),
+                    protocolInput("steps", stepCount, version = 1),
+                ),
+            ),
+        )
+
+        assertEquals(listOf(1, 2), pkg.metadata.protocols.map { it.version })
+    }
+
+    @Test
+    fun `workflow with no protocol-bound inputs yields no references`() {
+        val pkg = PackageBuilder.build(
+            workflowWith(
+                stepWithInputs(
+                    "import",
+                    DataPortDescriptor(id = "open-data", source = ExternalInputSource()),
+                ),
+            ),
+        )
+
+        assertTrue(pkg.metadata.protocols.isEmpty())
+        // A workflow that references no protocol packages exactly as it did before.
+        assertEquals(emptyList(), PackageBuilder.build(descriptor).metadata.protocols)
+    }
+
+    @Test
+    fun `protocol reference derivation is stable across repeated builds`() {
+        val workflow = workflowWith(
+            stepWithInputs("b", protocolInput("hr", heartRate, protocolId = protocolB)),
+            stepWithInputs("a", protocolInput("steps", stepCount, protocolId = protocolA)),
+        )
+
+        assertEquals(
+            PackageBuilder.build(workflow).metadata.protocols,
+            PackageBuilder.build(workflow).metadata.protocols,
+        )
     }
 }
 
