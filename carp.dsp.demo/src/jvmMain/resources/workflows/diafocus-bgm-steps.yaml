@@ -42,23 +42,23 @@ steps:
       name: "load-bgm"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_bgm.py"
+        - "scripts/load_bgm.py"
         - "input.0"
         - "output.0"
     inputs:
       - id: "diafocus-mock"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "DiaFocus mock data containing blood glucose and steps arrays"
         source:
           type: "file"
-          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/data/diafocus_mock.json"
+          path: "data/diafocus_mock.json"
     outputs:
       - id: "bgm-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Extracted blood glucose readings array"
 
   # Step 2: Load Steps data — extract daily_steps array from source JSON
@@ -75,23 +75,23 @@ steps:
       name: "load-steps"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_steps.py"
+        - "scripts/load_steps.py"
         - "input.0"
         - "output.0"
     inputs:
       - id: "diafocus-mock"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "DiaFocus mock data containing blood glucose and steps arrays"
         source:
           type: "file"
-          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/data/diafocus_mock.json"
+          path: "data/diafocus_mock.json"
     outputs:
       - id: "steps-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Extracted daily steps readings array"
 
   # Step 3: Analyse BGM + Steps — run comprehensive analysis combining both datasets
@@ -110,7 +110,7 @@ steps:
       name: "bgm-steps-analysis"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/bgm_steps_analysis.py"
+        - "scripts/bgm_steps_analysis.py"
         - "--bgm"
         - "input.0"
         - "--steps"
@@ -120,8 +120,8 @@ steps:
     inputs:
       - id: "bgm-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Blood glucose measurements"
         source:
           type: "step-output"
@@ -129,8 +129,8 @@ steps:
           outputId: "bgm-json"
       - id: "steps-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Daily step counts"
         source:
           type: "step-output"
@@ -139,7 +139,7 @@ steps:
     outputs:
       - id: "summary-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Analysis summary with BGM metrics and step trend"
 

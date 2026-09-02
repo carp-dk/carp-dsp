@@ -1,6 +1,7 @@
 package carp.dsp.core.application.translation.snakemake
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.InProcessTaskDescriptor
@@ -36,7 +37,7 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
         val content = buildString {
             val outputFiles = buildOutputFileMap(descriptor)
 
-            val finalOutputs = descriptor.steps.last().outputs
+            val finalOutputs = (descriptor.steps.last() as? DefinedStepDescriptor)?.outputs.orEmpty()
                 .mapNotNull { port -> outputFiles[port.id] }
 
             appendLine("rule all:")
@@ -80,10 +81,10 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
 
     private fun buildOutputFileMap(descriptor: WorkflowDescriptor): Map<String, String> =
         buildMap {
-            descriptor.steps.forEach { step ->
+            descriptor.steps.filterIsInstance<DefinedStepDescriptor>().forEach { step ->
                 step.outputs.forEach { port ->
                     val id = port.id ?: return@forEach
-                    put(id, portToFilename(id, port.descriptor?.type))
+                    put(id, portToFilename(id, port.descriptor?.fileFormat))
                 }
             }
         }
@@ -93,23 +94,25 @@ object DspToSnakemakeExporter : WorkflowExporter<SnakemakeWorkflow> {
         environments: Map<String, EnvironmentDescriptor>,
         outputFiles: Map<String, String>,
     ) {
-        val ruleName = (step.id ?: step.task.name)
+        // A referenced step (`uses:`) has no inline task until resolved; skip it.
+        val defined = step as? DefinedStepDescriptor ?: return
+        val ruleName = (step.id ?: defined.task.name)
             .replace(Regex("[^a-zA-Z0-9]+"), "_")
             .trim('_')
 
-        val env = environments[step.environmentId]
+        val env = environments[defined.environmentId]
         val dockerImage = if (env?.kind == "docker") env.spec["image"]?.firstOrNull() else null
-        val condaFile = if (env?.kind in CONDA_KINDS) "envs/${step.environmentId}.yaml" else null
+        val condaFile = if (env?.kind in CONDA_KINDS) "envs/${defined.environmentId}.yaml" else null
 
-        val inputFiles = step.inputs.mapNotNull { port ->
+        val inputFiles = defined.inputs.mapNotNull { port ->
             when (val src = port.source) {
                 is StepOutputInputSource -> outputFiles[src.outputId]
                 is FileInputSource -> src.path
                 else -> null
             }
         }
-        val outputFilesList = step.outputs.mapNotNull { port -> outputFiles[port.id] }
-        val shellCmd = buildShellCommand(step.task, inputFiles.size, outputFilesList.size)
+        val outputFilesList = defined.outputs.mapNotNull { port -> outputFiles[port.id] }
+        val shellCmd = buildShellCommand(defined.task, inputFiles.size, outputFilesList.size)
 
         appendLine("rule $ruleName:")
         if (inputFiles.isNotEmpty()) {

@@ -57,8 +57,8 @@ steps:
     inputs:
       - id: "input-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Raw input data"
         source:
           type: "file"
@@ -66,8 +66,8 @@ steps:
     outputs:
       - id: "loaded-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Validated data with row_id"
 
   # Step 2: Transform — R, uppercase string values
@@ -93,8 +93,8 @@ steps:
     inputs:
       - id: "loaded-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
         source:
           type: "step-output"
           stepId: "load-data"
@@ -102,8 +102,8 @@ steps:
     outputs:
       - id: "transformed-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Data with uppercased values"
 
   # Step 3: Finalize — Pixi Python, append status column
@@ -129,8 +129,8 @@ steps:
     inputs:
       - id: "transformed-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
         source:
           type: "step-output"
           stepId: "transform-data"
@@ -138,6 +138,6 @@ steps:
     outputs:
       - id: "final-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Final output with status column"

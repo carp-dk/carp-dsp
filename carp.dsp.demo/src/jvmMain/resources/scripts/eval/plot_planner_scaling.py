@@ -70,6 +70,21 @@ def main() -> int:
             color="black", label="Total")
     ax.fill_between(sizes, q1, q3, color="black", alpha=0.12, linewidth=0)
 
+    # Linear reference, anchored at the *largest* workflow.
+    #
+    # The pipeline is O(n + e) by construction - every phase is a pass over steps
+    # and their connections - so the guide states the complexity of the code and
+    # the data is shown against it, rather than a complexity being inferred from
+    # a fitted slope. Measured growth sits below the guide going left because a
+    # fixed per-run cost (~1 ms) dominates at small sizes, not because planning
+    # is sub-linear, which nothing that visits every step could be.
+    #
+    # Anchoring at the largest size matters: anchored at the smallest, the guide
+    # runs far above every point and flatters the result.
+    ref = [total_med[-1] * (s / sizes[-1]) for s in sizes]
+    ax.plot(sizes, ref, ls="--", color="#666666", linewidth=1.0, zorder=1,
+            label=r"$O(n)$ reference")
+
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xticks(sizes)

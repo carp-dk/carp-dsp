@@ -79,6 +79,8 @@ data class EnvironmentDescriptor(
  * @property metadata Workflow-level identity and documentation fields.
  * @property steps Ordered list of step descriptors.
  * @property environments Environments referenced by steps, keyed by their string id.
+ * @property library Publication metadata, present only on a step published to the
+ *   shared step library. A workflow authored by a researcher leaves this absent.
  */
 @Serializable
 data class WorkflowDescriptor(
@@ -86,4 +88,5 @@ data class WorkflowDescriptor(
     val metadata: WorkflowMetadataDescriptor,
     val steps: List<StepDescriptor> = emptyList(),
     val environments: Map<String, EnvironmentDescriptor> = emptyMap(),
+    val library: LibraryDescriptor? = null,
 )

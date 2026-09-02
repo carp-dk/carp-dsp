@@ -1,0 +1,8 @@
+id: "env-python-base"
+name: "Python (standard library only)"
+description: "Plain Python for steps that need no third-party packages."
+kind: "pixi"
+spec:
+  pythonVersion:
+    - "3.11"
+  dependencies: []

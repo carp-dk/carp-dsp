@@ -1,28 +1,36 @@
 package carp.dsp.demo.eval
 
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.WorkflowPreparation
 import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
-import dk.cachet.carp.common.application.UUID
+import java.io.File
 import java.time.Instant
 
 /**
  * Step-reuse eval (paper: Evaluation / Step reuse, Table `tab:step-reuse`).
  *
- * Three HR/step workflows are composed of a shared library of six typed steps
- * (scripts/hr_lib, over the open Fitbit dataset Zenodo 53894). This measures, from the
- * real artefacts, how much the library is reused:
- *   - which library step each workflow references (incidence -> the reuse table)
- *   - total references, distinct steps, per-step reuse counts
- *   - duplicated step bodies under CARP: 0 (workflows reference shared scripts)
- *   - what a monolithic re-implementation would incur: it inlines one copy of every
- *     referenced step, so (references - distinct) copies are redundant duplicates
- *   - library size for scale (SLOC of the six step scripts, written once)
+ * Measures the same three HR/step pipelines authored two ways, so the reuse claim
+ * is a comparison between real artefacts rather than a projection:
  *
- * All static (no pipeline run): step reuse is an authoring property. Each workflow is
- * planned only to confirm the composition is accepted with zero errors.
+ *   - **inline** (v1): every workflow re-declares each step in full - its task,
+ *     environment and typed ports - even where the step is identical to one
+ *     another workflow already declares. The scripts are shared; the *declaration*
+ *     is written out again per workflow.
+ *   - **`uses:`** (v2): every workflow supplies only wiring, and the declaration
+ *     comes from the certified library, pinned by content hash.
+ *
+ * Two numbers separate them, and they are different claims:
+ *
+ *   - **references** - how many times a step is used. A step used once is used,
+ *     not reused; this column says so rather than reporting "reuse x1".
+ *   - **repeats avoided** - `references - distinct`, the number of times a step
+ *     did not have to be written again. This is the reuse claim, and it is also
+ *     exactly what a monolithic build would duplicate.
+ *
+ * Neither number captures the other half of the argument: under `uses:` none of
+ * the steps had to be *written* at all, including the one referenced once. That
+ * is reported separately as the authored-elsewhere count.
  *
  * Run:
  *   ./gradlew :carp.dsp.demo:evalStepReuse
@@ -30,127 +38,275 @@ import java.time.Instant
  * Writes eval_results/step-reuse.txt, step-reuse.csv, and step-reuse-table.tex.
  */
 
-private val SR_NAMESPACE: UUID = UUID.parse("d3b7f2a0-0000-5000-8000-6d6f62676170")
 private const val SR_STEP_ANCHOR = "\n  - id: \""
 
-private val WORKFLOWS = listOf(
+/** The same three pipelines, authored inline. */
+private val INLINE_WORKFLOWS = listOf(
     "activity-summary" to "workflows/wf-activity-summary.yaml",
     "anomaly-report" to "workflows/wf-anomaly-report.yaml",
-    "minimal-summary" to "workflows/wf-minimal-summary.yaml"
+    "minimal-summary" to "workflows/wf-minimal-summary.yaml",
 )
 
-/** Pipeline order for stable table rows. */
-private val STEP_ORDER = listOf(
-    "load-hr-steps", "clean-resample", "daily-features", "summarise", "detect-anomaly", "visualise"
+/** The same three pipelines, composed from the certified library. */
+private val LIBRARY_WORKFLOWS = listOf(
+    "activity-summary" to "workflows/wf-activity-summary-v2.yaml",
+    "anomaly-report" to "workflows/wf-anomaly-report-v2.yaml",
+    "minimal-summary" to "workflows/wf-minimal-summary-v2.yaml",
 )
+
+private val COLUMN_COLOUR = mapOf(
+    "activity-summary" to "blue", "anomaly-report" to "red", "minimal-summary" to "green",
+)
+
+/**
+ * One authoring strategy measured over the three workflows.
+ *
+ * @property references step -> the workflow labels referencing it, one entry per
+ *   reference, so a step used twice in one workflow appears twice.
+ * @property declarationLines step -> YAML lines its declaration occupies, counted
+ *   once per reference. Under `uses:` a reference is a few lines of wiring; inline
+ *   it is the whole step.
+ */
+private data class Strategy(
+    val name: String,
+    val references: Map<String, List<String>>,
+    val declarationLines: Map<String, Int>,
+    val stepOrder: List<String>,
+    /**
+     * Total steps declared in each workflow, whether referenced or written out.
+     *
+     * Carried so the table can state how many steps are *not* references. Reading
+     * the reference count alone, there is no way to tell whether a workflow is
+     * built entirely from the library or only partly - and "entirely" is the
+     * stronger claim, so it should be measured rather than asserted in prose.
+     */
+    val stepsPerWorkflow: Map<String, Int>,
+    /**
+     * Whether a second use restates the step's declaration.
+     *
+     * Inline, it does: the task, environment and typed ports are written out again.
+     * Under `uses:`, it does not - the second reference adds only wiring, which is
+     * genuinely different each time because it names different inputs. Counting
+     * that as duplication would be wrong, so duplicated lines are zero by
+     * construction rather than by measurement.
+     */
+    val restatesDeclaration: Boolean,
+) {
+    val distinct: Int get() = references.keys.size
+    val total: Int get() = references.values.sumOf { it.size }
+    val repeatsAvoided: Int get() = total - distinct
+
+    /** YAML written for steps across all three workflows. */
+    val authoredLines: Int get() = references.entries.sumOf { (id, uses) ->
+        (declarationLines[id] ?: 0) * uses.size
+    }
+
+    /** Of that, the lines that restate a declaration another workflow already made. */
+    val duplicatedLines: Int get() =
+        if (!restatesDeclaration) 0
+        else references.entries.sumOf { (id, uses) ->
+            (declarationLines[id] ?: 0) * (uses.size - 1).coerceAtLeast(0)
+        }
+
+    fun countIn(workflow: String): Int = references.values.sumOf { uses -> uses.count { it == workflow } }
+
+    /** Steps the workflow declares, whether referenced or written out. */
+    fun stepsIn(workflow: String): Int = stepsPerWorkflow[workflow] ?: 0
+
+    val totalSteps: Int get() = stepsPerWorkflow.values.sum()
+
+    /**
+     * Steps written out in the workflow rather than referenced from the library.
+     *
+     * Under `uses:` this is the steps a reference did not account for. Inline,
+     * every step is written out by definition - there is no library to reference -
+     * so counting non-references there would report zero, which is the opposite of
+     * the truth. [restatesDeclaration] is what distinguishes the two.
+     */
+    fun inlineIn(workflow: String): Int =
+        if (restatesDeclaration) stepsIn(workflow) else stepsIn(workflow) - countIn(workflow)
+
+    val totalInline: Int get() = stepsPerWorkflow.keys.sumOf { inlineIn(it) }
+}
 
 fun main() {
     val codec = WorkflowYamlCodec()
 
-    // Plan each workflow (confirm reuse-safe) + collect step incidence from the YAML.
-    val incidence = LinkedHashMap<String, MutableList<String>>()  // stepId -> workflow labels
-    val scriptOf = LinkedHashMap<String, String>()                // stepId -> script file
+    val inline = measure("inline", INLINE_WORKFLOWS, restatesDeclaration = true) { block ->
+        // Inline: the step's identity is the script it runs. Two workflows that
+        // declare the same script have written the same step twice.
+        Regex("scriptPath:\\s*\"([^\"]+)\"").find(block)
+            ?.groupValues?.get(1)?.substringAfterLast('/')?.substringBeforeLast('.')
+    }
+    val library = measure("uses:", LIBRARY_WORKFLOWS, restatesDeclaration = false) { block ->
+        Regex("uses:\\s*\"([^\"]+)\"").find(block)?.groupValues?.get(1)?.let(::shortLabel)
+    }
+
+    // Every library composition must still plan cleanly once resolved - the table
+    // counts references, and this is what makes them references to something real.
     val accepted = LinkedHashMap<String, Boolean>()
-    for ((label, resource) in WORKFLOWS) {
-        val yaml = DemoIo.loadResource(resource)
-        val plan = DefaultExecutionPlanner().plan(
-            WorkflowDescriptorImporter(SR_NAMESPACE).import(codec.decodeOrThrow(yaml))
-        )
-        accepted[label] = plan.issues.none { it.severity == PlanIssueSeverity.ERROR }
-        stepBlocks(yaml).forEach { (id, block) ->
-            incidence.getOrPut(id) { mutableListOf() }.add(label)
-            scriptOf[id] = Regex("scriptPath:\\s*\"([^\"]+)\"").find(block)?.groupValues?.get(1)?.substringAfterLast('/')
-                ?: scriptOf[id] ?: "?"
-        }
+    val scratch = DemoIo.evalResultsDir().resolve("step-reuse-plan").apply { mkdirs() }
+    for ((label, resource) in LIBRARY_WORKFLOWS) {
+        val file = File(scratch, resource.substringAfterLast('/'))
+        DemoIo.copyResource(resource, file.toPath())
+        val prepared = WorkflowPreparation.prepare(file, codec.decodeOrThrow(file.readText()))
+        accepted[label] = prepared.plan.issues.none { it.severity == PlanIssueSeverity.ERROR }
     }
-
-    val distinct = incidence.keys.size
-    val references = incidence.values.sumOf { it.size }
-    val redundantCopies = references - distinct
-
-    // Library size (SLOC of each step script, written once): non-blank, non-comment lines.
-    val slocOf = STEP_ORDER.associateWith { id ->
-        scriptOf[id]?.let { sloc(DemoIo.loadResource("scripts/hr_lib/$it")) } ?: 0
-    }
-    val librarySloc = slocOf.values.sum()
-    val projectedDupSloc = STEP_ORDER.sumOf { id -> slocOf[id]!! * ((incidence[id]?.size ?: 0) - 1).coerceAtLeast(0) }
+    scratch.deleteRecursively()
 
     val report = buildString {
-        appendLine("=".repeat(72))
+        appendLine("=".repeat(76))
         appendLine("Step-reuse eval - ${Instant.now()}")
-        appendLine("Library: scripts/hr_lib (open Fitbit data, Zenodo 53894)")
+        appendLine("Three HR/step pipelines (open Fitbit data, Zenodo 53894), authored two ways.")
         appendLine()
-        appendLine("Workflows planned (0 ERROR issues each): ${accepted.all { it.value }}  $accepted")
+        appendLine("Library compositions plan with 0 ERROR issues: ${accepted.all { it.value }}  $accepted")
         appendLine()
-        appendLine("  %-16s  %-7s  %s".format("library step", "reuse", "workflows"))
-        STEP_ORDER.forEach { id ->
-            appendLine("  %-16s  x%-6d %s".format(id, incidence[id]?.size ?: 0, incidence[id] ?: emptyList<String>()))
-        }
+        appendLine(table(library))
         appendLine()
-        appendLine("Distinct library steps:        $distinct")
-        appendLine("References across workflows:   $references")
-        appendLine("Duplicated step bodies (CARP): 0  (workflows reference shared scripts)")
-        appendLine("Monolithic build would inline: $references copies -> $redundantCopies redundant " +
-            "(${100 * redundantCopies / references}% of inlined)")
-        appendLine("Library size (written once):   $librarySloc SLOC across $distinct steps")
-        appendLine("Projected duplicated SLOC:     $projectedDupSloc (monolithic)")
-        appendLine("=".repeat(72))
+        appendLine("  %-34s %10s %10s".format("", inline.name, library.name))
+        appendLine("  " + "-".repeat(56))
+        appendLine("  %-34s %10d %10d".format("distinct steps", inline.distinct, library.distinct))
+        appendLine("  %-34s %10d %10d".format("references", inline.total, library.total))
+        appendLine("  %-34s %10d %10d".format("repeats avoided", inline.repeatsAvoided, library.repeatsAvoided))
+        appendLine("  %-34s %10d %10d".format("step YAML authored (lines)", inline.authoredLines, library.authoredLines))
+        appendLine("  %-34s %10d %10d".format("of which duplicated", inline.duplicatedLines, library.duplicatedLines))
+        appendLine("  %-34s %10d %10d".format("steps declared inline", inline.totalInline, library.totalInline))
+        appendLine("  %-34s %10s %10d".format("steps authored elsewhere", "0", library.distinct))
+        appendLine()
+        appendLine("  Both share their scripts. What differs is the declaration: inline restates each")
+        appendLine("  step's task, environment and typed ports per workflow, while `uses:` states them")
+        appendLine("  once in the library and references them, so a second reference adds only wiring.")
+        appendLine()
+        appendLine("  The two decompositions are not identical, and that is itself a result: composing")
+        appendLine("  from generic library steps produced a finer pipeline (${library.distinct} steps against ${inline.distinct}), because a")
+        appendLine("  generic step does less each. Read the totals as 'what you write to express this")
+        appendLine("  analysis', not as the same pipeline measured twice.")
+        appendLine()
+        appendLine("  Under `uses:` none of the ${library.distinct} steps was written for these workflows - including the")
+        appendLine("  one referenced once, which is reuse of a step someone else authored rather than")
+        appendLine("  repeat use of your own.")
+        appendLine("=".repeat(76))
     }
     println(report)
 
     val dir = DemoIo.evalResultsDir()
     dir.resolve("step-reuse.txt").writeText(report + "\n")
-    dir.resolve("step-reuse.csv").writeText(
-        buildString {
-            appendLine("library_step,reuse_count,workflows,sloc")
-            STEP_ORDER.forEach { id ->
-                appendLine("$id,${incidence[id]?.size ?: 0},${incidence[id]?.joinToString("|")},${slocOf[id]}")
-            }
-            appendLine("TOTAL,$references,,${librarySloc}")
-            appendLine("# distinct=$distinct references=$references redundant_copies=$redundantCopies dup_sloc=$projectedDupSloc")
-        }
-    )
-    dir.resolve("step-reuse-table.tex").writeText(latexTable(incidence))
+    dir.resolve("step-reuse.csv").writeText(csv(inline, library))
+    dir.resolve("step-reuse-table.tex").writeText(latexTable(library))
     println("Wrote step-reuse.txt, step-reuse.csv, step-reuse-table.tex to: ${dir.absolutePath}")
 }
 
-/** Regenerate the reuse-table body rows so the paper table stays backed by the eval. */
-private fun latexTable(incidence: Map<String, List<String>>): String {
-    val colOf = mapOf("activity-summary" to "blue", "anomaly-report" to "red", "minimal-summary" to "green")
-    val cols = listOf("activity-summary", "anomaly-report", "minimal-summary")
-    return buildString {
-        appendLine("% GENERATED by StepReuseEval - reuse table body rows")
-        STEP_ORDER.forEach { id ->
-            val used = incidence[id] ?: emptyList()
-            val cells = cols.joinToString(" & ") { c -> if (c in used) "\\U{${colOf[c]}}" else "" }
-            appendLine("\\texttt{$id} & $cells & $\\times ${used.size}$ \\\\")
+/**
+ * Count references and declaration size per step, in first-appearance order.
+ *
+ * The row order is derived rather than hardcoded: a fixed list silently produces a
+ * table of zeros when a step is renamed or removed, which is how the previous
+ * version of this eval came to describe steps that no longer existed.
+ */
+private fun measure(
+    name: String,
+    workflows: List<Pair<String, String>>,
+    restatesDeclaration: Boolean,
+    identify: (String) -> String?,
+): Strategy {
+    val references = LinkedHashMap<String, MutableList<String>>()
+    val lines = LinkedHashMap<String, Int>()
+    val order = mutableListOf<String>()
+    val stepsPerWorkflow = LinkedHashMap<String, Int>()
+
+    for ((label, resource) in workflows) {
+        val blocks = stepBlocks(DemoIo.loadResource(resource))
+        stepsPerWorkflow[label] = blocks.size
+        blocks.forEach { (_, block) ->
+            val id = identify(block) ?: return@forEach
+            if (id !in order) order += id
+            references.getOrPut(id) { mutableListOf() }.add(label)
+            lines[id] = maxOf(lines[id] ?: 0, block.lines().count { it.isNotBlank() })
         }
-        val used = cols.map { c -> incidence.values.count { c in it } }
-        appendLine("\\midrule")
-        appendLine("Steps used & ${used.joinToString(" & ")} & ${incidence.values.sumOf { it.size }} \\\\")
     }
+    return Strategy(
+        name = name,
+        references = references,
+        declarationLines = lines,
+        stepOrder = order,
+        stepsPerWorkflow = stepsPerWorkflow,
+        restatesDeclaration = restatesDeclaration,
+    )
 }
 
-/** Non-blank, non-comment SLOC, excluding a leading triple-quoted module docstring. */
-private fun sloc(src: String): Int {
-    val lines = src.lines()
-    var i = 0
-    // skip leading blanks/comments to find a possible docstring
-    while (i < lines.size && (lines[i].isBlank() || lines[i].trimStart().startsWith("#"))) i++
-    var body = lines
-    if (i < lines.size && (lines[i].trimStart().startsWith("\"\"\"") || lines[i].trimStart().startsWith("'''"))) {
-        val q = lines[i].trimStart().take(3)
-        var j: Int
-        // handle single-line docstring
-        if (lines[i].trimStart().drop(3).contains(q)) {
-            body = lines.filterIndexed { idx, _ -> idx != i }
-        } else {
-            j = i + 1
-            while (j < lines.size && !lines[j].contains(q)) j++
-            body = lines.filterIndexed { idx, _ -> idx !in i..j }
+/** `core.io.fetch-zenodo` -> `fetch-zenodo`; `sensing.steps.clean` -> `steps.clean`. */
+private fun shortLabel(id: String): String {
+    val parts = id.split('.')
+    return if (parts.firstOrNull() == "core") parts.last() else parts.takeLast(2).joinToString(".")
+}
+
+private fun table(s: Strategy): String = buildString {
+    appendLine("  %-20s %-38s %s".format("library step", "workflows", "refs"))
+    s.stepOrder.forEach { id ->
+        val uses = s.references[id].orEmpty()
+        appendLine("  %-20s %-38s %d".format(id, uses.distinct().joinToString(","), uses.size))
+    }
+    appendLine("  %-20s %-38s %d".format("REFERENCES", "", s.total))
+    append("  %-20s %-38s %d".format("REPEATS AVOIDED", "", s.repeatsAvoided))
+}
+
+/**
+ * The whole reuse tabular, so the paper table is generated rather than transcribed.
+ *
+ * The complete `tabular` is emitted rather than only its body rows: `\input`
+ * *inside* an alignment fails, because a `\midrule` or `\bottomrule` across the
+ * file boundary becomes a misplaced `\noalign`. Emitting the environment also
+ * keeps the column headings tied to the data rather than to a hand-kept list.
+ *
+ * Cells use `\Uc{colour}{n}`, defined by the paper: a tick for one reference, a
+ * count for more, so a step referenced twice in one workflow is visible as such.
+ */
+private fun latexTable(s: Strategy): String = buildString {
+    val columns = COLUMN_COLOUR.keys.toList()
+    appendLine("% GENERATED by StepReuseEval - do not edit; run :carp.dsp.demo:evalStepReuse")
+    appendLine("\\begin{tabular}{@{}l ccc c@{}}")
+    appendLine("\\toprule")
+    val headings = columns.joinToString(" & ") { column ->
+        "\\shortstack{${column.substringBefore('-').replaceFirstChar { it.uppercase() }}\\\\${column.substringAfter('-')}}"
+    }
+    appendLine("Library step & $headings & Refs \\\\")
+    appendLine("\\midrule")
+    s.stepOrder.forEach { id ->
+        val uses = s.references[id].orEmpty()
+        val cells = columns.joinToString(" & ") { column ->
+            val n = uses.count { it == column }
+            if (n == 0) "" else "\\Uc{${COLUMN_COLOUR[column]}}{$n}"
+        }
+        appendLine("\\texttt{$id} & $cells & $${uses.size}$ \\\\")
+    }
+    appendLine("\\midrule")
+    // Total steps first, references second. The two are different quantities that
+    // happen to be equal here, and their being equal is the result: every step in
+    // these workflows came from the library. Reporting the absence instead
+    // ("steps declared inline: 0") reads as a measurement that found nothing.
+    // The rows diverge as soon as a workflow declares a step of its own.
+    appendLine(
+        "Steps in workflow & ${columns.joinToString(" & ") { "${s.stepsIn(it)}" }} & $${s.totalSteps}$ \\\\"
+    )
+    appendLine("References & ${columns.joinToString(" & ") { "${s.countIn(it)}" }} & $${s.total}$ \\\\")
+    appendLine("Repeats avoided & \\multicolumn{3}{c}{} & $${s.repeatsAvoided}$ \\\\")
+    appendLine("\\bottomrule")
+    appendLine("\\end{tabular}")
+}
+
+private fun csv(inline: Strategy, library: Strategy): String = buildString {
+    appendLine("strategy,library_step,references,workflows,declaration_lines")
+    listOf(inline, library).forEach { s ->
+        s.stepOrder.forEach { id ->
+            val uses = s.references[id].orEmpty()
+            appendLine("${s.name},$id,${uses.size},${uses.distinct().joinToString("|")},${s.declarationLines[id]}")
         }
     }
-    return body.count { it.isNotBlank() && !it.trimStart().startsWith("#") }
+    appendLine()
+    appendLine("strategy,distinct,references,repeats_avoided,authored_lines,duplicated_lines")
+    listOf(inline, library).forEach { s ->
+        appendLine("${s.name},${s.distinct},${s.total},${s.repeatsAvoided},${s.authoredLines},${s.duplicatedLines}")
+    }
 }
 
 private fun stepBlocks(yaml: String): Map<String, String> {
@@ -168,4 +324,3 @@ private fun stepBlocks(yaml: String): Map<String, String> {
     }
     return blocks
 }
-

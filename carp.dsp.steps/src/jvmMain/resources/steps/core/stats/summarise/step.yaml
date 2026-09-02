@@ -1,0 +1,92 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.stats.summarise"
+  name: "Summarise numeric columns"
+  description: >-
+    Reduce a tabular dataset to descriptive statistics. For every numeric column
+    it reports count, mean, median, standard deviation, minimum and maximum,
+    alongside the row count. Domain-agnostic: it makes no assumption about what
+    the columns mean.
+  version: "1.0"
+  tags:
+    - "core"
+    - "stats"
+    - "descriptive"
+    - "summary"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "summarise"
+    metadata:
+      name: "Summarise numeric columns"
+      description: "Descriptive statistics for every numeric column of a table"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-core-stats-summarise"
+      name: "summarise"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/summarise.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "table"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Any tabular dataset with a header row"
+    outputs:
+      - id: "summary"
+        descriptor:
+          fileFormat: "json"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/data_2082"
+          notes: "Descriptive statistics per numeric column, plus row count"
+
+# Library-only metadata.
+#
+# INTERIM: the workflow codec runs with strictMode = false, so this block is
+# ignored when the file is decoded as a WorkflowDescriptor and read separately by
+# the conformance gate. Promoting these to first-class descriptor fields is
+# tracked in docs/STEP_LIBRARY.md.
+library:
+  tier: "core"
+  subject: "stats"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/summarise.py"
+  method:
+    name: "Descriptive statistics"
+    citation: null      # no method paper: standard summary statistics
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.json"
+    tolerance:
+      float: 1.0e-6     # relative; exact for integer and categorical fields

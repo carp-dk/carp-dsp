@@ -62,8 +62,8 @@ internal object PortExporter
     private fun exportDataSchema( schema: DataSchema? ): DataDescriptor? =
         schema?.let {
             DataDescriptor(
-                type = it.format.extension,
-                format = it.encoding,
+                fileFormat = it.format.extension,
+                encoding = it.encoding,
             )
         }
 }
@@ -274,8 +274,8 @@ class WorkflowDescriptorExporter
             .filterIsInstance<Step>()
             .map { exportStep( it ) }
 
-    internal fun exportStep( step: Step ): StepDescriptor =
-        StepDescriptor(
+    internal fun exportStep( step: Step ): DefinedStepDescriptor =
+        DefinedStepDescriptor(
             id = step.metadata.id.toString(),
             metadata = MetadataExporter.exportStepMetadata( step.metadata ),
             environmentId = step.environmentId.toString(),

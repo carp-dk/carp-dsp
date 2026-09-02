@@ -1,15 +1,14 @@
 package carp.dsp.demo.demos
 
 import carp.dsp.demo.io.DemoIo
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.packaging.PackageBuilder
 import carp.dsp.core.application.translation.snakemake.DspToSnakemakeExporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
 import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.registry.RegistryClient
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.WorkflowPreparation
 import dk.cachet.carp.common.application.UUID
 import health.workflows.interfaces.model.WorkflowArtifactPackage
 import io.ktor.client.HttpClient
@@ -70,9 +69,13 @@ class HrActivityDemo {
             println("Workspace: $executionRoot")
             println()
 
-            // 3. Plan + Execute
-            val definition = WorkflowDescriptorImporter().import(descriptor)
-            val plan = DefaultExecutionPlanner().plan(definition)
+            // 3. Resolve, plan + execute. The plotting step is a certified library
+            // step referenced by `uses:`, so the workflow is written beside the run
+            // and resolution pins it in a steps.lock there.
+            val workflowFile = resultsDir.resolve("hr-activity-summary.yaml").toFile()
+            workflowFile.writeText(yaml)
+            val prepared = WorkflowPreparation.prepare(workflowFile, descriptor)
+            val plan = prepared.plan
             plan.validate()
 
             val executor = DefaultPlanExecutor(
@@ -81,7 +84,7 @@ class HrActivityDemo {
             )
             println("Running pipeline...")
             println("-" * 60)
-            val report = executor.execute(plan, runId)
+            val report = executor.run(plan, runId, prepared.provisioning)
             println("-" * 60)
 
             if (report.status.toString() != "SUCCEEDED") {
@@ -102,7 +105,9 @@ class HrActivityDemo {
             println()
             println("-" * 60)
             println("Packaging workflow...")
-            val pkg = PackageBuilder.build(descriptor)
+            // Package the resolved workflow: the authored one still carries a
+            // `uses:` reference, which packaging and CWL translation would skip.
+            val pkg = PackageBuilder.build(prepared.descriptor)
             println("Package : ${pkg.id} @ ${pkg.version}")
             println("Hash    : ${pkg.contentHash.take(16)}...")
             if (pkg.cwl != null) {

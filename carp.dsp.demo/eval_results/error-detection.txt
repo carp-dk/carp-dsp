@@ -117,3 +117,24 @@ cycle             0/8       0.0       0.0       unschedulable
 missing-env       0/8       0.0       0.0       runtime_env_error
 Static detection by ad-hoc pipeline: 0 / 5 (all faults surface only at runtime).
 ======================================================================
+======================================================================
+Error-detection eval (CARP arm) - 2026-08-12T09:07:46.005097600Z
+Workflow: mobgap-gait-analysis.yaml (8 steps)
+
+Control (clean workflow): 0 ERROR issue(s) (expected 0)
+
+Injected faults - detection stage is plan-time for all (0 steps executed):
+
+  fault             detected   expected code                     matched
+  type-mismatch     true       DEPENDENCY_TYPE_MISMATCH          true
+  missing-producer  true       DEPENDENCY_PRODUCER_NOT_FOUND     true
+      codes emitted: [DEPENDENCY_PRODUCER_NOT_FOUND, MISSING_PRODUCER_STEP]
+  missing-output    false      DEPENDENCY_OUTPUT_NOT_FOUND       false
+  cycle             true       WORKFLOW_CYCLE_DETECTED           true
+  missing-env       true       MISSING_ENVIRONMENT_DEFINITION    true
+
+All faults caught at plan time with the expected code: false
+Steps executed before detection: 0 / 8 for every fault (0% wasted compute).
+======================================================================
+
+Plan-time gate cost: 2 ms

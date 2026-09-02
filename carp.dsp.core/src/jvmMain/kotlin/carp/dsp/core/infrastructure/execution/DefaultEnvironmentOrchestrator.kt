@@ -13,8 +13,8 @@ import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentPhase
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentRegistry
 import dk.cachet.carp.analytics.infrastructure.execution.ErrorHandling
 import dk.cachet.carp.analytics.infrastructure.execution.LogLevel
-import kotlinx.datetime.Clock
 import java.io.IOException
+import kotlin.time.Clock
 
 /**
  * Default implementation of EnvironmentOrchestrator.

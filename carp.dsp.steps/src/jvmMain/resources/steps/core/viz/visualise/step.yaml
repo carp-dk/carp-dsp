@@ -1,0 +1,90 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.viz.visualise"
+  name: "Plot a table"
+  description: >-
+    Plot a table as a small multi-panel figure. Every panel is named by an
+    argument - line, histogram or scatter, over columns the caller chooses - so
+    the step holds no knowledge of what the columns measure and declares no CARP
+    data type, which is what places it in the core tier. It ships no default
+    panels: a reference must say what to plot.
+  version: "1.0"
+  tags:
+    - "core"
+    - "viz"
+    - "plot"
+    - "summary"
+
+environments:
+  env-python-viz:
+    name: "Python data visualisation"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+        - "pypi:matplotlib"
+
+steps:
+  - id: "visualise"
+    metadata:
+      name: "Plot a table"
+      description: "Multi-panel figure over columns named by argument"
+      version: "1.0"
+    environmentId: "env-python-viz"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-core-viz-visualise"
+      name: "visualise"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/visualise.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "table"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Any CSV with a header row; the panel options name its columns"
+    outputs:
+      - id: "plot"
+        descriptor:
+          fileFormat: "png"
+          encoding: "binary"
+          formatRef: "http://edamontology.org/format_3603"
+          notes: "Multi-panel figure as a PNG, one panel per option value"
+
+library:
+  tier: "core"
+  subject: "viz"
+  environment:
+    default: "env-python-viz"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+        - name: "matplotlib"
+          version: ">=3.7"
+  implementations:
+    - language: "python"
+      path: "impl/python/visualise.py"
+  method:
+    name: "Descriptive summary plotting"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.json"
+    tolerance:
+      float: 1.0e-6

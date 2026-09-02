@@ -3,10 +3,10 @@ package carp.dsp.core.infrastructure.serialization
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
-import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepMetadataDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
@@ -312,7 +312,7 @@ steps: []
                 )
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     metadata = StepMetadataDescriptor(
                         name = "Validate",
@@ -329,14 +329,14 @@ steps: []
                     inputs = listOf(
                         DataPortDescriptor(
                             id = "input-1",
-                            descriptor = DataDescriptor(type = "csv"),
+                            descriptor = DataDescriptor(fileFormat = "csv"),
                             source = FileInputSource(path = "./input.csv")
                         )
                     ),
                     outputs = listOf(
                         DataPortDescriptor(
                             id = "output-1",
-                            descriptor = DataDescriptor(type = "csv"),
+                            descriptor = DataDescriptor(fileFormat = "csv"),
                             destination = FileOutputDestination(path = "./output.csv")
                         )
                     ),
@@ -349,7 +349,7 @@ steps: []
         val decoded = codec.decodeOrThrow(encoded)
 
         assertEquals(1, decoded.steps.size)
-        val step = decoded.steps[0]
+        val step = decoded.steps[0] as DefinedStepDescriptor
         assertEquals("step-1", step.id)
         assertEquals("Validate", step.metadata?.name)
         assertEquals("validate", step.task.name)
@@ -373,7 +373,7 @@ steps: []
                 "a-env" to EnvironmentDescriptor(name = "A", kind = "pixi", spec = emptyMap()),
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = "a-env",
                     task = CommandTaskDescriptor(name = "task-1", executable = "echo")
@@ -397,9 +397,9 @@ steps: []
             metadata = WorkflowMetadataDescriptor(name = "Multi-Step"),
             environments = emptyMap(),
             steps = listOf(
-                StepDescriptor(id = "step-3", environmentId = "env", task = CommandTaskDescriptor(name = "c", executable = "echo")),
-                StepDescriptor(id = "step-1", environmentId = "env", task = CommandTaskDescriptor(name = "a", executable = "echo")),
-                StepDescriptor(id = "step-2", environmentId = "env", task = CommandTaskDescriptor(name = "b", executable = "echo")),
+                DefinedStepDescriptor(id = "step-3", environmentId = "env", task = CommandTaskDescriptor(name = "c", executable = "echo")),
+                DefinedStepDescriptor(id = "step-1", environmentId = "env", task = CommandTaskDescriptor(name = "a", executable = "echo")),
+                DefinedStepDescriptor(id = "step-2", environmentId = "env", task = CommandTaskDescriptor(name = "b", executable = "echo")),
             )
         )
 
@@ -411,7 +411,7 @@ steps: []
         val step2Index = lines.indexOfFirst { it.contains("step-2") }
 
         assertEquals(
-            step1Index in (step3Index + 1)..<step2Index, true,
+            true, step1Index in (step3Index + 1)..<step2Index,
             "Steps should maintain declaration order: step-3, step-1, step-2"
         )
     }

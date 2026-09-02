@@ -1,6 +1,8 @@
 package carp.dsp.core.application.authoring.validation
 
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
+import carp.dsp.core.application.authoring.descriptor.ReferencedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import dk.cachet.carp.analytics.domain.validation.ValidationErrorCode
 import dk.cachet.carp.analytics.domain.validation.ValidationIssue
@@ -51,6 +53,9 @@ object WorkflowLinter
         val stepIds = descriptor.steps.mapNotNull { it.id }.toSet()
         val envIds = descriptor.environments.keys.toSet()
 
+        // Check 0: `uses:` references must be resolved before linting
+        issues += checkStepsResolved(descriptor)
+
         // Check 1: Duplicate step IDs
         issues += checkDuplicateStepIds(descriptor)
 
@@ -89,6 +94,24 @@ object WorkflowLinter
 
         return if (issues.isEmpty()) ValidationResult.OK else ValidationResult(issues)
     }
+
+    // ── Check 0: Unresolved `uses:` References ────────────────────────────────
+    //
+    // Resolution runs before linting, so a reference reaching the linter means
+    // the resolve stage was skipped - a hard error rather than under-validating
+    // a half-specified step.
+
+    private fun checkStepsResolved(descriptor: WorkflowDescriptor): List<ValidationIssue> =
+        descriptor.steps.filterIsInstance<ReferencedStepDescriptor>().map { step ->
+            ValidationIssue(
+                severity = ValidationSeverity.ERROR,
+                code = ValidationErrorCode.WORKFLOW_UNRESOLVED_STEP_REFERENCE,
+                message = "Step '${step.id ?: step.uses}' is an unresolved 'uses:' reference to " +
+                    "'${step.uses}'. Resolve the workflow against the step library before linting.",
+                path = "steps[${step.id ?: step.uses}]",
+                subjectId = step.id ?: step.uses
+            )
+        }
 
     // ── Check 1: Duplicate Step IDs ───────────────────────────────────────────
 
@@ -137,8 +160,8 @@ object WorkflowLinter
                 )
             }
 
-            // Check output port duplicates
-            val outputIds = step.outputs.mapNotNull { it.id }
+            // Check output port duplicates (a referenced step has no inline outputs)
+            val outputIds = (step as? DefinedStepDescriptor)?.outputs.orEmpty().mapNotNull { it.id }
             val dupOutputs = outputIds.groupingBy { it }.eachCount().filter { it.value > 1 }
             dupOutputs.forEach { (dupId, count) ->
                 issues.add(
@@ -167,7 +190,9 @@ object WorkflowLinter
         val issues = mutableListOf<ValidationIssue>()
 
         descriptor.steps.forEach { step ->
-            if (step.environmentId !in envIds)
+            // A referenced step (`uses:`) has no environmentId of its own - it is
+            // resolved from the library step, so there is nothing to check here.
+            if (step is DefinedStepDescriptor && step.environmentId !in envIds)
             {
                 issues.add(
                     ValidationIssue(
@@ -219,7 +244,8 @@ object WorkflowLinter
 
         descriptor.steps.forEach { step ->
             // Check step ID format
-            if (step.id != null && !isValidUuid(step.id))
+            val stepId = step.id
+            if (stepId != null && !isValidUuid(stepId))
             {
                 issues.add(
                     ValidationIssue(
@@ -233,14 +259,15 @@ object WorkflowLinter
                 )
             }
 
-            // Check task ID format
-            if (step.task.id != null && !isValidUuid(step.task.id!!))
+            // Check task ID format (a referenced step has no inline task).
+            val taskId = (step as? DefinedStepDescriptor)?.task?.id
+            if (taskId != null && !isValidUuid(taskId))
             {
                 issues.add(
                     ValidationIssue(
                         severity = ValidationSeverity.WARNING,
                         code = ValidationErrorCode.INVALID_UUID_FORMAT,
-                        message = "Task ID '${step.task.id}' is not a valid UUID. " +
+                        message = "Task ID '$taskId' is not a valid UUID. " +
                             "Task IDs can be semantic strings or UUIDs.",
                         path = "steps[${step.id}].task.id",
                         subjectId = step.id
@@ -291,7 +318,8 @@ object WorkflowLinter
         // Build adjacency list — only steps with IDs can participate in named dependency cycles
         val graph = mutableMapOf<String, Set<String>>()
         descriptor.steps.forEach { step ->
-            if ( step.id != null ) graph[step.id] = step.dependsOn.toSet()
+            val stepId = step.id
+            if ( stepId != null ) graph[stepId] = step.dependsOn.toSet()
         }
 
         // Detect cycles using DFS
@@ -315,9 +343,10 @@ object WorkflowLinter
         }
 
         descriptor.steps.forEach { step ->
-            if ( step.id != null && step.id !in visited )
+            val stepId = step.id
+            if ( stepId != null && stepId !in visited )
             {
-                if ( hasCycle( step.id ) )
+                if ( hasCycle( stepId ) )
                 {
                     issues.add(
                         ValidationIssue(
@@ -408,7 +437,8 @@ object WorkflowLinter
 
         // Check step IDs
         for ((index, step) in descriptor.steps.withIndex()) {
-            if (step.id != null && !step.id.matches(namingPattern)) {
+            val stepId = step.id
+            if (stepId != null && !stepId.matches(namingPattern)) {
                 issues += ValidationIssue(
                     severity = ValidationSeverity.WARNING,
                     code = ValidationErrorCode.NAMING_CONVENTION_VIOLATION,
@@ -479,8 +509,8 @@ object WorkflowLinter
 
         val issues = mutableListOf<ValidationIssue>()
 
-        // Find all used environment IDs
-        val usedEnvIds = descriptor.steps.map { it.environmentId }.toSet()
+        // Find all used environment IDs (referenced steps contribute none)
+        val usedEnvIds = descriptor.steps.mapNotNull { (it as? DefinedStepDescriptor)?.environmentId }.toSet()
 
         // Check for defined but unused
         for ((envId, _) in descriptor.environments) {

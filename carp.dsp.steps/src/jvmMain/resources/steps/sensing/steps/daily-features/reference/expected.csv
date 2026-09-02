@@ -1,0 +1,5 @@
+participant_id,date,total_steps,active_intervals,observed_step_intervals
+p01,2016-04-12,2650,7,11
+p01,2016-04-13,2700,7,8
+p02,2016-04-12,5400,8,11
+p02,2016-04-13,160,0,8

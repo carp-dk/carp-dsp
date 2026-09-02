@@ -103,7 +103,7 @@ data class ProtocolRefDescriptor(
  * @property protocol Reference to the study protocol collecting this data.
  * @property dataType Fully namespaced CARP data type expected from the protocol
  *   (e.g. `"dk.cachet.carp.heartrate"`). This is the domain data type, distinct
- *   from the port's file-format `descriptor.type` (e.g. `"csv"`).
+ *   from the port's `descriptor.fileFormat` (e.g. `"csv"`).
  *
  * Example YAML:
  * ```yaml

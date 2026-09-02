@@ -2,10 +2,12 @@ package carp.dsp.core.application.authoring.validation
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
+import carp.dsp.core.application.authoring.descriptor.ReferencedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepMetadataDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
@@ -40,7 +42,7 @@ class WorkflowLinterTest
         dependsOn: List<String> = emptyList(),
         inputs: List<DataPortDescriptor> = emptyList(),
         outputs: List<DataPortDescriptor> = emptyList(),
-    ) = StepDescriptor(
+    ) = DefinedStepDescriptor(
         id = id,
         environmentId = environmentId,
         dependsOn = dependsOn,
@@ -93,6 +95,23 @@ class WorkflowLinterTest
         val result = WorkflowLinter.lint(workflow)
         assertTrue(result.isValid)
         assertEquals(0, result.issues.size)
+    }
+
+    // ── Check 0: Unresolved uses references ───────────────────────────────────
+
+    @Test
+    fun `lint flags an unresolved uses reference as an error`()
+    {
+        val workflow = minimalWorkflow(
+            steps = listOf( ReferencedStepDescriptor( id = "clean-hr", uses = "sensing.heartrate.clean" ) )
+        )
+        val result = WorkflowLinter.lint(workflow)
+
+        val error = result.issues.firstOrNull {
+            it.code == ValidationErrorCode.WORKFLOW_UNRESOLVED_STEP_REFERENCE
+        }
+        assertNotNull(error)
+        assertEquals(ValidationSeverity.ERROR, error.severity)
     }
 
     // ── Check 1: Duplicate Step IDs ───────────────────────────────────────────
@@ -278,7 +297,7 @@ class WorkflowLinterTest
     {
         val workflow = minimalWorkflow(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "550e8400-e29b-41d4-a716-446655440000",
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(
@@ -549,7 +568,7 @@ class WorkflowLinterTest
         val error = result.issues.find { it.message.contains("non-existent environment") }
 
         assertEquals("step-1", error?.subjectId)
-        assertEquals(error?.path?.contains("environmentId"), true)
+        assertEquals(true, error?.path?.contains("environmentId"))
     }
 
     @Test
@@ -835,7 +854,7 @@ class WorkflowLinterTest
     private fun workflowWithStepId(stepId: String): WorkflowDescriptor =
         minimalWorkflow().copy(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = stepId,
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(name = "test", executable = "echo", args = emptyList())
@@ -849,7 +868,7 @@ class WorkflowLinterTest
                 envId to EnvironmentDescriptor(name = "test", kind = "system")
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = envId,
                     task = CommandTaskDescriptor(name = "test", executable = "echo", args = emptyList())
@@ -860,7 +879,7 @@ class WorkflowLinterTest
     private fun workflowWithStepMissingDescription(): WorkflowDescriptor =
         minimalWorkflow().copy(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = "env-1",
                     metadata = StepMetadataDescriptor(name = "step-1", description = null),
@@ -876,7 +895,7 @@ class WorkflowLinterTest
                 "env-unused" to EnvironmentDescriptor(name = "unused", kind = "system")
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = "env-used",
                     task = CommandTaskDescriptor(name = "test", executable = "echo", args = emptyList())
@@ -891,12 +910,12 @@ class WorkflowLinterTest
                 "env-2" to EnvironmentDescriptor(name = "env2", kind = "system")
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(name = "test", executable = "echo", args = emptyList())
                 ),
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-2",
                     environmentId = "env-2",
                     task = CommandTaskDescriptor(name = "test2", executable = "echo", args = emptyList())
@@ -907,7 +926,7 @@ class WorkflowLinterTest
     private fun workflowWithStepCount(count: Int): WorkflowDescriptor =
         minimalWorkflow().copy(
             steps = (1..count).map { i ->
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-$i",
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(name = "task-$i", executable = "echo", args = emptyList())
@@ -927,7 +946,7 @@ class WorkflowLinterTest
                 "env-unused" to EnvironmentDescriptor(name = "unused", kind = "system") // Unused
             ),
             steps = (1..15).map { i -> // Too long
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "InvalidStep$i", // Naming violation
                     environmentId = if (i == 1) "InvalidEnv" else "env-unused",
                     metadata = StepMetadataDescriptor(

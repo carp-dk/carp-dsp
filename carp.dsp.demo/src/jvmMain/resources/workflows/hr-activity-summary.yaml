@@ -42,8 +42,8 @@ steps:
     outputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Hourly wearable data: timestamp, heart_rate_bpm, steps"
 
   - id: "compute-features"
@@ -69,8 +69,8 @@ steps:
     inputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Hourly wearable data"
         source:
           type: "step-output"
@@ -79,43 +79,21 @@ steps:
     outputs:
       - id: "daily-features-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Daily summary features: date, mean_hr, resting_hr, peak_hr, total_steps, active_hours"
 
-  - id: "visualize"
-    metadata:
-      name: "Visualize"
-      description: "Generate a 2x2 summary plot of the weekly heart rate and activity features"
-      version: "1.0"
-    environmentId: "env-conda"
+  # Plotting is not specific to this study, so it is a certified library step
+  # referenced by `uses:` rather than a script maintained here. The preceding two
+  # steps stay inline: generating this cohort's data and deriving its features is
+  # particular to the demo.
+  - id: "visualise"
+    uses: "core.viz.visualise"
     dependsOn:
       - "compute-features"
-    task:
-      type: "python"
-      id: "task-visualize"
-      name: "visualize"
-      entryPoint:
-        type: "script"
-        scriptPath: "scripts/hr_activity/visualize.py"
-      args:
-        - "--input"
-        - "input.0"
-        - "--output"
-        - "output.0"
     inputs:
-      - id: "daily-features-csv"
-        descriptor:
-          type: "csv"
-          format: "utf-8"
-          notes: "Daily summary features"
+      - id: "daily-features"
         source:
           type: "step-output"
           stepId: "compute-features"
           outputId: "daily-features-csv"
-    outputs:
-      - id: "summary-plot-png"
-        descriptor:
-          type: "png"
-          format: "binary"
-          notes: "2x2 chart: mean/resting HR, peak HR, daily steps, active hours"

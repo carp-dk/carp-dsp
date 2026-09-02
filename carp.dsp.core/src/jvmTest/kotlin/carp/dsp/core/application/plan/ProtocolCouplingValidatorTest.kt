@@ -17,11 +17,11 @@ import dk.cachet.carp.common.application.data.DataType
 import dk.cachet.carp.common.application.tasks.BackgroundTask
 import dk.cachet.carp.common.application.tasks.Measure
 import dk.cachet.carp.protocols.application.StudyProtocolSnapshot
-import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * Tests for [ProtocolCouplingValidator] and [StudyProtocolSnapshotDataTypeProvider].

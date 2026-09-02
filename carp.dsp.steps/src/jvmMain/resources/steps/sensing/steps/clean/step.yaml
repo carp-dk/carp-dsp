@@ -1,0 +1,97 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "sensing.steps.clean"
+  name: "Regularise step counts"
+  description: >-
+    Put a step-count series onto a regular time grid and mask values that cannot
+    be true, leaving them empty rather than repairing them. Missing intervals stay
+    missing, so a later step can tell "no steps" from "no data" - the distinction
+    non-wear detection and valid-day criteria depend on. Consumes and produces
+    step counts and nothing else, which places it in the sensing tier.
+  version: "1.0"
+  tags:
+    - "sensing"
+    - "steps"
+    - "activity"
+    - "quality-control"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "clean"
+    metadata:
+      name: "Regularise step counts"
+      description: "Deduplicate, place on a regular grid, and mask impossible values"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-sensing-steps-clean"
+      name: "clean"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/clean_steps.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "raw-steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: "Raw step counts: participant_id, timestamp, steps"
+    outputs:
+      - id: "clean-steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: >-
+            Step counts on a regular grid, same schema as the input. Invalid and
+            missing intervals are empty, never zero.
+
+library:
+  tier: "sensing"
+  subject: "steps"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/clean_steps.py"
+  method:
+    name: "Timestamp regularisation with masking of impossible values"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

@@ -5,9 +5,9 @@ import dk.cachet.carp.common.application.UUID
 import dk.cachet.carp.common.application.data.DataType
 import dk.cachet.carp.data.application.DataStreamId
 import dk.cachet.carp.data.application.SyncPoint
-import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Instant
 
 class CarpMeasurementMetadataTest {
 

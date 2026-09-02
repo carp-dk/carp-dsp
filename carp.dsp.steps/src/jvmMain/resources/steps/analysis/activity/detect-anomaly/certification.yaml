@@ -1,0 +1,8 @@
+id: "analysis.activity.detect-anomaly"
+version: "1.0"
+level: "gated"
+contentHash: "0a5017d82b5490b8c38b8a26cc4dc9b02c326c9704481277af8c047a69361ded"
+reviewedOn: null
+reviewer: null
+reviewedPr: null
+reviewedHash: null

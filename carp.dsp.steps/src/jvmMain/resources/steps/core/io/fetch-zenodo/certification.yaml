@@ -1,0 +1,8 @@
+id: "core.io.fetch-zenodo"
+version: "1.0"
+level: "gated"
+contentHash: "737d541b3aec041a4405333498348d3b02286b4b3603a58a6a1498d7a1bb080e"
+reviewedOn: null
+reviewer: null
+reviewedPr: null
+reviewedHash: null

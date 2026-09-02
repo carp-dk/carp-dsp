@@ -1,5 +1,10 @@
 package carp.dsp.demo
 import carp.dsp.demo.demos.StepExecutionRegisteredDemo
+import carp.dsp.demo.demos.LibraryCleanRegisteredDemo
+import carp.dsp.demo.demos.LibraryReuseRegisteredDemo
+import carp.dsp.demo.demos.LibraryOfflineRegisteredDemo
+import carp.dsp.demo.demos.LibraryMinimalSummaryRegisteredDemo
+import carp.dsp.demo.demos.LibraryAnomalyReportRegisteredDemo
 import carp.dsp.demo.demos.DiafocusRegisteredDemo
 import carp.dsp.demo.demos.DbdpCovidRegisteredDemo
 import carp.dsp.demo.demos.MobgapRegisteredDemo
@@ -12,6 +17,7 @@ import carp.dsp.demo.demos.ErrorDetectionEvalRegisteredDemo
 import carp.dsp.demo.demos.StepReuseEvalRegisteredDemo
 import carp.dsp.demo.demos.DriftEvalRegisteredDemo
 import carp.dsp.demo.demos.RunAllEvalsRegisteredDemo
+import carp.dsp.demo.demos.RunAllDemosRegisteredDemo
 
 /**
  * JVM actual: registers filesystem-backed demos before the shared dispatcher runs.
@@ -20,6 +26,11 @@ import carp.dsp.demo.demos.RunAllEvalsRegisteredDemo
  */
 actual fun registerPlatformDemos() {
     DemoRegistry.register(StepExecutionRegisteredDemo)
+    DemoRegistry.register(LibraryCleanRegisteredDemo)
+    DemoRegistry.register(LibraryReuseRegisteredDemo)
+    DemoRegistry.register(LibraryOfflineRegisteredDemo)
+    DemoRegistry.register(LibraryMinimalSummaryRegisteredDemo)
+    DemoRegistry.register(LibraryAnomalyReportRegisteredDemo)
     DemoRegistry.register(DiafocusRegisteredDemo)
     DemoRegistry.register(DbdpCovidRegisteredDemo)
     DemoRegistry.register(MobgapRegisteredDemo)
@@ -32,5 +43,6 @@ actual fun registerPlatformDemos() {
     DemoRegistry.register(StepReuseEvalRegisteredDemo)
     DemoRegistry.register(DriftEvalRegisteredDemo)
     DemoRegistry.register(RunAllEvalsRegisteredDemo)
+    DemoRegistry.register(RunAllDemosRegisteredDemo)
 }
 

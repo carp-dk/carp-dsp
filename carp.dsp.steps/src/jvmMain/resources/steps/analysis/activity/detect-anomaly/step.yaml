@@ -1,0 +1,97 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "analysis.activity.detect-anomaly"
+  name: "Flag anomalous participant-days"
+  description: >-
+    Flag participant-days with unusually low activity or elevated resting heart
+    rate, against baselines computed per participant. Reads a heart-rate feature
+    and a step-count feature and reports a decision over both, which places it in
+    the analysis tier. The decision rule is configurable, and the fewest days on
+    which the heart-rate test can fire is derived from the multiplier rather than
+    fixed.
+  version: "1.0"
+  tags:
+    - "analysis"
+    - "activity"
+    - "anomaly"
+    - "outlier"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "detect-anomaly"
+    metadata:
+      name: "Flag anomalous participant-days"
+      description: "Per-participant baselines flag low activity and elevated resting HR"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-analysis-activity-detect-anomaly"
+      name: "detect-anomaly"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/detect_anomaly.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "daily-features"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "resting_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "total_steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: >-
+            Per participant-day features carrying both signals, typically the two
+            sensing daily-features outputs joined on participant_id and date.
+    outputs:
+      - id: "anomaly"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Per participant-day flags: low_activity, elevated_resting_hr, flagged"
+
+library:
+  tier: "analysis"
+  subject: "activity"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/detect_anomaly.py"
+  method:
+    name: "Per-participant baseline thresholding"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

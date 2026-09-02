@@ -1,0 +1,24 @@
+schemaVersion: "1.0"
+
+metadata:
+  name: "HR clean (via library)"
+  description: >-
+    Demonstrates `uses:`. Instead of inlining the heart-rate cleaning step, this
+    workflow references the vendored library step `sensing.heartrate.clean`.
+    Resolution fills in the task, environment and port descriptors from the
+    library, overlays the wiring below, and pins the resolution in steps.lock.
+  version: "1.0"
+  tags:
+    - "heart-rate"
+    - "library"
+
+# No `environments:` block and no `task:` here - both come from the library step
+# once the reference is resolved.
+steps:
+  - id: "clean-hr"
+    uses: "sensing.heartrate.clean"
+    inputs:
+      - id: "raw-heart-rate"
+        source:
+          type: "file"
+          path: "./raw_heart_rate.csv"

@@ -88,8 +88,22 @@ class DefaultExecutionPlanner(
         issues.addAll(order.issues)
 
         // Plan Steps (in sorted order)
+        //
+        // Indexed by id first: the sorted order gives ids, and looking each one up
+        // with a scan over `steps` made planning quadratic in workflow size - the
+        // only super-linear stage in a pipeline that is otherwise O(n + e). It is
+        // invisible at the sizes measured, where a fixed cost dominates, which is
+        // why it survived unnoticed.
+        //
+        // `putIfAbsent` rather than `associateBy`: duplicate step ids are a lint
+        // error, but planning still runs on a workflow that has issues, and the
+        // scan this replaces returned the *first* match. `associateBy` keeps the
+        // last, which would quietly change which step gets planned in exactly the
+        // case the author has already been told is broken.
+        val stepsById = LinkedHashMap<UUID, Step>()
+        steps.forEach { stepsById.putIfAbsent(it.metadata.id, it) }
         for ((executionIndex, stepId) in order.ordered.withIndex()) {
-            val step = steps.find { it.metadata.id == stepId }
+            val step = stepsById[stepId]
             if (step != null) {
                 // Resolve bindings
                 val bindings = bindingsResolver.resolve(

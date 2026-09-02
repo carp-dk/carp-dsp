@@ -1,0 +1,9 @@
+id: "env-python-data"
+name: "Python data analysis"
+description: "General-purpose tabular data handling with pandas."
+kind: "pixi"
+spec:
+  pythonVersion:
+    - "3.11"
+  dependencies:
+    - "pypi:pandas"

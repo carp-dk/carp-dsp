@@ -29,5 +29,5 @@ steps:
     outputs:
       - id: "output-txt"
         descriptor:
-          type: "TXT"
-          format: "utf-8"
+          fileFormat: "TXT"
+          encoding: "utf-8"

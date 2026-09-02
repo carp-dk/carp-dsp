@@ -1,5 +1,6 @@
 package carp.dsp.core.application.authoring.mapper
 
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import dk.cachet.carp.analytics.domain.workflow.Step
@@ -57,18 +58,15 @@ class WorkflowDescriptorImporter(
             workflowNamespace
         )
 
-        // Build workflow
+        // Build workflow. Each step's descriptor id is carried onto its StepMetadata
+        // (StepMetadata.descriptorId), so downstream stages can tie descriptor-keyed
+        // data to the planned step without a separate id map.
         val workflow = Workflow(metadata = workflowMetadata)
-
-        // Import steps (delegates to sub-importer)
         workflowDescriptor.steps.forEach { stepDesc ->
             workflow.addComponent( importStepInternal( stepDesc, environmentKeyToUuid ) )
         }
 
-        return WorkflowDefinition(
-            workflow = workflow,
-            environments = environments,
-        )
+        return WorkflowDefinition( workflow = workflow, environments = environments )
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -85,22 +83,29 @@ class WorkflowDescriptorImporter(
         environmentKeyToUuid: Map<String, UUID>,
     ): Step
     {
+        // A referenced step (`uses:`) must be resolved into a defined step before import.
+        val step = stepDescriptor as? DefinedStepDescriptor
+            ?: error(
+                "Step '${stepDescriptor.id}' is an unresolved 'uses:' reference - " +
+                    "resolve it before import."
+            )
+
         // Step ID: explicit UUID, deterministic v5, or fallback random (precomputed for consistency)
-        val stepId = resolveStepId(stepDescriptor)
+        val stepId = resolveStepId(step)
 
         // Environment ID: lookup table first (human-readable keys),
         // then direct UUID parse (canonical UUID keys from exporter),
         // then fallback (error case, but don't fail here)
-        val envUuid = environmentKeyToUuid[stepDescriptor.environmentId]
-            ?: tryParseUuid( stepDescriptor.environmentId )
+        val envUuid = environmentKeyToUuid[step.environmentId]
+            ?: tryParseUuid( step.environmentId )
             ?: UUID.randomUUID()
 
-        val inputs = stepDescriptor.inputs.map { PortImporter.importInputPort( it, workflowNamespace ) }
-        val outputs = stepDescriptor.outputs.map { PortImporter.importOutputPort( it, workflowNamespace ) }
+        val inputs = step.inputs.map { PortImporter.importInputPort( it, workflowNamespace ) }
+        val outputs = step.outputs.map { PortImporter.importOutputPort( it, workflowNamespace ) }
 
         return Step(
-            metadata = MetadataImporter.importStepMetadata( stepId, stepDescriptor.id, stepDescriptor.metadata ),
-            task = TaskImporter.importTask( stepDescriptor.task, workflowNamespace, inputs, outputs ),
+            metadata = MetadataImporter.importStepMetadata( stepId, step.id, step.metadata ),
+            task = TaskImporter.importTask( step.task, workflowNamespace, inputs, outputs ),
             environmentId = envUuid,
             inputs = inputs,
             outputs = outputs,

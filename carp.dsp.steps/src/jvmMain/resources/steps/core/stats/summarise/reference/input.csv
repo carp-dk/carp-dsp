@@ -1,0 +1,6 @@
+participant_id,day,steps,resting_hr,label
+p01,1,8210,58,active
+p01,2,10432,57,active
+p02,1,4110,66,low
+p02,2,,64,low
+p03,1,12980,52,active

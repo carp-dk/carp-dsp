@@ -2,6 +2,7 @@ package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
@@ -83,10 +84,10 @@ class WorkflowYamlFixtureTest
         val descriptor = decodeFixture()
 
         assertEquals(4, descriptor.steps.size)
-        assertEquals("env-conda-001", descriptor.steps[0].environmentId)
-        assertEquals("env-conda-001", descriptor.steps[1].environmentId)
-        assertEquals("env-conda-001", descriptor.steps[2].environmentId)
-        assertEquals("env-pixi-002", descriptor.steps[3].environmentId)
+        assertEquals("env-conda-001", (descriptor.steps[0] as DefinedStepDescriptor).environmentId)
+        assertEquals("env-conda-001", (descriptor.steps[1] as DefinedStepDescriptor).environmentId)
+        assertEquals("env-conda-001", (descriptor.steps[2] as DefinedStepDescriptor).environmentId)
+        assertEquals("env-pixi-002", (descriptor.steps[3] as DefinedStepDescriptor).environmentId)
     }
 
     @Test
@@ -103,7 +104,7 @@ class WorkflowYamlFixtureTest
     @Test
     fun `fixture decode - command task (step-001)`()
     {
-        val step = decodeFixture().steps[0]
+        val step = decodeFixture().steps[0] as DefinedStepDescriptor
         assertEquals("step-001", step.id)
 
         val task = assertIs<CommandTaskDescriptor>(step.task)
@@ -117,7 +118,7 @@ class WorkflowYamlFixtureTest
     @Test
     fun `fixture decode - python script task (step-002)`()
     {
-        val step = decodeFixture().steps[1]
+        val step = decodeFixture().steps[1] as DefinedStepDescriptor
         assertEquals("step-002", step.id)
 
         val task = assertIs<PythonTaskDescriptor>(step.task)
@@ -130,7 +131,7 @@ class WorkflowYamlFixtureTest
     @Test
     fun `fixture decode - python module task (step-003)`()
     {
-        val step = decodeFixture().steps[2]
+        val step = decodeFixture().steps[2] as DefinedStepDescriptor
         assertEquals("step-003", step.id)
 
         val task = assertIs<PythonTaskDescriptor>(step.task)
@@ -146,13 +147,13 @@ class WorkflowYamlFixtureTest
         val descriptor = decodeFixture()
 
         // step-001: literal, input-ref, param-ref
-        val step1Task = assertIs<CommandTaskDescriptor>(descriptor.steps[0].task)
+        val step1Task = assertIs<CommandTaskDescriptor>((descriptor.steps[0] as DefinedStepDescriptor).task)
         assertEquals("validate_eeg.py", step1Task.args[0]) // literal
         assertEquals("input.0", step1Task.args[1]) // input-ref by index
         assertEquals("param:strict_mode", step1Task.args[2]) // param-ref
 
         // step-002: input-ref, output-ref, literal
-        val step2Task = assertIs<PythonTaskDescriptor>(descriptor.steps[1].task)
+        val step2Task = assertIs<PythonTaskDescriptor>((descriptor.steps[1] as DefinedStepDescriptor).task)
         assertEquals("input.0", step2Task.args[0]) // input-ref
         assertEquals("output.0", step2Task.args[1]) // output-ref
         assertEquals("--notch-freq=50", step2Task.args[2]) // literal
@@ -164,20 +165,20 @@ class WorkflowYamlFixtureTest
         val descriptor = decodeFixture()
 
         // step-001: 1 input with descriptor, 0 outputs
-        val step1 = descriptor.steps[0]
+        val step1 = descriptor.steps[0] as DefinedStepDescriptor
         assertEquals(1, step1.inputs.size)
         assertEquals("port-raw-eeg-001", step1.inputs[0].id)
-        assertEquals("edf", step1.inputs[0].descriptor?.type)
+        assertEquals("edf", step1.inputs[0].descriptor?.fileFormat)
         assertEquals(0, step1.outputs.size)
 
         // step-002: 1 input (no descriptor), 1 output (with descriptor)
-        val step2 = descriptor.steps[1]
+        val step2 = descriptor.steps[1] as DefinedStepDescriptor
         assertEquals(1, step2.inputs.size)
         assertEquals("port-raw-eeg-001", step2.inputs[0].id)
         assertIs<DataPortDescriptor>(step2.inputs[0])
         assertEquals(1, step2.outputs.size)
         assertEquals("port-clean-eeg-002", step2.outputs[0].id)
-        assertEquals("edf", step2.outputs[0].descriptor?.type)
+        assertEquals("edf", step2.outputs[0].descriptor?.fileFormat)
     }
 
     @Test
@@ -186,7 +187,7 @@ class WorkflowYamlFixtureTest
         val descriptor = decodeFixture()
 
         // step-004 task has no description in the fixture
-        val task4 = assertIs<CommandTaskDescriptor>(descriptor.steps[3].task)
+        val task4 = assertIs<CommandTaskDescriptor>((descriptor.steps[3] as DefinedStepDescriptor).task)
         assertEquals(null, task4.description)
 
         // step-002 input port has no descriptor

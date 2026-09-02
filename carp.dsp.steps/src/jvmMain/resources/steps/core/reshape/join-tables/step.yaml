@@ -1,0 +1,99 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.reshape.join-tables"
+  name: "Join two tables"
+  description: >-
+    Join two tabular files on shared key columns. Generic and domain-agnostic:
+    column renames, the join keys, the join type, and an optional per-side
+    time-resample are all arguments, so the step carries no dataset knowledge.
+    Override the defaults with `args:` on the reference to configure a specific
+    join.
+  version: "1.0"
+  tags:
+    - "core"
+    - "reshape"
+    - "join"
+    - "merge"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "join-tables"
+    metadata:
+      name: "Join two tables"
+      description: "Join two CSVs on shared keys, with optional rename and resample"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-core-reshape-join-tables"
+      name: "join-tables"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/join_tables.py"
+      args:
+        - "--left"
+        - "input.0"
+        - "--right"
+        - "input.1"
+        - "--output"
+        - "output.0"
+        - "--on"
+        - "participant_id,timestamp"
+        - "--how"
+        - "inner"
+    inputs:
+      - id: "left"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Left-hand table"
+      - id: "right"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Right-hand table"
+    outputs:
+      - id: "joined"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "The two tables joined on the shared keys"
+
+library:
+  tier: "core"
+  subject: "reshape"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/join_tables.py"
+  method:
+    name: "Relational join with optional time resampling"
+    citation: null
+  reference:
+    input: "reference/left.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

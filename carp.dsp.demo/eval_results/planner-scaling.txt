@@ -58,3 +58,33 @@ All workflows planned with zero ERROR issues.
    200 steps: total median    26.06 ms  (plan+validate   2.07 ms)
 ======================================================================
 
+======================================================================
+Planner-scaling eval - 2026-08-12T09:07:44.650107100Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     0.88 ms  (plan+validate   0.21 ms)
+     5 steps: total median     1.55 ms  (plan+validate   0.26 ms)
+    10 steps: total median     2.39 ms  (plan+validate   0.30 ms)
+    20 steps: total median     4.62 ms  (plan+validate   0.50 ms)
+    50 steps: total median     8.54 ms  (plan+validate   0.78 ms)
+   100 steps: total median    14.59 ms  (plan+validate   1.03 ms)
+   200 steps: total median    26.79 ms  (plan+validate   1.98 ms)
+======================================================================
+
+======================================================================
+Planner-scaling eval - 2026-08-12T09:35:51.709538800Z
+Synthetic linear chains, sizes [2, 5, 10, 20, 50, 100, 200], 50 repeats each,
+25 warm-up iterations. Phases: decode | import | plan | validate.
+All workflows planned with zero ERROR issues.
+
+     2 steps: total median     2.61 ms  (plan+validate   0.64 ms)
+     5 steps: total median     2.73 ms  (plan+validate   0.40 ms)
+    10 steps: total median     4.19 ms  (plan+validate   0.45 ms)
+    20 steps: total median     5.51 ms  (plan+validate   0.59 ms)
+    50 steps: total median    10.86 ms  (plan+validate   0.95 ms)
+   100 steps: total median    14.63 ms  (plan+validate   1.24 ms)
+   200 steps: total median    30.56 ms  (plan+validate   2.41 ms)
+======================================================================
+

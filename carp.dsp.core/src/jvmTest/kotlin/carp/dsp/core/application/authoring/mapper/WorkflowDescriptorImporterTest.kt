@@ -3,6 +3,7 @@ package carp.dsp.core.application.authoring.mapper
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
@@ -57,7 +58,7 @@ class WorkflowDescriptorImporterTest
     private fun cmdStep(
         id: String? = UUID.randomUUID().toString(),
         envId: String = UUID.randomUUID().toString(),
-    ) = StepDescriptor(
+    ) = DefinedStepDescriptor(
         id = id,
         environmentId = envId,
         task = CommandTaskDescriptor( name = "t", executable = "echo" ),
@@ -108,6 +109,16 @@ class WorkflowDescriptorImporterTest
         assertNotEquals( idA, idB )
     }
 
+    @Test
+    fun `import carries the descriptor id onto step metadata`()
+    {
+        val envId = UUID.randomUUID().toString()
+        val desc = minimalDesc( steps = listOf( cmdStep( id = "clean", envId = envId ) ), )
+
+        val step = importer.import( desc ).workflow.getComponents().single() as Step
+        assertEquals( "clean", step.metadata.descriptorId )
+    }
+
     // ── Step count and ordering ───────────────────────────────────────────────
 
     @Test
@@ -143,7 +154,7 @@ class WorkflowDescriptorImporterTest
         val envId = UUID.randomUUID().toString()
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = UUID.randomUUID().toString(),
                     environmentId = envId,
                     metadata = StepMetadataDescriptor(
@@ -216,7 +227,7 @@ class WorkflowDescriptorImporterTest
         val envId = UUID.randomUUID().toString()
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = envId,
                     task = PythonTaskDescriptor(
                         name = "py", entryPoint = ScriptEntryPointDescriptor( "run.py" )
@@ -235,7 +246,7 @@ class WorkflowDescriptorImporterTest
         val envId = UUID.randomUUID().toString()
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = envId,
                     task = CommandTaskDescriptor(
                         name = "run", executable = "python",
@@ -329,7 +340,7 @@ class WorkflowDescriptorImporterTest
         val portId = UUID.randomUUID()
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = UUID.randomUUID().toString(),
                     task = CommandTaskDescriptor( name = "t", executable = "echo" ),
                     inputs = listOf( DataPortDescriptor( id = portId.toString() ) ),
@@ -347,7 +358,7 @@ class WorkflowDescriptorImporterTest
         val portId = UUID.randomUUID()
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = UUID.randomUUID().toString(),
                     task = CommandTaskDescriptor( name = "t", executable = "echo" ),
                     outputs = listOf( DataPortDescriptor( id = portId.toString() ) ),
@@ -364,13 +375,13 @@ class WorkflowDescriptorImporterTest
     {
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = UUID.randomUUID().toString(),
                     task = CommandTaskDescriptor( name = "t", executable = "echo" ),
                     outputs = listOf(
                         DataPortDescriptor(
                         id = UUID.randomUUID().toString(),
-                        descriptor = DataDescriptor( type = "csv", format = "UTF-8" )
+                        descriptor = DataDescriptor( fileFormat = "csv", encoding = "UTF-8" )
                     )
                     ),
                 )
@@ -386,7 +397,7 @@ class WorkflowDescriptorImporterTest
     {
         val desc = minimalDesc(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     environmentId = UUID.randomUUID().toString(),
                     task = CommandTaskDescriptor( name = "t", executable = "echo" ),
                     inputs = listOf( DataPortDescriptor( id = UUID.randomUUID().toString() ) ),
@@ -415,7 +426,7 @@ class WorkflowDescriptorImporterTest
                 id = UUID.randomUUID().toString(), name = "Roundtrip WF", version = "1.0"
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = stepId.toString(),
                     environmentId = envId.toString(),
                     metadata = StepMetadataDescriptor( name = "Step A" ),
@@ -429,7 +440,7 @@ class WorkflowDescriptorImporterTest
                     outputs = listOf(
                         DataPortDescriptor(
                         id = outId.toString(),
-                        descriptor = DataDescriptor( type = "csv", format = "UTF-8" )
+                        descriptor = DataDescriptor( fileFormat = "csv", encoding = "UTF-8" )
                     )
                     ),
                 )
@@ -456,8 +467,8 @@ class WorkflowDescriptorImporterTest
         assertEquals( descriptor.environments.keys, reExported.environments.keys )
         assertEquals( descriptor.steps.size, reExported.steps.size )
 
-        val origStep = descriptor.steps[0]
-        val reimport = reExported.steps[0]
+        val origStep = descriptor.steps[0] as DefinedStepDescriptor
+        val reimport = reExported.steps[0] as DefinedStepDescriptor
         assertEquals( origStep.id, reimport.id )
         assertEquals( origStep.environmentId, reimport.environmentId )
         assertEquals( origStep.task, reimport.task )
@@ -491,7 +502,7 @@ class WorkflowDescriptorImporterTest
                 )
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "validate-input",
                     environmentId = "conda-eeg",
                     task = CommandTaskDescriptor(
@@ -503,7 +514,7 @@ class WorkflowDescriptorImporterTest
                     inputs = emptyList(),
                     outputs = emptyList()
                 ),
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "preprocess-eeg",
                     environmentId = "conda-eeg",
                     dependsOn = listOf("validate-input"),
@@ -592,7 +603,7 @@ class WorkflowDescriptorImporterTest
                 )
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-1",
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(
@@ -634,8 +645,8 @@ class WorkflowDescriptorImporterTest
                 "env-b" to EnvironmentDescriptor(name = "B", kind = "pixi", spec = emptyMap())
             ),
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env-a", task = CommandTaskDescriptor(name = "t1", executable = "echo")),
-                StepDescriptor(id = "s2", environmentId = "env-b", task = CommandTaskDescriptor(name = "t2", executable = "echo"))
+                DefinedStepDescriptor(id = "s1", environmentId = "env-a", task = CommandTaskDescriptor(name = "t1", executable = "echo")),
+                DefinedStepDescriptor(id = "s2", environmentId = "env-b", task = CommandTaskDescriptor(name = "t2", executable = "echo"))
             )
         )
 

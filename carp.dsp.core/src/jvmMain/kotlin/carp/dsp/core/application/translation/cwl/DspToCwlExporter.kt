@@ -2,6 +2,7 @@ package carp.dsp.core.application.translation.cwl
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
@@ -33,8 +34,11 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
         step: StepDescriptor,
         environments: Map<String, EnvironmentDescriptor>,
     ): CwlDocument? {
-        val (baseCommand, arguments) = commandFor(step.task) ?: return null
-        val env = environments[step.environmentId]
+        // A referenced step (`uses:`) has no inline task until resolved; skip it, as
+        // with any step that has no command to translate.
+        val defined = step as? DefinedStepDescriptor ?: return null
+        val (baseCommand, arguments) = commandFor(defined.task) ?: return null
+        val env = environments[defined.environmentId]
 
         val dockerImage = if (env?.kind == "docker") env.spec["image"]?.firstOrNull() else null
 
@@ -48,9 +52,17 @@ object DspToCwlExporter : WorkflowExporter<List<CwlDocument>> {
                 if (parts.size == 2) parts[0] to parts[1] else null
             } ?: emptyList()
 
-        val stepId = step.id ?: step.task.name
+        val stepId = step.id ?: defined.task.name
         val ctx =
-            CwlYamlContext(baseCommand, arguments, softwarePackages, envVars, dockerImage, step.inputs, step.outputs)
+            CwlYamlContext(
+                baseCommand,
+                arguments,
+                softwarePackages,
+                envVars,
+                dockerImage,
+                defined.inputs,
+                defined.outputs
+            )
         return CwlDocument(stepId = stepId, content = buildCwlYaml(ctx))
     }
 

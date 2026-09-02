@@ -6,6 +6,7 @@ import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.FileSystemStepLogRecorder
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
+import dk.cachet.carp.analytics.application.execution.workspace.StepInfo
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.*
 import dk.cachet.carp.analytics.domain.workflow.StepMetadata
@@ -45,7 +46,18 @@ class StepExecutionDemo {
         private fun executeDemo(command: CommandSpec, commandLabel: String) {
             val tmpDir = Files.createTempDirectory("step-execution-demo")
             try {
-                val workspace = ExecutionWorkspace(UUID.randomUUID(), tmpDir.toString(), "StepExecutionDemo")
+                // The step has to be registered in the workspace: the runner asks it
+                // for the step's directory when recording the run detail, and a
+                // workspace that does not know the step cannot answer.
+                val step = createDemoStep(command)
+                val workspace = ExecutionWorkspace(
+                    runId = UUID.randomUUID(),
+                    executionRoot = tmpDir.toString(),
+                    workflowName = "StepExecutionDemo",
+                    stepInfos = mapOf(
+                        step.metadata.id to StepInfo(step.metadata.id, step.metadata.name, 0)
+                    ),
+                )
                 val artefactStore = FileSystemArtefactStore(tmpDir.resolve("artifacts"))
                 val runner = CommandStepRunner(
                     workspaceManager = DemoWorkspaceManager(tmpDir),
@@ -57,7 +69,6 @@ class StepExecutionDemo {
                     )
                 )
 
-                val step = createDemoStep(command)
                 val result = runner.run(step, workspace)
 
                 println("------------------------------------------------------------")
@@ -151,7 +162,16 @@ private class DemoWorkspaceManager(
     private val root: Path
 ) : WorkspaceManager {
     override fun create(plan: ExecutionPlan, runId: UUID): ExecutionWorkspace =
-        ExecutionWorkspace(runId = runId, executionRoot = root.toString(), "StepExecutionDemo")
+        ExecutionWorkspace(
+            runId = runId,
+            executionRoot = root.toString(),
+            workflowName = "StepExecutionDemo",
+            // Register the plan's steps, so the workspace can resolve a step's
+            // directory rather than reporting it as unknown.
+            stepInfos = plan.steps.mapIndexed { index, step ->
+                step.metadata.id to StepInfo(step.metadata.id, step.metadata.name, index)
+            }.toMap(),
+        )
 
     override fun prepareStepDirectories(workspace: ExecutionWorkspace, stepId: UUID) {
         root.resolve("steps").resolve(stepId.toString()).resolve("work").createDirectories()

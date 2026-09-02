@@ -56,8 +56,8 @@ steps:
   inputs:
   - id: "port-raw-eeg-001"
     descriptor:
-      type: "edf"
-      format: "binary"
+      fileFormat: "edf"
+      encoding: "binary"
   outputs: []
 
 - id: "step-002"
@@ -83,8 +83,8 @@ steps:
   outputs:
   - id: "port-clean-eeg-002"
     descriptor:
-      type: "edf"
-      format: "binary"
+      fileFormat: "edf"
+      encoding: "binary"
 
 - id: "step-003"
   metadata:
@@ -108,8 +108,8 @@ steps:
   outputs:
   - id: "port-features-003"
     descriptor:
-      type: "csv"
-      format: "utf-8"
+      fileFormat: "csv"
+      encoding: "utf-8"
 
 - id: "step-004"
   metadata:

@@ -64,8 +64,14 @@ class DiafocusDemo {
                 val descriptor = WorkflowYamlCodec().decodeOrThrow(workflowYaml)
                 println("Workflow loaded: ${descriptor.metadata.name}")
 
-                // 2. Copy data files to workspace
-                setupWorkspaceFiles(demoResultsDir)
+                // 2. Lay out the files the run needs. Task script paths are relative
+                // to the execution root (a command's working directory), while a
+                // declared file input is resolved relative to the workflow file, so
+                // the two go in different places.
+                val workflowName = "diafocus_blood_glucose__steps_analysis"
+                val executionRoot = demoResultsDir.resolve("$workflowName/run_$runId")
+                executionRoot.createDirectories()
+                setupWorkspaceFiles(executionRoot)
                 println("Workspace prepared at: $demoResultsDir")
 
                 // 3. Import workflow descriptor and generate execution plan
@@ -103,7 +109,6 @@ class DiafocusDemo {
 
                 // 7. Read and display results from summary.json
                 // The workflow creates a directory structure: <workflowName>/run_<runId>/steps/<stepIndex>_<stepName>/outputs/
-                val workflowName = "diafocus_blood_glucose__steps_analysis"
                 val summaryFile = demoResultsDir.resolve(
                     "$workflowName/run_${runId}/steps/03_analyse_bgm_and_steps/outputs/summary-json.json"
                 )
@@ -130,20 +135,22 @@ class DiafocusDemo {
         @OptIn(ExperimentalPathApi::class)
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("diafocus").toPath()
 
+        /**
+         * Places the run's files under [executionRoot], the working directory a
+         * step's command runs in.
+         *
+         * This workflow references no library steps, so it is imported and executed
+         * without the resolve-and-provision path: its declared file input is read
+         * from the working directory as written, rather than being staged there.
+         * Both the dataset and the scripts therefore sit under the execution root.
+         */
         @OptIn(ExperimentalPathApi::class)
-        private fun setupWorkspaceFiles(tmpDir: Path) {
-            // Copy workflow YAML
-            val workflowsDir = tmpDir.resolve("resources/workflows")
-            workflowsDir.createDirectories()
-            copyResourceFile("workflows/diafocus-bgm-steps.yaml", workflowsDir.resolve("diafocus-bgm-steps.yaml"))
-
-            // Copy data files
-            val dataDir = tmpDir.resolve("resources/data")
+        private fun setupWorkspaceFiles(executionRoot: Path) {
+            val dataDir = executionRoot.resolve("data")
             dataDir.createDirectories()
             copyResourceFile("data/diafocus_mock.json", dataDir.resolve("diafocus_mock.json"))
 
-            // Copy scripts
-            val scriptsDir = tmpDir.resolve("resources/scripts")
+            val scriptsDir = executionRoot.resolve("scripts")
             scriptsDir.createDirectories()
             copyResourceFile("scripts/load_bgm.py", scriptsDir.resolve("load_bgm.py"))
             copyResourceFile("scripts/load_steps.py", scriptsDir.resolve("load_steps.py"))

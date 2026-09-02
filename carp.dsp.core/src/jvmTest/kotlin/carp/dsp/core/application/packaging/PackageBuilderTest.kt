@@ -1,6 +1,7 @@
 package carp.dsp.core.application.packaging
 
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
@@ -120,7 +121,7 @@ class PackageBuilderTest {
     fun `build with a Python step auto-generates CWL`() {
         val withStep = descriptor.copy(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "score",
                     environmentId = "conda-env",
                     task = PythonTaskDescriptor(
@@ -150,7 +151,7 @@ class PackageBuilderTest {
     fun `build with multiple steps concatenates CWL documents`() {
         val withSteps = descriptor.copy(
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-a",
                     environmentId = "conda-env",
                     task = PythonTaskDescriptor(
@@ -158,7 +159,7 @@ class PackageBuilderTest {
                         entryPoint = ScriptEntryPointDescriptor("scripts/a.py"),
                     ),
                 ),
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-b",
                     environmentId = "conda-env",
                     task = PythonTaskDescriptor(
@@ -225,7 +226,7 @@ class PackageBuilderTest {
         ),
     )
 
-    private fun stepWithInputs(id: String, vararg inputs: DataPortDescriptor) = StepDescriptor(
+    private fun stepWithInputs(id: String, vararg inputs: DataPortDescriptor) = DefinedStepDescriptor(
         id = id,
         environmentId = "conda-env",
         task = PythonTaskDescriptor(

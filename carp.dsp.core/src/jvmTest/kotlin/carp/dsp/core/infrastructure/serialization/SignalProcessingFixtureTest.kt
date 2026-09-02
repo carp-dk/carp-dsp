@@ -1,6 +1,7 @@
 package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
 import dk.cachet.carp.analytics.domain.validation.ValidationSeverity
@@ -81,10 +82,10 @@ class SignalProcessingFixtureTest
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
 
-        assertIs<CommandTaskDescriptor>( descriptor.steps[0].task ) // validate-signal
-        assertIs<CommandTaskDescriptor>( descriptor.steps[1].task ) // preprocess-signal
-        assertIs<CommandTaskDescriptor>( descriptor.steps[2].task ) // extract-features
-        assertIs<CommandTaskDescriptor>( descriptor.steps[3].task ) // generate-report
+        assertIs<CommandTaskDescriptor>( (descriptor.steps[0] as DefinedStepDescriptor).task ) // validate-signal
+        assertIs<CommandTaskDescriptor>( (descriptor.steps[1] as DefinedStepDescriptor).task ) // preprocess-signal
+        assertIs<CommandTaskDescriptor>( (descriptor.steps[2] as DefinedStepDescriptor).task ) // extract-features
+        assertIs<CommandTaskDescriptor>( (descriptor.steps[3] as DefinedStepDescriptor).task ) // generate-report
     }
 
     // ── Test: Dependencies ───────────────────────────────────────────────────
@@ -123,19 +124,19 @@ class SignalProcessingFixtureTest
 
         // Step 1: 1 input, 1 output
         assertEquals(1, descriptor.steps[0].inputs.size)
-        assertEquals(1, descriptor.steps[0].outputs.size)
+        assertEquals(1, (descriptor.steps[0] as DefinedStepDescriptor).outputs.size)
 
         // Step 2: 1 input, 1 output
         assertEquals(1, descriptor.steps[1].inputs.size)
-        assertEquals(1, descriptor.steps[1].outputs.size)
+        assertEquals(1, (descriptor.steps[1] as DefinedStepDescriptor).outputs.size)
 
         // Step 3: 1 input, 1 output
         assertEquals(1, descriptor.steps[2].inputs.size)
-        assertEquals(1, descriptor.steps[2].outputs.size)
+        assertEquals(1, (descriptor.steps[2] as DefinedStepDescriptor).outputs.size)
 
         // Step 4: 1 input, 1 output
         assertEquals(1, descriptor.steps[3].inputs.size)
-        assertEquals(1, descriptor.steps[3].outputs.size)
+        assertEquals(1, (descriptor.steps[3] as DefinedStepDescriptor).outputs.size)
     }
 
     // ── Test: Arguments with References ──────────────────────────────────────
@@ -148,19 +149,19 @@ class SignalProcessingFixtureTest
         val descriptor = result.descriptor
 
         // Step 1: args with literal and input-ref
-        val step1Args = assertIs<CommandTaskDescriptor>( descriptor.steps[0].task ).args
+        val step1Args = assertIs<CommandTaskDescriptor>( (descriptor.steps[0] as DefinedStepDescriptor).task ).args
         assertTrue(step1Args.isNotEmpty(), "Step 1 should have arguments")
 
         // Step 2: args with input-ref, output-ref, and literals
-        val step2Args = assertIs<CommandTaskDescriptor>( descriptor.steps[1].task ).args
+        val step2Args = assertIs<CommandTaskDescriptor>( (descriptor.steps[1] as DefinedStepDescriptor).task ).args
         assertTrue(step2Args.isNotEmpty(), "Step 2 should have arguments")
 
         // Step 3: args with input-ref and output-ref
-        val step3Args = assertIs<CommandTaskDescriptor>( descriptor.steps[2].task ).args
+        val step3Args = assertIs<CommandTaskDescriptor>( (descriptor.steps[2] as DefinedStepDescriptor).task ).args
         assertTrue(step3Args.isNotEmpty(), "Step 3 should have arguments")
 
         // Step 4: args with literals and references
-        val step4Args = assertIs<CommandTaskDescriptor>( descriptor.steps[3].task ).args
+        val step4Args = assertIs<CommandTaskDescriptor>( (descriptor.steps[3] as DefinedStepDescriptor).task ).args
         assertTrue(step4Args.isNotEmpty(), "Step 4 should have arguments")
     }
 

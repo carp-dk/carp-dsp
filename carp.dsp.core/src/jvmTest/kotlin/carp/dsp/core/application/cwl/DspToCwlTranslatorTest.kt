@@ -2,6 +2,7 @@ package carp.dsp.core.application.cwl
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
@@ -64,7 +65,7 @@ private fun pythonStep(
     outputs: List<DataPortDescriptor> = listOf(
         DataPortDescriptor(id = "output-csv", destination = FileOutputDestination("data/output.csv")),
     ),
-) = StepDescriptor(
+) = DefinedStepDescriptor(
     id = id,
     environmentId = environmentId,
     task = PythonTaskDescriptor(
@@ -141,7 +142,7 @@ class DspToCwlExporterTest {
 
     @Test
     fun `python module entry point uses -m flag`() {
-        val step = StepDescriptor(
+        val step = DefinedStepDescriptor(
             id = "run-module",
             environmentId = "conda-env",
             task = PythonTaskDescriptor(
@@ -161,7 +162,7 @@ class DspToCwlExporterTest {
 
     @Test
     fun `R step uses Rscript baseCommand`() {
-        val step = StepDescriptor(
+        val step = DefinedStepDescriptor(
             id = "r-step",
             environmentId = "r-env",
             task = RTaskDescriptor(
@@ -184,7 +185,7 @@ class DspToCwlExporterTest {
 
     @Test
     fun `command task maps executable to baseCommand`() {
-        val step = StepDescriptor(
+        val step = DefinedStepDescriptor(
             id = "copy-step",
             environmentId = "system-env",
             task = CommandTaskDescriptor(name = "copy-step", executable = "cp", args = listOf("src.csv", "dst.csv")),
@@ -200,7 +201,7 @@ class DspToCwlExporterTest {
 
     @Test
     fun `InProcess step is skipped`() {
-        val step = StepDescriptor(
+        val step = DefinedStepDescriptor(
             id = "in-process-step",
             environmentId = "system-env",
             task = InProcessTaskDescriptor(name = "in-process-step", operationId = "my.operation"),
@@ -236,7 +237,7 @@ class DspToCwlExporterTest {
 
     @Test
     fun `multi-step workflow produces one asset per translatable step`() {
-        val inProcess = StepDescriptor(
+        val inProcess = DefinedStepDescriptor(
             id = "in-process",
             environmentId = "system-env",
             task = InProcessTaskDescriptor(name = "in-process", operationId = "op"),

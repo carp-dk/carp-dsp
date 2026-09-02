@@ -326,3 +326,47 @@ Output determinism across 2 runs (same machine):
   Identical: 11 / 11, differing: 0
 
 
+======================================================================
+Mobgap timed run 1 - 2026-08-12T09:07:47.472854400Z
+Status: FAILED
+Total wall clock: 663 ms
+(run 1 includes env setup + dataset download - use later runs for steady state)
+
+Framework phases (ms):
+  decode-yaml               3
+  import                    1
+  plan                      0
+  validate                  0
+  stage-workspace          31
+  execute-total           423
+  bundle                   29
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=    -1  compute=   n/a  overhead=  n/a
+
+Outputs (bytes, sha256):
+
+======================================================================
+Mobgap timed run 2 - 2026-08-12T09:07:47.473865200Z
+Status: FAILED
+Total wall clock: 355 ms
+
+Framework phases (ms):
+  decode-yaml               2
+  import                    0
+  plan                      0
+  validate                  0
+  stage-workspace          12
+  execute-total           317
+  bundle                    4
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=    -1  compute=   n/a  overhead=  n/a
+
+Outputs (bytes, sha256):
+
+======================================================================
+Output determinism across 2 runs (same machine):
+  Identical: 0 / 0, differing: 0
+
+

@@ -111,7 +111,7 @@ class MinimalValidFixtureTest
         val yaml = loadFixtureYaml()
         val result = codec.decode(yaml) as DecodeResult.Success
         val descriptor = result.descriptor
-        val step1 = descriptor.steps[0]
+        val step1 = descriptor.steps[0] as carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 
         assertEquals("write-file", step1.id)
         assertEquals("system-env", step1.environmentId)

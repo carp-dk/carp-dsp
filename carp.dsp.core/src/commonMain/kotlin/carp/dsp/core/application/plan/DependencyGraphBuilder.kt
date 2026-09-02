@@ -3,6 +3,7 @@ package carp.dsp.core.application.plan
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.domain.data.FileFormat
+import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
 
@@ -199,7 +200,8 @@ class DependencyGraphBuilder
                     ?: context.stepsByName[ref]
                     ?: context.stepsByDescriptorId[ref]
 
-                val producerOutput = producerStep?.outputs?.firstOrNull { it.name == input.name }
+                val outputRef = ( input.location as? FileLocation )?.metadata?.get( "outputId" ) ?: input.name
+                val producerOutput = producerStep?.outputs?.firstOrNull { it.name == outputRef }
 
                 CrossStepDependency(
                     producerStepRef = ref,

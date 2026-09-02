@@ -175,9 +175,11 @@ class BindingsResolver
             return resolveExternalInput(input, context)
         }
 
-        // Get producer's output with matching name
+        // Wire to the output the source names (outputId), falling back to matching on
+        // the input's own name for inputs authored without an explicit outputId.
+        val outputRef = ( input.location as? FileLocation )?.metadata?.get( "outputId" ) ?: input.name
         val producerOutput = producer.bindings.outputs.values.firstOrNull { output ->
-            output.spec.name == input.name
+            output.spec.name == outputRef
         }
 
         if ( producerOutput == null )
