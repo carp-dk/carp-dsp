@@ -1,0 +1,106 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "analysis.activity.hr-activity-contrast"
+  name: "Heart rate contrast between active and inactive intervals"
+  description: >-
+    For each participant-day, report mean heart rate in intervals classified as
+    active, mean heart rate in the rest, and the difference between them. None of
+    these can be derived from either signal alone - it takes heart rate and step
+    counts together, which places this step in the analysis tier. A descriptive
+    contrast, not a validated physiological measure: the activity threshold is a
+    convention chosen here rather than a published cut point.
+  version: "1.0"
+  tags:
+    - "analysis"
+    - "activity"
+    - "heart-rate"
+    - "steps"
+    - "descriptive"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "hr-activity-contrast"
+    metadata:
+      name: "Heart rate contrast between active and inactive intervals"
+      description: "Mean heart rate when active and when not, and the gap between them"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-analysis-activity-hr-activity-contrast"
+      name: "hr-activity-contrast"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/hr_activity_contrast.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "hr-steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "heart_rate_bpm"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: "Heart rate and step counts on a shared time grid, for the same participants"
+    outputs:
+      - id: "hr-activity-contrast"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "active_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "inactive_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: >-
+            Per participant-day: active_hr, inactive_hr, hr_activity_gap (their
+            difference), and the interval counts each mean was taken over.
+            inactive_hr is deliberately not called resting heart rate - see README.
+
+library:
+  tier: "analysis"
+  subject: "activity"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/hr_activity_contrast.py"
+  method:
+    name: "Activity-stratified heart rate contrast"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

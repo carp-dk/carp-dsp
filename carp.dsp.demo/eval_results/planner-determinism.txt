@@ -122,3 +122,34 @@ Reference plan (first invocation):
   issues=0
 ======================================================================
 
+======================================================================
+Planner determinism eval - 2026-08-12T09:07:41.366594800Z
+Workflow: mobgap-gait-analysis.yaml
+
+Part 1: fixed workflow namespace (d3b7f2a0-0000-5000-8000-6d6f62676170)
+  Invocations:            100
+  Distinct fingerprints:  1 (expected: 1)
+  Distinct planIds:       100 (random by design, expected: 100)
+  Claim holds:            true
+
+Part 2: default importer (random namespace), 5 invocations
+  Distinct fingerprints:  5
+  -> step UUIDs are only stable with a fixed namespace;
+     scope the paper claim accordingly or fix the demo default.
+
+Fingerprint fields: execution index | step UUID | step name | environmentRef,
+plus sorted requiredEnvironmentRefs and issue count. planId excluded.
+
+Reference plan (first invocation):
+  0 | 2f838774-8171-58ec-9064-5031bfb166c2 | Import IMU Data | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  1 | fb83aebf-f480-568c-b68b-044dcdf98320 | Gait Sequence Detection | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  2 | a1eb154d-522f-5e8c-98f3-3a1d937e0aa3 | Initial Contact Detection | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  3 | de764248-b570-555b-a275-5cb7571b64b3 | Per-Second Parameter Estimation | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  4 | 61e5fc64-6428-5cb6-b2a6-ef8130d7b409 | Walking Bout Assembly | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  5 | bffdfea5-b5b6-5d8a-a6d0-086346bfbaff | DMO Aggregation | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  6 | 0a2647f2-3aff-555a-8be1-846002c31f56 | Plot Walking Bout Parameters | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  7 | 2c079438-04a8-5551-a6ef-12b418d4553f | Plot Aggregated DMOs | env=f30ef75d-0c30-5a42-94c4-f3bd26c3021a
+  envRefs=[f30ef75d-0c30-5a42-94c4-f3bd26c3021a=PixiEnvironmentRef(id=f30ef75d-0c30-5a42-94c4-f3bd26c3021a, name=python-pixi, dependencies=[pypi:mobgap, pypi:seaborn, pypi:matplotlib], channels=[conda-forge], pythonVersion=3.12)]
+  issues=0
+======================================================================
+

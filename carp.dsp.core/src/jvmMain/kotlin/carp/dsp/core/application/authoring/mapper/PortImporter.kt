@@ -74,12 +74,12 @@ internal object PortImporter
         portDescriptor: DataPortDescriptor
     ): Pair<dk.cachet.carp.analytics.domain.data.DataLocation, String?>
     {
-        val declaredFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+        val declaredFormat = portDescriptor.descriptor?.fileFormat?.let { parseFileFormat( it ) }
 
         return when ( val inputSource = portDescriptor.source )
         {
             is FileInputSource -> fileLocationFor( inputSource, declaredFormat ) to null
-            is StepOutputInputSource -> stepOutputLocation() to inputSource.stepId
+            is StepOutputInputSource -> stepOutputLocation( inputSource.outputId ) to inputSource.stepId
             is EnvironmentVariableInputSource -> environmentLocationFor( inputSource ) to null
             is ProtocolInputSource -> protocolLocationFor( inputSource, declaredFormat ) to null
             is ExternalInputSource -> externalLocationFor( inputSource, declaredFormat ) to null
@@ -95,12 +95,18 @@ internal object PortImporter
             metadata = mapOf( "source" to "file" )
         )
 
-    /** [StepOutputInputSource]: path and format are resolved later by BindingsResolver. */
-    private fun stepOutputLocation() =
+    /**
+     * [StepOutputInputSource]: path and format are resolved later by BindingsResolver.
+     * The producer output port id is carried in metadata as `outputId` so the
+     * binding wires to that specific output rather than matching on port name -
+     * which lets a step consume an upstream output whose name differs from its own
+     * input port (as generic library steps require).
+     */
+    private fun stepOutputLocation( outputId: String ) =
         FileLocation(
             path = "",
             format = FileFormat.UNKNOWN,
-            metadata = mapOf( "source" to "step-output" )
+            metadata = mapOf( "source" to "step-output", "outputId" to outputId )
         )
 
     /** [EnvironmentVariableInputSource]: a registry key rather than a file. */
@@ -172,7 +178,7 @@ internal object PortImporter
         {
             is FileOutputDestination ->
             {
-                val fileFormat = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+                val fileFormat = portDescriptor.descriptor?.fileFormat?.let { parseFileFormat( it ) }
                     ?: inferFormatFromPath( outputDest.path )
                 FileLocation(
                     path = outputDest.path,
@@ -195,7 +201,7 @@ internal object PortImporter
                 // No destination specified → FileLocation (empty, will be generated)
                 FileLocation(
                     path = "",
-                    format = portDescriptor.descriptor?.type?.let { parseFileFormat( it ) }
+                    format = portDescriptor.descriptor?.fileFormat?.let { parseFileFormat( it ) }
                         ?: FileFormat.UNKNOWN,
                     metadata = emptyMap()
                 )
@@ -220,10 +226,10 @@ internal object PortImporter
      */
     private fun importSchema( descriptor: DataPortDescriptor ): DataSchema? =
         descriptor.descriptor?.let {
-            if ( it.type == null ) null
+            if ( it.fileFormat == null ) null
             else DataSchema(
-                format = parseFileFormat( it.type ),
-                encoding = it.format ?: "UTF-8",
+                format = parseFileFormat( it.fileFormat ),
+                encoding = it.encoding ?: "UTF-8",
             )
         }
 

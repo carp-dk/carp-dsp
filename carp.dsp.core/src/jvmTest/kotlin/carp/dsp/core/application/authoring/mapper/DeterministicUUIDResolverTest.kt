@@ -1,8 +1,8 @@
 package carp.dsp.core.application.authoring.mapper
 
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
-import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
 import dk.cachet.carp.common.application.UUID
 import kotlin.test.Test
@@ -29,7 +29,7 @@ class DeterministicUUIDResolverTest
     fun `resolveStepId with explicit ID parses UUID string`()
     {
         val explicitId = "550e8400-e29b-41d4-a716-446655440000"
-        val stepDescriptor = StepDescriptor(
+        val stepDescriptor = DefinedStepDescriptor(
             id = explicitId,
             environmentId = "env-1",
             task = dummyTask
@@ -43,12 +43,12 @@ class DeterministicUUIDResolverTest
     @Test
     fun `resolveStepId without ID generates deterministic UUID v5`()
     {
-        val stepDescriptor1 = StepDescriptor(
+        val stepDescriptor1 = DefinedStepDescriptor(
             id = null, // No explicit ID
             environmentId = "env-1",
             task = dummyTask
         )
-        val stepDescriptor2 = StepDescriptor(
+        val stepDescriptor2 = DefinedStepDescriptor(
             id = null, // Same: no explicit ID
             environmentId = "env-1",
             task = dummyTask
@@ -64,12 +64,12 @@ class DeterministicUUIDResolverTest
     @Test
     fun `resolveStepId generates different UUIDs for different explicit IDs`()
     {
-        val step1 = StepDescriptor(
+        val step1 = DefinedStepDescriptor(
             id = "550e8400-e29b-41d4-a716-446655440001",
             environmentId = "env-1",
             task = dummyTask
         )
-        val step2 = StepDescriptor(
+        val step2 = DefinedStepDescriptor(
             id = "550e8400-e29b-41d4-a716-446655440002",
             environmentId = "env-1",
             task = dummyTask
@@ -85,7 +85,7 @@ class DeterministicUUIDResolverTest
     fun `resolveStepId prefers explicit ID over v5 generation`()
     {
         val explicitId = "ffffffff-ffff-ffff-ffff-ffffffffffff"
-        val stepDescriptor = StepDescriptor(
+        val stepDescriptor = DefinedStepDescriptor(
             id = explicitId,
             environmentId = "env-1",
             task = dummyTask
@@ -100,7 +100,7 @@ class DeterministicUUIDResolverTest
     @Test
     fun `resolveStepId is deterministic across resolver instances`()
     {
-        val stepDescriptor = StepDescriptor(
+        val stepDescriptor = DefinedStepDescriptor(
             id = null,
             environmentId = "env-1",
             task = dummyTask
@@ -125,7 +125,7 @@ class DeterministicUUIDResolverTest
         val resolver1 = DeterministicUUIDResolverImpl( namespace1 )
         val resolver2 = DeterministicUUIDResolverImpl( namespace2 )
 
-        val stepDescriptor = StepDescriptor(
+        val stepDescriptor = DefinedStepDescriptor(
             id = null,
             environmentId = "env-1",
             task = dummyTask
@@ -301,12 +301,12 @@ class DeterministicUUIDResolverTest
     @Test
     fun `resolveStepId handles case-sensitive names`()
     {
-        val step1 = StepDescriptor(
+        val step1 = DefinedStepDescriptor(
             id = "Step-Extract",
             environmentId = "env-1",
             task = dummyTask
         )
-        val step2 = StepDescriptor(
+        val step2 = DefinedStepDescriptor(
             id = "step-extract", // Different case
             environmentId = "env-1",
             task = dummyTask

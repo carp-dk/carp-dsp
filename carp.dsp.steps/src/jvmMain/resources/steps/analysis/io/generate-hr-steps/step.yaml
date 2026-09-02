@@ -1,0 +1,90 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "analysis.io.generate-hr-steps"
+  name: "Generate synthetic HR and step counts"
+  description: >-
+    Synthesise an hourly heart-rate and step-count table in the same shape the
+    library's other steps consume, so a workflow can be built, tested and
+    demonstrated without network access or a real dataset. Output is
+    deterministic for a given seed. Synthetic data for exercising a pipeline -
+    not a physiological model, and not a basis for any finding.
+  version: "1.0"
+  tags:
+    - "analysis"
+    - "io"
+    - "synthetic"
+    - "offline"
+    - "testing"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "generate-hr-steps"
+    metadata:
+      name: "Generate synthetic HR and step counts"
+      description: "Deterministic synthetic hourly HR and step table"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-analysis-io-generate-hr-steps"
+      name: "generate-hr-steps"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/generate_hr_steps.py"
+      args:
+        - "--output"
+        - "output.0"
+        - "--participants"
+        - "2"
+        - "--days"
+        - "7"
+        - "--seed"
+        - "42"
+    outputs:
+      - id: "hr-steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "heart_rate_bpm"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: "Hourly heart rate and step counts: participant_id, timestamp, heart_rate_bpm, steps"
+
+library:
+  tier: "analysis"
+  subject: "io"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages: []
+  implementations:
+    - language: "python"
+      path: "impl/python/generate_hr_steps.py"
+  method:
+    name: "Seeded diurnal simulation"
+    citation: null
+  reference:
+    input: null
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

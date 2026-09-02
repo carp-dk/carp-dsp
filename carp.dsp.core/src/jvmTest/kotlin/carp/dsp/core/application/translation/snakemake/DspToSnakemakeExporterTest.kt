@@ -1,6 +1,7 @@
 package carp.dsp.core.application.translation.snakemake
 
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
@@ -45,7 +46,7 @@ private val dockerEnv = EnvironmentDescriptor(
 private fun step(
     id: String = "process-data",
     environmentId: String = "env",
-) = StepDescriptor(
+) = DefinedStepDescriptor(
     id = id,
     environmentId = environmentId,
     task = PythonTaskDescriptor(

@@ -1,0 +1,10 @@
+id: "env-python-viz"
+name: "Python data visualisation"
+description: "Tabular data handling with pandas plus matplotlib for plotting."
+kind: "pixi"
+spec:
+  pythonVersion:
+    - "3.11"
+  dependencies:
+    - "pypi:pandas"
+    - "pypi:matplotlib"

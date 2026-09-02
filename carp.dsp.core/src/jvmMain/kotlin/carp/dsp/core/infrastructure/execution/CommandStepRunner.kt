@@ -14,8 +14,8 @@ import dk.cachet.carp.analytics.application.runtime.CommandResult
 import dk.cachet.carp.analytics.application.runtime.CommandRunner
 import dk.cachet.carp.common.application.UUID
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.datetime.Clock
 import java.nio.file.Path
+import kotlin.time.Clock
 
 /**
  * Runs a single [PlannedStep] against a live [ExecutionWorkspace].

@@ -1,0 +1,155 @@
+schemaVersion: "1.0"
+metadata:
+  id: "wf-anomaly-report-v2"
+  name: "Anomaly Report (library steps)"
+  description: >-
+    The activity-summary pipeline with an anomaly detector on the end, built
+    entirely from certified library steps referenced with `uses:`. Each signal is
+    cleaned and aggregated to daily features by its own sensing step, and the two
+    meet once, at the daily join the detector needs. There is no interval-level
+    join here: nothing in this analysis compares the signals within an interval.
+    v2 of wf-anomaly-report.
+  version: "2.0"
+  tags:
+    - "heart-rate"
+    - "activity"
+    - "anomaly"
+    - "reuse"
+    - "library"
+
+steps:
+  - id: "fetch-steps"
+    uses: "core.io.fetch-zenodo"
+
+  - id: "fetch-hr"
+    uses: "core.io.fetch-zenodo"
+    args:
+      - "--member"
+      - "Fitabase Data 4.12.16-5.12.16/heartrate_seconds_merged.csv"
+
+  - id: "shape-steps"
+    uses: "core.reshape.select-columns"
+    dependsOn:
+      - "fetch-steps"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "fetch-steps"
+          outputId: "file"
+    args:
+      - "--rename"
+      - "Id:participant_id,ActivityHour:timestamp,StepTotal:steps"
+      - "--columns"
+      - "participant_id,timestamp,steps"
+
+  - id: "shape-hr"
+    uses: "core.reshape.select-columns"
+    dependsOn:
+      - "fetch-hr"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "fetch-hr"
+          outputId: "file"
+    args:
+      - "--rename"
+      - "Id:participant_id,Time:timestamp,Value:heart_rate_bpm"
+      - "--columns"
+      - "participant_id,timestamp,heart_rate_bpm"
+
+  - id: "clean-steps"
+    uses: "sensing.steps.clean"
+    dependsOn:
+      - "shape-steps"
+    inputs:
+      - id: "raw-steps"
+        source:
+          type: "step-output"
+          stepId: "shape-steps"
+          outputId: "selected"
+
+  - id: "clean-hr"
+    uses: "sensing.heartrate.clean"
+    dependsOn:
+      - "shape-hr"
+    inputs:
+      - id: "raw-heart-rate"
+        source:
+          type: "step-output"
+          stepId: "shape-hr"
+          outputId: "selected"
+
+  - id: "daily-steps"
+    uses: "sensing.steps.daily-features"
+    dependsOn:
+      - "clean-steps"
+    inputs:
+      - id: "steps"
+        source:
+          type: "step-output"
+          stepId: "clean-steps"
+          outputId: "clean-steps"
+
+  - id: "daily-hr"
+    uses: "sensing.heartrate.daily-features"
+    dependsOn:
+      - "clean-hr"
+    inputs:
+      - id: "heart-rate"
+        source:
+          type: "step-output"
+          stepId: "clean-hr"
+          outputId: "clean-heart-rate"
+
+  - id: "join-daily"
+    uses: "core.reshape.join-tables"
+    dependsOn:
+      - "daily-steps"
+      - "daily-hr"
+    inputs:
+      - id: "left"
+        source:
+          type: "step-output"
+          stepId: "daily-steps"
+          outputId: "daily-steps"
+      - id: "right"
+        source:
+          type: "step-output"
+          stepId: "daily-hr"
+          outputId: "daily-heart-rate"
+    args:
+      - "--on"
+      - "participant_id,date"
+      - "--how"
+      - "outer"
+
+  - id: "anomaly"
+    uses: "analysis.activity.detect-anomaly"
+    dependsOn:
+      - "join-daily"
+    inputs:
+      - id: "daily-features"
+        source:
+          type: "step-output"
+          stepId: "join-daily"
+          outputId: "joined"
+
+  - id: "visualise"
+    uses: "core.viz.visualise"
+    dependsOn:
+      - "join-daily"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "join-daily"
+          outputId: "joined"
+    args:
+      - "--line"
+      - "total_steps,resting_hr"
+      - "--histogram"
+      - "total_steps"
+      - "--scatter"
+      - "total_steps:mean_hr"

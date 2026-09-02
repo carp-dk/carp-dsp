@@ -1,0 +1,89 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "{{ID}}"
+  name: "{{NAME}}"
+  description: >-
+    One or two sentences: what it computes and what it assumes. This is indexed
+    for search, so be specific.
+  version: "1.0"
+  tags:
+    - "{{TIER}}"
+    - "{{SUBJECT}}"
+
+# Inline the catalogue environment you chose. The gate checks it matches
+# resources/environments/<id>.yaml. Reuse before adding a new one.
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "{{STEP}}"
+    metadata:
+      name: "{{NAME}}"
+      description: "What this step does"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-{{TASK_ID}}"
+      name: "{{STEP}}"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/{{STEP}}.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "input-port"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"   # ontology term for the format; required
+          # One entry per typed field. Required for sensing.*/analysis.*, omit for core.*.
+          # fields:
+          #   - name: "heart_rate_bpm"
+          #     dataType: "dk.cachet.carp.heartrate"          # CARP data type this field carries
+          #     ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: "What this input is"
+    outputs:
+      - id: "output-port"
+        descriptor:
+          fileFormat: "json"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/data_2082"     # required
+          notes: "What this output is"
+
+library:
+  tier: "{{TIER}}"
+  subject: "{{SUBJECT}}"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/{{STEP}}.py"
+  method:
+    name: "Method name, or null for standard operations"
+    citation: null            # DOI where the method has a paper
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.json"
+    tolerance:
+      float: 1.0e-6

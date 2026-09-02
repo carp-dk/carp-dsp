@@ -9,7 +9,7 @@ import org.gradle.process.ExecOperations
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kover)
-    kotlin("plugin.serialization") version "2.1.20"
+    alias(libs.plugins.kotlin.serialization)
 }
 
 group = "carp.dsp.core"
@@ -23,6 +23,18 @@ kotlin {
     jvmToolchain(17)
     jvm()
 
+    // kotlin.time.Clock and kotlin.time.Instant are still experimental; carp.core-kotlin
+    // opts in globally, so match it here or every usage needs its own annotation.
+    targets.configureEach {
+        compilations.configureEach {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    optIn.add( "kotlin.time.ExperimentalTime" )
+                }
+            }
+        }
+    }
+
     sourceSets {
         commonMain {
             dependencies {
@@ -30,26 +42,26 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-data")
                 implementation("dk.cachet.carp:carp-core-analytics")
                 implementation("dk.cachet.carp:carp-core-protocols")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.kotlinx.serialization.get()}")
                 implementation("com.charleskorn.kaml:kaml:0.61.0")
                 implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")
 
                 // For coroutines support
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.kotlinx.coroutines.get()}")
 
                 // Ktor HTTP client for data retrieval
                 implementation("io.ktor:ktor-client-core:2.3.7")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
 
                 // Multiplatform datetime support
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:${libs.versions.kotlinx.datetime.get()}")
             }
         }
 
         commonTest {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.kotlinx.serialization.get()}")
             }
         }
 
@@ -62,7 +74,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-cio:2.3.7")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.kotlinx.serialization.get()}")
                 implementation("io.github.oshai:kotlin-logging-jvm:7.0.3")
                 // SLF4J backend — enables kotlin-logging output at runtime
                 implementation("ch.qos.logback:logback-classic:1.5.6")
@@ -74,17 +86,35 @@ kotlin {
                 implementation(kotlin("test-junit"))
                 implementation("org.junit.jupiter:junit-jupiter-engine:5.10.0")
                 implementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.kotlinx.serialization.get()}")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
             }
         }
     }
 }
 
 // ── Integration test filtering ───────────────────────────────────────────────
+// Some tests need a live toolchain - Docker for the cwltool validation, and
+// conda/pixi/R for the execution integration tests - so they are slow and fail
+// on a machine without them. Skip them with:
+//
+//   ./gradlew build -PskipIntegration
+//
+// The CI and SKIP_INTEGRATION environment variables are honoured too.
+val skipIntegrationTests = project.hasProperty("skipIntegration") ||
+    System.getenv("CI") == "true" ||
+    System.getenv("SKIP_INTEGRATION") == "true"
+
 tasks.named<Test>("jvmTest") {
-    if (System.getenv("CI") == "true" || System.getenv("SKIP_INTEGRATION") == "true") {
+    if (skipIntegrationTests) {
+        // Execution integration tests (conda / pixi / R).
         exclude("**/integration/**")
+        // CWL validation - shells out to cwltool in Docker. Excluded by class
+        // rather than by package, since it does not sit under integration/.
+        exclude("**/CwlValidationIntegrationTest*")
+        // Belt and braces: tests that consult the variable themselves (an
+        // assumeTrue guard, and a @BeforeClass that would otherwise docker pull).
+        environment("SKIP_INTEGRATION", "true")
     }
 }
 

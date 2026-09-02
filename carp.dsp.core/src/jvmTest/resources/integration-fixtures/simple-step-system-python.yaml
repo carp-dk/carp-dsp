@@ -35,8 +35,8 @@ steps:
     inputs:
       - id: "input-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Input data CSV file"
         source:
           type: "file"
@@ -44,6 +44,6 @@ steps:
     outputs:
       - id: "output-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Processed data CSV file"

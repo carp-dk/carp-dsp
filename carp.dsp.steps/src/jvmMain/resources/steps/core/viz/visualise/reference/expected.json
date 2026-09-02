@@ -1,0 +1,63 @@
+{
+  "figure": {
+    "cols": 2,
+    "rows": 2
+  },
+  "invocation": [
+    "--line",
+    "total_steps,resting_hr",
+    "--histogram",
+    "total_steps",
+    "--scatter",
+    "total_steps:mean_hr"
+  ],
+  "panels": {
+    "bottom_left": {
+      "bins": 20,
+      "title": "total_steps distribution",
+      "values": [
+        2650,
+        2700,
+        5400,
+        160
+      ]
+    },
+    "bottom_right": {
+      "title": "total_steps vs mean_hr",
+      "x": [
+        2650,
+        2700,
+        5400,
+        160
+      ],
+      "y": [
+        70.4919786096,
+        70.0,
+        75.4919786096,
+        75.0
+      ]
+    },
+    "top_left": {
+      "title": "Mean total_steps per date",
+      "x": [
+        "2016-04-12",
+        "2016-04-13"
+      ],
+      "y": [
+        4025.0,
+        1430.0
+      ]
+    },
+    "top_right": {
+      "title": "Mean resting_hr per date",
+      "x": [
+        "2016-04-12",
+        "2016-04-13"
+      ],
+      "y": [
+        65.5,
+        66.2
+      ]
+    }
+  }
+}

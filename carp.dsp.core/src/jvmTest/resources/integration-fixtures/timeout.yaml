@@ -35,6 +35,6 @@ steps:
     outputs:
       - id: "output-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Output that will never be produced"

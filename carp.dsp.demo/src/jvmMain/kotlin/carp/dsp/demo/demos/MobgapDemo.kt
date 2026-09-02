@@ -60,8 +60,12 @@ class MobgapDemo {
                 val descriptor = WorkflowYamlCodec().decodeOrThrow(workflowYaml)
                 println("Workflow loaded: ${descriptor.metadata.name}")
 
-                // 2. Set up workspace (scripts only — dataset is downloaded by the import step)
-                setupWorkspaceFiles(demoResultsDir)
+                // 2. Set up workspace (scripts only — dataset is downloaded by the import step).
+                // Task script paths are relative to the execution root, which is the
+                // working directory a step's command runs in.
+                val executionRoot = demoResultsDir.resolve("mobgap_gait_analysis_pipeline/run_$runId")
+                executionRoot.createDirectories()
+                setupWorkspaceFiles(executionRoot)
                 println("Workspace prepared at: $demoResultsDir")
 
                 // 3. Import and plan
@@ -132,14 +136,13 @@ class MobgapDemo {
         @OptIn(ExperimentalPathApi::class)
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("mobgap").toPath()
 
-        private fun setupWorkspaceFiles(tmpDir: Path) {
-            // Copy workflow YAML
-            val workflowsDir = tmpDir.resolve("resources/workflows")
-            workflowsDir.createDirectories()
-            copyResourceFile("workflows/mobgap-gait-analysis.yaml", workflowsDir.resolve("mobgap-gait-analysis.yaml"))
-
-            // Copy mobgap scripts
-            val scriptsDir = tmpDir.resolve("resources/scripts/mobgap")
+        /**
+         * Copies the pipeline's scripts under [executionRoot], the working directory
+         * a step's command runs in, so the relative script paths in the workflow
+         * resolve. The dataset is not copied: the import step downloads it.
+         */
+        private fun setupWorkspaceFiles(executionRoot: Path) {
+            val scriptsDir = executionRoot.resolve("scripts/mobgap")
             scriptsDir.createDirectories()
             listOf(
                 "import_data.py",

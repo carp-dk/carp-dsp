@@ -1,6 +1,7 @@
 package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.ModuleEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.PythonTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
@@ -124,7 +125,7 @@ class WorkflowDescriptorExporterTest
 
         // Exactly one step
         assertEquals(1, result.steps.size)
-        val step = result.steps.first()
+        val step = result.steps.first() as DefinedStepDescriptor
         assertEquals(stepId.toString(), step.id)
         assertEquals("Echo Step", step.metadata?.name)
         assertEquals(envId.toString(), step.environmentId)
@@ -344,7 +345,7 @@ class WorkflowDescriptorExporterTest
         val descriptor: WorkflowDescriptor = exporter.export(makeDefinition(commandStep()))
         descriptor.steps.forEach { step: StepDescriptor ->
             assertNotNull(step.id, "step.id must not be null in exported descriptor")
-            assertNotNull(step.task.id, "task.id must not be null in exported descriptor")
+            assertNotNull((step as DefinedStepDescriptor).task.id, "task.id must not be null in exported descriptor")
         }
     }
 
@@ -429,7 +430,7 @@ class WorkflowDescriptorExporterTest
 
         assertEquals(original, decoded)
 
-        val task = decoded.steps.first().task as PythonTaskDescriptor
+        val task = (decoded.steps.first() as DefinedStepDescriptor).task as PythonTaskDescriptor
         assertEquals(ScriptEntryPointDescriptor("analysis/run.py"), task.entryPoint)
         assertTrue(yaml.contains("type:"), "YAML must contain 'type:' discriminator, got:\n$yaml")
         assertTrue(yaml.contains("python"), "YAML must contain task kind 'python', got:\n$yaml")
@@ -446,7 +447,7 @@ class WorkflowDescriptorExporterTest
 
         assertEquals(original, decoded)
 
-        val task = decoded.steps.first().task as PythonTaskDescriptor
+        val task = (decoded.steps.first() as DefinedStepDescriptor).task as PythonTaskDescriptor
         assertEquals(ModuleEntryPointDescriptor("mypackage.cli"), task.entryPoint)
     }
 
@@ -473,7 +474,7 @@ class WorkflowDescriptorExporterTest
             descriptorYaml.encodeToString(WorkflowDescriptor.serializer(), original)
         )
 
-        val args = (decoded.steps.first().task as CommandTaskDescriptor).args
+        val args = ((decoded.steps.first() as DefinedStepDescriptor).task as CommandTaskDescriptor).args
         assertEquals(4, args.size)
         assertEquals("--flag", args[0])
         // InputRef/OutputRef without port list → fallback strings starting with "input."/"output."

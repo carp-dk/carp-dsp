@@ -1,0 +1,98 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "sensing.steps.daily-features"
+  name: "Daily step-count features"
+  description: >-
+    Reduce a regularly sampled step-count series to one row per participant per
+    day: total steps, the number of intervals above an activity threshold, and
+    the number of intervals actually observed. The grid the input is on is
+    declared and checked. Consumes and describes step counts and nothing else,
+    which places it in the sensing tier.
+  version: "1.0"
+  tags:
+    - "sensing"
+    - "steps"
+    - "activity"
+    - "features"
+    - "daily"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "daily-features"
+    metadata:
+      name: "Daily step-count features"
+      description: "Aggregate a step-count series to per-participant-per-day features"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-sensing-steps-daily-features"
+      name: "daily-features"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/daily_step_features.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: "Step counts on a fixed grid: participant_id, timestamp, steps"
+    outputs:
+      - id: "daily-steps"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "total_steps"
+              dataType: "dk.cachet.carp.stepcount"
+              ontologyRef: "http://purl.bioontology.org/ontology/LNC/55423-8"
+          notes: >-
+            Per participant-day: total_steps, active_intervals, and
+            observed_step_intervals - the denominator the other two are read against.
+
+library:
+  tier: "sensing"
+  subject: "steps"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/daily_step_features.py"
+  method:
+    name: "Daily aggregation of step counts"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

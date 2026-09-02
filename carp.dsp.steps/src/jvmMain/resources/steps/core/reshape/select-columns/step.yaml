@@ -1,0 +1,85 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.reshape.select-columns"
+  name: "Select and rename columns"
+  description: >-
+    Rename, keep and reorder the columns of a table. Generic and domain-agnostic:
+    every column name is an argument, so the step carries no dataset knowledge.
+    Values are copied as text and never reinterpreted, so a projection cannot
+    change how a number or a timestamp is written. Used to put a source export
+    into the library's schema before a typed step consumes it.
+  version: "1.0"
+  tags:
+    - "core"
+    - "reshape"
+    - "select"
+    - "rename"
+    - "project"
+
+environments:
+  env-python-base:
+    name: "Python (standard library only)"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies: []
+
+steps:
+  - id: "select-columns"
+    metadata:
+      name: "Select and rename columns"
+      description: "Rename, keep and reorder a table's columns"
+      version: "1.0"
+    environmentId: "env-python-base"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-core-reshape-select-columns"
+      name: "select-columns"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/select_columns.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "table"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Any tabular dataset with a header row"
+    outputs:
+      - id: "selected"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "The chosen columns, renamed and in the requested order"
+
+library:
+  tier: "core"
+  subject: "reshape"
+  environment:
+    default: "env-python-base"
+    requires:
+      kind: ["pixi", "conda", "system"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages: []
+  implementations:
+    - language: "python"
+      path: "impl/python/select_columns.py"
+  method:
+    name: "Relational projection with renaming"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

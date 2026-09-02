@@ -2,9 +2,11 @@ package carp.dsp.demo.eval
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
+import carp.dsp.core.application.plan.DependencyGraphBuilder
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
+import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
 import java.io.File
 
@@ -68,11 +70,17 @@ fun main(args: Array<String>) {
 
     for (size in sizes) {
         val yaml = syntheticChainYaml(size)
+        // Counted from the built graph rather than assumed to be size - 1. That
+        // assumption holds only while the generator emits linear chains; the
+        // moment anyone adds a branching topology here, a derived column would
+        // report the wrong edge count without failing. Measured once per size,
+        // outside the timed section.
+        val edges = edgeCount(codec, yaml)
         val samples = (1..repeats).map { r ->
             val s = timedPlan(codec, yaml)
             csv.append(
                 "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f\n".format(
-                    size, size - 1, r, s.decodeMs, s.importMs, s.planMs, s.validateMs, s.totalMs
+                    size, edges, r, s.decodeMs, s.importMs, s.planMs, s.validateMs, s.totalMs
                 )
             )
             s
@@ -161,6 +169,20 @@ private fun psDetectPython(): String? =
     listOf("python3", "python").firstOrNull { psToolAvailable(it) }
 
 /** Runs the full path once, timing each phase; aborts if the plan is not clean. */
+/**
+ * Dependency edges in [yaml], counted from the graph the planner actually builds.
+ *
+ * An edge is what [DependencyGraphBuilder] treats as one: a typed input bound to
+ * an upstream step's output, or an explicit `dependsOn`. The paper's complexity
+ * claim is stated as `O(n + e)`, so `e` should be measured rather than inferred
+ * from the shape the generator happens to produce today.
+ */
+private fun edgeCount(codec: WorkflowYamlCodec, yaml: String): Int {
+    val definition = WorkflowDescriptorImporter(PS_FIXED_NAMESPACE).import(codec.decodeOrThrow(yaml))
+    val steps = definition.workflow.getComponents().filterIsInstance<Step>()
+    return DependencyGraphBuilder().build(steps).adjacency.values.sumOf { it.size }
+}
+
 private fun timedPlan(codec: WorkflowYamlCodec, yaml: String): PhaseSample {
     val t0 = System.nanoTime()
     val descriptor = codec.decodeOrThrow(yaml)

@@ -64,14 +64,14 @@ steps:
     inputs:
       - id: "input-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Raw input data"
     outputs:
       - id: "loaded-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Loaded data from Conda step"
 
   # Step 2: Process with Python-Pixi
@@ -97,8 +97,8 @@ steps:
     inputs:
       - id: "loaded-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
         source:
           type: "step-output"
           stepId: "load-with-conda"
@@ -106,8 +106,8 @@ steps:
     outputs:
       - id: "processed-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Processed data from Pixi step"
 
   # Step 3: Analyze with R
@@ -132,8 +132,8 @@ steps:
     inputs:
       - id: "processed-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
         source:
           type: "step-output"
           stepId: "process-with-pixi"
@@ -141,6 +141,6 @@ steps:
     outputs:
       - id: "analysis-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Analysis results from R step"

@@ -32,7 +32,7 @@ class DataPortDescriptorTest
     @Test
     fun `equality hashCode toString copy`()
     {
-        val desc = DataDescriptor( type = "csv", format = "UTF-8" )
+        val desc = DataDescriptor( fileFormat = "csv", encoding = "UTF-8" )
         val a = DataPortDescriptor( id = "p-1", descriptor = desc )
         val b = a.copy()
 
@@ -51,8 +51,8 @@ class DataPortDescriptorTest
     {
         assertNotEquals( DataPortDescriptor( id = "x" ), DataPortDescriptor( id = null ) )
         assertNotEquals( DataPortDescriptor( id = null ), DataPortDescriptor( id = "x" ) )
-        assertNotEquals( DataPortDescriptor( descriptor = DataDescriptor( type = "csv" ) ), DataPortDescriptor( descriptor = null ) )
-        assertNotEquals( DataPortDescriptor( descriptor = null ), DataPortDescriptor( descriptor = DataDescriptor( type = "csv" ) ) )
+        assertNotEquals( DataPortDescriptor( descriptor = DataDescriptor( fileFormat = "csv" ) ), DataPortDescriptor( descriptor = null ) )
+        assertNotEquals( DataPortDescriptor( descriptor = null ), DataPortDescriptor( descriptor = DataDescriptor( fileFormat = "csv" ) ) )
         assertNotEquals( DataPortDescriptor( source = FileInputSource("p") ), DataPortDescriptor( source = null ) )
         assertNotEquals( DataPortDescriptor( source = null ), DataPortDescriptor( source = FileInputSource("p") ) )
         assertNotEquals( DataPortDescriptor( destination = FileOutputDestination("p") ), DataPortDescriptor( destination = null ) )
@@ -83,7 +83,7 @@ class DataPortDescriptorTest
     @Test
     fun `stores descriptor`()
     {
-        val desc = DataDescriptor( type = "parquet", format = "UTF-8" )
+        val desc = DataDescriptor( fileFormat = "parquet", encoding = "UTF-8" )
         assertEquals( desc, DataPortDescriptor( descriptor = desc ).descriptor )
     }
 
@@ -127,7 +127,7 @@ class DataPortDescriptorTest
     @Test
     fun `copy changing id does not affect other fields`()
     {
-        val desc = DataDescriptor( type = "csv" )
+        val desc = DataDescriptor( fileFormat = "csv" )
         val source = FileInputSource( "./in.csv" )
         val dest = FileOutputDestination( "./out.csv" )
         val orig = DataPortDescriptor( id = "old", descriptor = desc, source = source, destination = dest )
@@ -168,7 +168,7 @@ class DataPortDescriptorTest
     @Test
     fun `serializes descriptor field`()
     {
-        val encoded = json.encodeToString( DataPortDescriptor( descriptor = DataDescriptor( type = "csv" ) ) )
+        val encoded = json.encodeToString( DataPortDescriptor( descriptor = DataDescriptor( fileFormat = "csv" ) ) )
         assertTrue( encoded.contains("\"descriptor\""), "Missing descriptor key: $encoded" )
         assertTrue( encoded.contains("\"csv\""), "Missing type value: $encoded" )
     }
@@ -203,7 +203,8 @@ class DataPortDescriptorTest
     @Test
     fun `roundtrip with id and descriptor only`()
     {
-        val original = DataPortDescriptor( id = "p-1", descriptor = DataDescriptor( type = "csv", format = "UTF-8" ) )
+        val original =
+            DataPortDescriptor( id = "p-1", descriptor = DataDescriptor( fileFormat = "csv", encoding = "UTF-8" ) )
         assertEquals( original, json.decodeFromString<DataPortDescriptor>( json.encodeToString( original ) ) )
     }
 
@@ -247,7 +248,7 @@ class DataPortDescriptorTest
     {
         val original = DataPortDescriptor(
             id = "port-99",
-            descriptor = DataDescriptor( type = "parquet", format = "UTF-8", notes = "features" ),
+            descriptor = DataDescriptor( fileFormat = "parquet", encoding = "UTF-8", notes = "features" ),
             source = StepOutputInputSource( stepId = "preprocess", outputId = "clean" ),
             destination = FileOutputDestination( "/results/features.parquet" ),
         )

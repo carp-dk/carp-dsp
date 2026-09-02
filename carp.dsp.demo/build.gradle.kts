@@ -26,7 +26,7 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-protocols")
 
                 // For coroutines support
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.kotlinx.coroutines.get()}")
             }
         }
 
@@ -38,6 +38,8 @@ kotlin {
 
         jvmMain {
             dependencies {
+                // The vendored step library, to resolve `uses:` references against
+                implementation(project(":carp.dsp.steps"))
                 // JSON parsing for demo output
                 implementation("com.google.code.gson:gson:2.10.1")
                 implementation("health.workflows:lib")
@@ -54,6 +56,24 @@ kotlin {
             }
         }
     }
+}
+
+// Python working directories are not part of the published resources.
+//
+// `pixi.toml` and `pixi.lock` are deliberately NOT excluded: they describe the
+// environment rather than being it, and they are what an environment identity would
+// be computed from.
+tasks.named<Copy>("jvmProcessResources") {
+    exclude(
+        "**/.pixi", "**/.pixi/**",
+        "**/.drift-pixi", "**/.drift-pixi/**",
+        "**/.drift-venvs", "**/.drift-venvs/**",
+        "**/.venv", "**/.venv/**",
+        "**/__pycache__", "**/__pycache__/**",
+        "**/.pytest_cache", "**/.pytest_cache/**",
+        "**/.ruff_cache", "**/.ruff_cache/**",
+        "**/*.pyc", "**/*.pyo",
+    )
 }
 
 // Create a run task that executes the JVM main class
@@ -97,6 +117,7 @@ tasks.register<JavaExec>("runWorkflow") {
 
     standardInput = System.`in`
     standardOutput = System.out
+    errorOutput = System.err
 }
 
 // Paper evaluation harnesses (Section: Evaluation)

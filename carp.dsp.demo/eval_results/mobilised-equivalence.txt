@@ -1,0 +1,51 @@
+Mobilise-D equivalence check
+============================================================
+mobgap version      : 1.2.0
+reference pipeline  : MobilisedPipelineUniversal -> MobilisedPipelineImpaired
+datapoint           : MS/001/Test11/Trial1
+workflow output     : carp.dsp.demo\demo_results\mobgap\mobgap_gait_analysis_pipeline\run_00000000-0000-0000-0000-000000000002\steps\06_dmo_aggregation\outputs\aggregated-dmos-csv.csv
+
+1. Algorithm chain
+block                       mobgap reference        CARP-DSP workflow       same
+gait_sequence_detection     GsdIonescu              GsdIluz                 NO
+initial_contact_detection   IcdIonescu              IcdShinImproved         NO
+laterality_classification   LrcUllrich              LrcUllrich              yes
+cadence_calculation         CadFromIcDetector       CadFromIc               NO
+stride_length_calculation   SlZijlstra              SlZijlstra              yes
+walking_speed_calculation   WsNaive                 WsNaive                 yes
+turn_detection              TdElGohary              TdElGohary              yes
+stride_selection            StrideSelection         StrideSelection         yes
+wba                         WbAssembly              WbAssembly              yes
+dmo_aggregation             MobilisedAggregator     MobilisedAggregator     yes
+  -> chains DIFFER
+
+2. Aggregated DMOs
+dmo                            reference        workflow      rel.diff  verdict
+wb_all__count                          5               5             0  identical
+total_walking_duration_min      1.06116667      1.58416667         0.493  differs
+wb_all__n_raw_initial_contacts__sum              98             136         0.388  differs
+wb_all__duration_s__avg             9.15           13.81         0.509  differs
+wb_all__duration_s__p90           19.672          30.712         0.561  differs
+wb_all__duration_s__var      0.483779873      0.55098742         0.139  differs
+wb_all__cadence_spm__avg      93.2642361      88.6053028          0.05  differs
+wb_all__stride_duration_s__avg      1.18807718      1.32511018         0.115  differs
+wb_all__cadence_spm__var    0.0798806978    0.0766109266        0.0409  differs
+wb_all__stride_duration_s__var    0.0789235087    0.0851034183        0.0783  differs
+wb_10_30__count                        2               4             1  differs
+wb_10_30__walking_speed_mps__avg     0.690201948     0.747259276        0.0827  differs
+wb_10_30__stride_length_m__avg     0.890549983      1.02829317         0.155  differs
+wb_10__count                           2               5           1.5  differs
+wb_10__walking_speed_mps__p90     0.731611759     0.843781801         0.153  differs
+wb_30__count                           0               1           inf  differs
+wb_30__walking_speed_mps__avg             nan     0.785845378           nan  differs
+wb_30__stride_length_m__avg             nan     0.968140911           nan  differs
+wb_30__cadence_spm__avg              nan      97.1072142           nan  differs
+wb_30__stride_duration_s__avg             nan      1.23510638           nan  differs
+wb_30__walking_speed_mps__p90             nan     0.785845378           nan  differs
+wb_30__cadence_spm__p90              nan      97.1072142           nan  differs
+wb_30__walking_speed_mps__var             nan             nan             0  identical
+wb_30__stride_length_m__var             nan             nan             0  identical
+wb_60__count                           0               0             0  identical
+  -> 25 shared columns compared; DMOs DIFFER (tolerance 1e-09)
+
+VERDICT: see the rows marked NO / differs above.

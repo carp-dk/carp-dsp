@@ -4,11 +4,11 @@ import dk.cachet.carp.analytics.application.execution.ExecutionReport
 import dk.cachet.carp.analytics.application.execution.ExecutionStatus
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentExecutionLogs
 import dk.cachet.carp.common.application.UUID
-import kotlinx.datetime.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
 class IntegrationTestBaseTest : IntegrationTestBase()

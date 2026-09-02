@@ -1,0 +1,104 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "sensing.heartrate.daily-features"
+  name: "Daily heart-rate features"
+  description: >-
+    Reduce a regularly sampled heart-rate series to one row per participant per
+    day: mean, a low quantile reported as resting heart rate, peak, and the
+    number of intervals actually observed. The grid the input is on is declared
+    and checked. Consumes and describes heart rate and nothing else, which places
+    it in the sensing tier.
+  version: "1.0"
+  tags:
+    - "sensing"
+    - "heart-rate"
+    - "features"
+    - "daily"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "daily-features"
+    metadata:
+      name: "Daily heart-rate features"
+      description: "Aggregate a heart-rate series to per-participant-per-day features"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-sensing-heartrate-daily-features"
+      name: "daily-features"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/daily_hr_features.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "heart-rate"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "heart_rate_bpm"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: "Heart rate on a fixed grid: participant_id, timestamp, heart_rate_bpm"
+    outputs:
+      - id: "daily-heart-rate"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "mean_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "resting_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+            - name: "peak_hr"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: >-
+            Per participant-day: mean_hr, resting_hr, peak_hr, and
+            observed_hr_intervals - the denominator the other three are read
+            against. resting_hr is a percentile, not a resting measurement.
+
+library:
+  tier: "sensing"
+  subject: "heartrate"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/daily_hr_features.py"
+  method:
+    name: "Daily aggregation of heart rate"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

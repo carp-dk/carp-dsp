@@ -3,11 +3,11 @@ package carp.dsp.core.infrastructure.execution
 
 import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentMetadata
-import kotlinx.datetime.Clock
 import java.nio.file.Files
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
 import kotlin.test.*
+import kotlin.time.Clock
 
 class DefaultEnvironmentRegistryTest {
 

@@ -183,3 +183,14 @@ include(":detekt")
 include(":carp.dsp.core")
 include(":carp.dsp.demo")
 
+// Step library. Vendored by default; a "minimal" install skips it and
+// resolves every `uses:` reference through the registry instead.
+//   ./gradlew build -PcarpDspSteps=false
+// or set carpDspSteps=false in gradle.properties.
+val includeStepLibrary = (extra.properties["carpDspSteps"] as String?)?.toBoolean() ?: true
+if (includeStepLibrary) {
+    include(":carp.dsp.steps")
+} else {
+    println("Step library excluded (carpDspSteps=false) - steps resolve through the registry")
+}
+

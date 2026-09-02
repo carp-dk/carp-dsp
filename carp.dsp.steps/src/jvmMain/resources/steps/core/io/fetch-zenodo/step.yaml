@@ -1,0 +1,85 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.io.fetch-zenodo"
+  name: "Fetch a dataset file"
+  description: >-
+    Download a file from a URL and, if it is a zip archive, extract one named
+    member. Generic and domain-agnostic: the archive URL and member path are
+    arguments, so the step carries no dataset knowledge. Used to pull open
+    datasets (e.g. from Zenodo) into a workflow. The default arguments fetch the
+    hourly step counts from the open Fitbit dataset (Zenodo 53894); override them
+    with `args:` on the reference to fetch a different file.
+  version: "1.0"
+  tags:
+    - "core"
+    - "io"
+    - "download"
+    - "zenodo"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "fetch-zenodo"
+    metadata:
+      name: "Fetch a dataset file"
+      description: "Download a file and optionally extract a zip member"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-core-io-fetch-zenodo"
+      name: "fetch-zenodo"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/fetch_zenodo.py"
+      args:
+        - "--url"
+        - "https://zenodo.org/records/53894/files/mturkfitbit_export_4.12.16-5.12.16.zip?download=1"
+        - "--member"
+        - "Fitabase Data 4.12.16-5.12.16/hourlySteps_merged.csv"
+        - "--output"
+        - "output.0"
+    outputs:
+      - id: "file"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "The downloaded (and optionally extracted) CSV file"
+
+# Library-only metadata. Ignored by the codec (strictMode = false), read separately
+# by the conformance gate. See docs/STEP_LIBRARY.md.
+library:
+  tier: "core"
+  subject: "io"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/fetch_zenodo.py"
+  method:
+    name: "Open dataset ingestion"
+    citation: null
+  reference:
+    input: "reference/input.zip"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

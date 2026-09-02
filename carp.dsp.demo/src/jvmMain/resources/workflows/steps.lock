@@ -1,0 +1,4 @@
+steps:
+- uses: "sensing.heartrate.clean"
+  version: "1.0"
+  contentHash: "c43b1d1b8ecede8cac849d7b7f8685862f76f9274b6773563b4031dd70ccb878"

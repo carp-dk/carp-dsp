@@ -1,14 +1,20 @@
 [versions]
-kotlin = "2.1.20"
+# Kept in step with carp.core-kotlin: its artifacts carry Kotlin 2.4.0 metadata,
+# which a 2.1.x compiler cannot read.
+kotlin = "2.4.0"
 detekt = "1.23.8"
-kover = "0.8.3"
-kotlinx-serialization = "1.6.3"
-kotlinx-coroutines = "1.8.0"
+# 0.8.x reads compilation.compileKotlinTask, removed from the Kotlin Gradle
+# plugin in 2.2+. 0.9.x uses compileTaskProvider instead.
+kover = "0.9.9"
+kotlinx-serialization = "1.11.0"
+kotlinx-coroutines = "1.11.0"
+kotlinx-datetime = "0.8.0"
 kaml = "0.61.0"
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 

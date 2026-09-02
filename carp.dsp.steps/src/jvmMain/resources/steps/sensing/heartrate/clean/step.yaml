@@ -1,0 +1,94 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "sensing.heartrate.clean"
+  name: "Clean heart rate samples"
+  description: >-
+    Quality-control a heart-rate series: drop physiologically implausible
+    values, remove duplicate timestamps, resample each participant onto a
+    regular grid, and interpolate short gaps. Produces heart rate, so it can be
+    chained before any step that consumes it.
+  version: "1.0"
+  tags:
+    - "sensing"
+    - "heart-rate"
+    - "quality-control"
+    - "resampling"
+
+environments:
+  env-python-data:
+    name: "Python data analysis"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "pypi:pandas"
+
+steps:
+  - id: "clean"
+    metadata:
+      name: "Clean heart rate samples"
+      description: "Drop implausible values, deduplicate, resample and interpolate"
+      version: "1.0"
+    environmentId: "env-python-data"
+    dependsOn: []
+    task:
+      type: "python"
+      id: "task-sensing-heartrate-clean"
+      name: "clean"
+      entryPoint:
+        type: "script"
+        scriptPath: "impl/python/clean_heart_rate.py"
+      args:
+        - "--input"
+        - "input.0"
+        - "--output"
+        - "output.0"
+    inputs:
+      - id: "raw-heart-rate"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "heart_rate_bpm"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: "Raw heart rate samples: participant_id, timestamp, heart_rate_bpm"
+    outputs:
+      - id: "clean-heart-rate"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          fields:
+            - name: "heart_rate_bpm"
+              dataType: "dk.cachet.carp.heartrate"
+              ontologyRef: "http://purl.bioontology.org/ontology/SNOMEDCT/364075005"
+          notes: "Cleaned heart rate on a regular grid, same schema as the input"
+
+library:
+  tier: "sensing"
+  subject: "heartrate"
+  environment:
+    default: "env-python-data"
+    requires:
+      kind: ["pixi", "conda"]
+      interpreter:
+        name: "python"
+        version: ">=3.11,<4"
+      packages:
+        - name: "pandas"
+          version: ">=2.0"
+  implementations:
+    - language: "python"
+      path: "impl/python/clean_heart_rate.py"
+  method:
+    name: "Range filtering with linear interpolation of short gaps"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

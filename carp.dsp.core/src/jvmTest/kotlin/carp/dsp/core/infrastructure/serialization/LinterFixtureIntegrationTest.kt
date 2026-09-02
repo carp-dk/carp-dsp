@@ -337,7 +337,7 @@ class LinterFixtureIntegrationTest {
                 )
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-validate",
                     environmentId = "env-system",
                     metadata = StepMetadataDescriptor(
@@ -366,13 +366,13 @@ class LinterFixtureIntegrationTest {
                 "env-pixi-002" to EnvironmentDescriptor(name = "report-gen", kind = "pixi")
             ),
             steps = listOf(
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-validate",
                     environmentId = "env-conda-001",
                     metadata = StepMetadataDescriptor(name = "Validate Input"),
                     task = CommandTaskDescriptor(name = "validate", executable = "python", args = listOf("validate_eeg.py"))
                 ),
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-preprocess",
                     environmentId = "env-conda-001",
                     metadata = StepMetadataDescriptor(name = "Preprocess"),
@@ -384,14 +384,14 @@ class LinterFixtureIntegrationTest {
     private fun signalProcessingWithNamingViolations(): WorkflowDescriptor =
         signalProcessingFixture().copy(
             steps = signalProcessingFixture().steps.map { step ->
-                step.copy(id = "InvalidStepID-${step.id}") // Violates naming convention
+                (step as DefinedStepDescriptor).copy(id = "InvalidStepID-${step.id}") // Violates naming convention
             }
         )
 
     private fun signalProcessingWithMissingDescriptions(): WorkflowDescriptor =
         signalProcessingFixture().copy(
             steps = signalProcessingFixture().steps.map { step ->
-                step.copy(
+                (step as DefinedStepDescriptor).copy(
                     metadata = step.metadata?.copy(description = null)
                 )
             }
@@ -406,7 +406,7 @@ class LinterFixtureIntegrationTest {
     private fun signalProcessingWithExtraSteps(): WorkflowDescriptor =
         signalProcessingFixture().copy(
             steps = (1..15).map { i ->
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-$i",
                     environmentId = "env-conda-001",
                     metadata = StepMetadataDescriptor(name = "Step $i"),
@@ -424,7 +424,7 @@ class LinterFixtureIntegrationTest {
                 "env-unused" to EnvironmentDescriptor(name = "Unused", kind = "system")
             ),
             steps = (1..15).map { i ->
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "InvalidStep$i",
                     environmentId = if (i == 1) "InvalidEnv" else "env-unused",
                     metadata = StepMetadataDescriptor(name = "Step $i", description = null),
@@ -443,7 +443,7 @@ class LinterFixtureIntegrationTest {
                 "env-unused" to EnvironmentDescriptor(name = "unused", kind = "system")
             ),
             steps = (1..15).map { i ->
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "InvalidStep$i",
                     environmentId = if (i == 1) "InvalidEnv" else "env-unused",
                     metadata = StepMetadataDescriptor(name = "Step $i", description = null),
@@ -463,7 +463,7 @@ class LinterFixtureIntegrationTest {
                 "env-system" to EnvironmentDescriptor(name = "System", kind = "system")
             ),
             steps = (1..5).map { i ->
-                StepDescriptor(
+                DefinedStepDescriptor(
                     id = "step-task-$i", // Good naming
                     environmentId = "env-system",
                     metadata = StepMetadataDescriptor(

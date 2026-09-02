@@ -42,8 +42,8 @@ steps:
     outputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Hourly wearable data: participant_id, timestamp, heart_rate_bpm, steps"
 
   - id: "clean-resample"
@@ -69,8 +69,8 @@ steps:
     inputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Hourly wearable data"
         source:
           type: "step-output"
@@ -79,8 +79,8 @@ steps:
     outputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Cleaned hourly wearable data"
 
   - id: "daily-features"
@@ -106,8 +106,8 @@ steps:
     inputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Cleaned hourly wearable data"
         source:
           type: "step-output"
@@ -116,8 +116,8 @@ steps:
     outputs:
       - id: "daily-features-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Daily features: participant_id, date, mean_hr, resting_hr, peak_hr, total_steps, active_hours"
 
   - id: "summarise"
@@ -143,8 +143,8 @@ steps:
     inputs:
       - id: "daily-features-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Daily features"
         source:
           type: "step-output"
@@ -153,8 +153,8 @@ steps:
     outputs:
       - id: "summary-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Study-level summary statistics"
 
   - id: "visualise"
@@ -180,8 +180,8 @@ steps:
     inputs:
       - id: "daily-features-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Daily features"
         source:
           type: "step-output"
@@ -190,6 +190,6 @@ steps:
     outputs:
       - id: "plot-png"
         descriptor:
-          type: "png"
-          format: "binary"
+          fileFormat: "png"
+          encoding: "binary"
           notes: "2x2 summary chart of daily HR and activity"

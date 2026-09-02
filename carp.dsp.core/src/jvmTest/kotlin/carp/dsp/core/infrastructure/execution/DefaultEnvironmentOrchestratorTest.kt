@@ -4,9 +4,9 @@ import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.SystemEnvironmentRef
 import dk.cachet.carp.analytics.infrastructure.execution.*
-import kotlinx.datetime.Clock
 import java.nio.file.Files
 import kotlin.test.*
+import kotlin.time.Clock
 
 class DefaultEnvironmentOrchestratorTest {
 

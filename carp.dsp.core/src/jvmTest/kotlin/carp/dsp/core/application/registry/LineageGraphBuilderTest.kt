@@ -2,6 +2,7 @@ package carp.dsp.core.application.registry
 
 import carp.dsp.core.application.authoring.descriptor.CommandTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
@@ -58,7 +59,7 @@ class LineageGraphBuilderTest {
     fun `step nodes have type step`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to systemEnv),
         )
@@ -73,7 +74,7 @@ class LineageGraphBuilderTest {
     fun `environment nodes have type environment`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to condaEnv),
         )
@@ -88,7 +89,7 @@ class LineageGraphBuilderTest {
     fun `package nodes have type package`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to condaEnv),
         )
@@ -105,7 +106,7 @@ class LineageGraphBuilderTest {
     fun `one conda step produces correct node count`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to condaEnv),
         )
@@ -118,7 +119,7 @@ class LineageGraphBuilderTest {
     fun `system environment produces no package nodes`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to systemEnv),
         )
@@ -131,7 +132,7 @@ class LineageGraphBuilderTest {
     @Test
     fun `conda environment version is pythonVersion`() {
         val wf = workflowWith(
-            steps = listOf(StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
+            steps = listOf(DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
             environments = mapOf("env1" to condaEnv),
         )
         val graph = LineageGraphBuilder.build(wf)
@@ -142,7 +143,7 @@ class LineageGraphBuilderTest {
     @Test
     fun `docker environment version is image reference`() {
         val wf = workflowWith(
-            steps = listOf(StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
+            steps = listOf(DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
             environments = mapOf("env1" to dockerEnv),
         )
         val graph = LineageGraphBuilder.build(wf)
@@ -155,7 +156,7 @@ class LineageGraphBuilderTest {
     @Test
     fun `step USES environment edge is present`() {
         val wf = workflowWith(
-            steps = listOf(StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
+            steps = listOf(DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
             environments = mapOf("env1" to condaEnv),
         )
         val graph = LineageGraphBuilder.build(wf)
@@ -166,7 +167,7 @@ class LineageGraphBuilderTest {
     @Test
     fun `environment CONTAINS package edges are present`() {
         val wf = workflowWith(
-            steps = listOf(StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
+            steps = listOf(DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo"))),
             environments = mapOf("env1" to condaEnv),
         )
         val graph = LineageGraphBuilder.build(wf)
@@ -182,8 +183,8 @@ class LineageGraphBuilderTest {
     fun `two steps sharing one environment produce two USES edges`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = PythonTaskDescriptor(name = "s1", entryPoint = ScriptEntryPointDescriptor("a.py"))),
-                StepDescriptor(id = "s2", environmentId = "env1", task = PythonTaskDescriptor(name = "s2", entryPoint = ScriptEntryPointDescriptor("b.py"))),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = PythonTaskDescriptor(name = "s1", entryPoint = ScriptEntryPointDescriptor("a.py"))),
+                DefinedStepDescriptor(id = "s2", environmentId = "env1", task = PythonTaskDescriptor(name = "s2", entryPoint = ScriptEntryPointDescriptor("b.py"))),
             ),
             environments = mapOf("env1" to condaEnv),
         )
@@ -196,8 +197,8 @@ class LineageGraphBuilderTest {
     fun `two steps with different environments produce independent sub-graphs`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
-                StepDescriptor(id = "s2", environmentId = "env2", task = CommandTaskDescriptor(name = "s2", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s2", environmentId = "env2", task = CommandTaskDescriptor(name = "s2", executable = "echo")),
             ),
             environments = mapOf("env1" to condaEnv, "env2" to dockerEnv),
         )
@@ -212,7 +213,7 @@ class LineageGraphBuilderTest {
     fun `lineage graph conforms to shared contract`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to condaEnv),
         )
@@ -243,7 +244,7 @@ class LineageGraphBuilderTest {
         ),
     )
 
-    private fun stepConsuming(id: String, vararg inputs: DataPortDescriptor) = StepDescriptor(
+    private fun stepConsuming(id: String, vararg inputs: DataPortDescriptor) = DefinedStepDescriptor(
         id = id,
         environmentId = "env1",
         task = CommandTaskDescriptor(name = id, executable = "echo"),
@@ -323,7 +324,7 @@ class LineageGraphBuilderTest {
     fun `workflow with no protocol-bound inputs has no protocol nodes or edges`() {
         val wf = workflowWith(
             steps = listOf(
-                StepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
+                DefinedStepDescriptor(id = "s1", environmentId = "env1", task = CommandTaskDescriptor(name = "s1", executable = "echo")),
             ),
             environments = mapOf("env1" to systemEnv),
         )

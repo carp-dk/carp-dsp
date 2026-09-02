@@ -7,10 +7,10 @@ import dk.cachet.carp.common.infrastructure.test.StubDataPoint
 import dk.cachet.carp.data.application.*
 import dk.cachet.carp.data.infrastructure.dataStreamId
 import dk.cachet.carp.data.infrastructure.measurement
-import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class DataStreamBatchConverterTest {
 

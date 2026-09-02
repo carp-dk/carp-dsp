@@ -8,11 +8,11 @@ import dk.cachet.carp.common.application.data.HeartRate
 import dk.cachet.carp.common.application.data.StepCount
 import dk.cachet.carp.data.application.DataStreamId
 import dk.cachet.carp.data.application.SyncPoint
-import kotlinx.datetime.Instant
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Instant
 
 class CarpMeasurementRowTest {
 

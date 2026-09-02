@@ -1,6 +1,8 @@
 package carp.dsp.core.infrastructure.execution
 
 import carp.dsp.core.application.execution.ExecutionLogger
+import carp.dsp.core.infrastructure.execution.workspace.WorkspaceProvisioner
+import carp.dsp.core.infrastructure.execution.workspace.WorkspaceProvisioning
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
 import dk.cachet.carp.analytics.application.exceptions.*
 import dk.cachet.carp.analytics.application.execution.*
@@ -15,8 +17,8 @@ import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentOrchestrator
 import dk.cachet.carp.analytics.infrastructure.execution.SetupTiming
 import dk.cachet.carp.common.application.UUID
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.datetime.Clock
 import java.nio.file.Paths
+import kotlin.time.Clock
 
 /**
  * Implementation of [PlanExecutor] that drives real command execution.
@@ -62,6 +64,19 @@ class DefaultPlanExecutor(
         plan: ExecutionPlan,
         runId: UUID,
         policy: RunPolicy
+    ): ExecutionReport = run(plan, runId, WorkspaceProvisioning.EMPTY, policy)
+
+    /**
+     * Executes [plan], first materialising [provisioning] into the run workspace -
+     * a resolved library step's impl code and any declared file inputs are staged
+     * into each step's own directory before it runs. [execute] is this with nothing
+     * to provision.
+     */
+    fun run(
+        plan: ExecutionPlan,
+        runId: UUID,
+        provisioning: WorkspaceProvisioning,
+        policy: RunPolicy = DefaultRunPolicy()
     ): ExecutionReport {
         // Plan-time check: a plan carrying ERROR issues is never executed
         if (!plan.isRunnable()) {
@@ -69,7 +84,7 @@ class DefaultPlanExecutor(
         }
 
         logger.info { "Executing plan '${plan.workflowName}' (${plan.steps.size} step(s), runId=$runId)" }
-        val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy)
+        val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy, provisioning)
 
         try {
             executeSteps(plan, policy, context, environmentCoordinator)
@@ -89,9 +104,11 @@ class DefaultPlanExecutor(
     private fun initializeExecutionContext(
         plan: ExecutionPlan,
         runId: UUID,
-        policy: RunPolicy
+        policy: RunPolicy,
+        provisioning: WorkspaceProvisioning
     ): Pair<KnownStepExecutionContext, EnvironmentExecutionCoordinator> {
         val workspace = workspaceManager.create(plan, runId)
+        WorkspaceProvisioner().provision(workspace, provisioning)
         val stepRunner = createStepRunner()
         val environmentCoordinator = EnvironmentExecutionCoordinator(
             plan = plan,

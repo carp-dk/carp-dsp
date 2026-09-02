@@ -1,0 +1,155 @@
+schemaVersion: "1.0"
+metadata:
+  id: "wf-activity-summary-offline"
+  name: "Activity Summary (offline)"
+  description: >-
+    The activity-summary pipeline built entirely from certified library steps,
+    but sourcing synthetic data instead of fetching from Zenodo. Same shape as
+    wf-activity-summary-v2 from the cleaning steps onwards; the only difference is
+    the source. Runs with no network access, which makes it the pipeline to reach
+    for in CI or a demo.
+  version: "1.0"
+  tags:
+    - "heart-rate"
+    - "activity"
+    - "reuse"
+    - "library"
+    - "offline"
+
+# The generator emits both signals in one table, so it is split back into two
+# before cleaning: each sensing step is tied to a single signal, and that is what
+# lets it apply the right rules. select-columns splits, the sensing steps clean,
+# join-tables recombines.
+steps:
+  - id: "generate"
+    uses: "analysis.io.generate-hr-steps"
+    args:
+      - "--participants"
+      - "4"
+      - "--days"
+      - "14"
+
+  - id: "split-steps"
+    uses: "core.reshape.select-columns"
+    dependsOn:
+      - "generate"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "generate"
+          outputId: "hr-steps"
+    args:
+      - "--columns"
+      - "participant_id,timestamp,steps"
+
+  - id: "split-hr"
+    uses: "core.reshape.select-columns"
+    dependsOn:
+      - "generate"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "generate"
+          outputId: "hr-steps"
+    args:
+      - "--columns"
+      - "participant_id,timestamp,heart_rate_bpm"
+
+  - id: "clean-steps"
+    uses: "sensing.steps.clean"
+    dependsOn:
+      - "split-steps"
+    inputs:
+      - id: "raw-steps"
+        source:
+          type: "step-output"
+          stepId: "split-steps"
+          outputId: "selected"
+
+  - id: "clean-hr"
+    uses: "sensing.heartrate.clean"
+    dependsOn:
+      - "split-hr"
+    inputs:
+      - id: "raw-heart-rate"
+        source:
+          type: "step-output"
+          stepId: "split-hr"
+          outputId: "selected"
+
+  - id: "daily-steps"
+    uses: "sensing.steps.daily-features"
+    dependsOn:
+      - "clean-steps"
+    inputs:
+      - id: "steps"
+        source:
+          type: "step-output"
+          stepId: "clean-steps"
+          outputId: "clean-steps"
+
+  - id: "daily-hr"
+    uses: "sensing.heartrate.daily-features"
+    dependsOn:
+      - "clean-hr"
+    inputs:
+      - id: "heart-rate"
+        source:
+          type: "step-output"
+          stepId: "clean-hr"
+          outputId: "clean-heart-rate"
+
+  # Outer, deliberately: an inner join would drop a day observed on one signal
+  # only, which is the defect the removed clean-resample step had.
+  - id: "join-daily"
+    uses: "core.reshape.join-tables"
+    dependsOn:
+      - "daily-steps"
+      - "daily-hr"
+    inputs:
+      - id: "left"
+        source:
+          type: "step-output"
+          stepId: "daily-steps"
+          outputId: "daily-steps"
+      - id: "right"
+        source:
+          type: "step-output"
+          stepId: "daily-hr"
+          outputId: "daily-heart-rate"
+    args:
+      - "--on"
+      - "participant_id,date"
+      - "--how"
+      - "outer"
+
+  - id: "summarise"
+    uses: "core.stats.summarise"
+    dependsOn:
+      - "join-daily"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "join-daily"
+          outputId: "joined"
+
+  - id: "visualise"
+    uses: "core.viz.visualise"
+    dependsOn:
+      - "join-daily"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "join-daily"
+          outputId: "joined"
+    args:
+      - "--line"
+      - "total_steps,resting_hr"
+      - "--histogram"
+      - "total_steps"
+      - "--scatter"
+      - "total_steps:mean_hr"

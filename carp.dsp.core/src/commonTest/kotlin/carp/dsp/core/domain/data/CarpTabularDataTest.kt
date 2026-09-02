@@ -14,11 +14,11 @@ import dk.cachet.carp.common.application.data.StepCount
 import dk.cachet.carp.data.application.DataStreamId
 import dk.cachet.carp.data.application.MutableDataStreamBatch
 import dk.cachet.carp.data.application.SyncPoint
-import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class CarpTabularDataTest {
 

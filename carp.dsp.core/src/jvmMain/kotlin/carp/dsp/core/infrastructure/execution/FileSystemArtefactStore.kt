@@ -9,8 +9,6 @@ import dk.cachet.carp.analytics.application.execution.ProducedOutputRef
 import dk.cachet.carp.analytics.application.execution.ResourceKind
 import dk.cachet.carp.analytics.application.execution.ResourceRef
 import dk.cachet.carp.common.application.UUID
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.nio.file.Path
@@ -19,7 +17,9 @@ import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * File-system based implementation of [ArtefactStore].
@@ -29,7 +29,9 @@ import kotlin.time.ExperimentalTime
  * @param workspaceRoot The root directory of the execution workspace
  * @param clock Wall-clock source for timestamps; defaults to [Clock.System]
  */
-class FileSystemArtefactStore(
+class FileSystemArtefactStore
+@OptIn(ExperimentalTime::class)
+constructor(
     private val workspaceRoot: Path,
     private val clock: Clock.System = Clock.System
 ) : ArtefactStore
@@ -142,7 +144,6 @@ class FileSystemArtefactStore(
         )
     }
 
-    @OptIn(ExperimentalTime::class)
     private fun loadExistingArtefacts()
     {
         if (!outputsDir.exists() || !outputsDir.isDirectory()) return
@@ -203,7 +204,8 @@ class FileSystemArtefactStore(
     // Serializable metadata for persistence
 
     @kotlinx.serialization.Serializable
-    private data class PersistedArtefactMetadata(
+    @OptIn(ExperimentalTime::class)
+    private data class PersistedArtefactMetadata (
         val outputId: UUID,
         val stepId: UUID,
         val location: ResourceRef,

@@ -2,7 +2,12 @@ schemaVersion: "1.0"
 metadata:
   id: "dbdp-covid-hr-steps"
   name: "DBDP COVID Heart Rate & Steps Analysis"
-  description: "Three-step workflow for COVID-19 health monitoring. Loads HR and steps data, analyzes for biomarkers, and generates a summary report."
+  description: >-
+    COVID-19 health monitoring. Loads HR and steps data, analyses it for
+    biomarkers, and generates a summary report. Mixes study-specific steps
+    authored for this workflow with a certified library step referenced by
+    `uses:` - the descriptive statistics are not worth writing again, while the
+    biomarker analysis is particular to this study.
   version: "1.0"
   tags:
     - "dbdp"
@@ -43,23 +48,23 @@ steps:
       name: "load-data"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/load_hr_steps.py"
+        - "scripts/load_hr_steps.py"
         - "input.0"
         - "output.0"
     inputs:
       - id: "covid-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Raw COVID-19 HR and steps data"
         source:
           type: "file"
-          path: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources//data/dbdp_covid_sample.csv"
+          path: "data/dbdp_covid_sample.csv"
     outputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Validated HR and steps CSV"
 
   # Step 2: Analyse — run biomarker detection
@@ -78,7 +83,7 @@ steps:
       description: "Detect COVID-19 health anomalies using Pixi Python environment"
       entryPoint:
         type: "script"
-        scriptPath: "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/covid_hr_steps.py"
+        scriptPath: "scripts/covid_hr_steps.py"
       args:
         - "--input"
         - "input.0"
@@ -87,8 +92,8 @@ steps:
     inputs:
       - id: "hr-steps-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "HR and steps data"
         source:
           type: "step-output"
@@ -97,8 +102,8 @@ steps:
     outputs:
       - id: "biomarker-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Biomarker analysis results (alert flag, metrics)"
 
   # Step 3: Report — generate human-readable summary
@@ -116,14 +121,14 @@ steps:
       name: "biomarker-report"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/report_biomarker.py"
+        - "scripts/report_biomarker.py"
         - "input.0"
         - "output.0"
     inputs:
       - id: "biomarker-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Biomarker analysis results"
         source:
           type: "step-output"
@@ -132,7 +137,21 @@ steps:
     outputs:
       - id: "report-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Formatted biomarker report"
+
+  # Step 4: Descriptive statistics — a certified library step, referenced rather
+  # than written again. Its task, environment and ports come from the library;
+  # this workflow supplies only the wiring.
+  - id: "summarise"
+    uses: "core.stats.summarise"
+    dependsOn:
+      - "load-data"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "load-data"
+          outputId: "hr-steps-csv"
 

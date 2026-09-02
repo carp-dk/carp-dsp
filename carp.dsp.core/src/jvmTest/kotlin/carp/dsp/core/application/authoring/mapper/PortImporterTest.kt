@@ -86,7 +86,7 @@ class PortImporterTest
     {
         val descriptor = DataPortDescriptor(
             id = "port-hr",
-            descriptor = DataDescriptor( type = "csv" ),
+            descriptor = DataDescriptor( fileFormat = "csv" ),
             source = ProtocolInputSource(
                 protocol = ProtocolRefDescriptor( id = "aabbccdd-0000-0000-0000-000000000000", version = 2 ),
                 dataType = "dk.cachet.carp.heartrate"
@@ -229,8 +229,8 @@ class PortImporterTest
             id = "port-json",
             source = FileInputSource( path = "/data/data" ), // No extension
             descriptor = DataDescriptor(
-                type = "JSON", // Explicit format
-                format = "UTF-8"
+                fileFormat = "JSON", // Explicit format
+                encoding = "UTF-8"
             )
         )
 
@@ -332,7 +332,7 @@ class PortImporterTest
             id = "port-typed",
             destination = FileOutputDestination( path = "/output/data" ), // No extension
             descriptor = DataDescriptor(
-                type = "JSON" // Explicit format
+                fileFormat = "JSON" // Explicit format
             )
         )
 
@@ -372,8 +372,8 @@ class PortImporterTest
             id = "port-schema",
             source = FileInputSource( path = "/data/file.csv" ),
             descriptor = DataDescriptor(
-                type = "CSV",
-                format = "UTF-8"
+                fileFormat = "CSV",
+                encoding = "UTF-8"
             )
         )
 
@@ -394,8 +394,8 @@ class PortImporterTest
             id = "port-schema",
             destination = FileOutputDestination( path = "/output/file.csv" ),
             descriptor = DataDescriptor(
-                type = "CSV",
-                format = "UTF-8"
+                fileFormat = "CSV",
+                encoding = "UTF-8"
             )
         )
 
@@ -416,8 +416,8 @@ class PortImporterTest
             id = "port-no-schema",
             source = FileInputSource( path = "/data/file" ),
             descriptor = DataDescriptor(
-                type = null, // No type specified
-                format = "UTF-8"
+                fileFormat = null, // No type specified
+                encoding = "UTF-8"
             )
         )
 

@@ -241,7 +241,7 @@ class DescriptorDataClassTest
     fun `StepDescriptor equality hashCode toString copy`()
     {
         val task = CommandTaskDescriptor(name = "t", executable = "echo")
-        val a = StepDescriptor(id = "s-1", environmentId = "e-1", task = task, dependsOn = listOf("s-0"))
+        val a = DefinedStepDescriptor(id = "s-1", environmentId = "e-1", task = task, dependsOn = listOf("s-0"))
         val b = a.copy()
 
         assertEquals(a, b)
@@ -257,10 +257,11 @@ class DescriptorDataClassTest
     fun `StepDescriptor equals null-branch coverage`()
     {
         val task = CommandTaskDescriptor(name = "t", executable = "echo")
-        val withId = StepDescriptor(id = "s", environmentId = "e", task = task)
-        val withoutId = StepDescriptor(id = null, environmentId = "e", task = task)
-        val withMeta = StepDescriptor(environmentId = "e", task = task, metadata = StepMetadataDescriptor(name = "m"))
-        val withoutMeta = StepDescriptor(environmentId = "e", task = task, metadata = null)
+        val withId = DefinedStepDescriptor(id = "s", environmentId = "e", task = task)
+        val withoutId = DefinedStepDescriptor(id = null, environmentId = "e", task = task)
+        val withMeta =
+            DefinedStepDescriptor(environmentId = "e", task = task, metadata = StepMetadataDescriptor(name = "m"))
+        val withoutMeta = DefinedStepDescriptor(environmentId = "e", task = task, metadata = null)
 
         assertNotEquals(withId, withoutId)
         assertNotEquals(withoutId, withId)
@@ -322,7 +323,7 @@ class DescriptorDataClassTest
     {
         val meta = WorkflowMetadataDescriptor(name = "wf")
         val task = CommandTaskDescriptor(name = "t", executable = "echo")
-        val step = StepDescriptor(environmentId = "e1", task = task)
+        val step = DefinedStepDescriptor(environmentId = "e1", task = task)
         val env = EnvironmentDescriptor(name = "env", kind = "conda")
 
         val a = WorkflowDescriptor(
@@ -339,7 +340,7 @@ class DescriptorDataClassTest
     {
         val meta = WorkflowMetadataDescriptor(name = "wf")
         val task = CommandTaskDescriptor(name = "t", executable = "echo")
-        val step = StepDescriptor(environmentId = "e", task = task)
+        val step = DefinedStepDescriptor(environmentId = "e", task = task)
         val env = EnvironmentDescriptor(name = "env", kind = "conda")
 
         val withSteps = WorkflowDescriptor(schemaVersion = "1.0", metadata = meta, steps = listOf(step))

@@ -1,0 +1,63 @@
+schemaVersion: "1.0"
+metadata:
+  id: "wf-minimal-summary-v2"
+  name: "Minimal Summary (library steps)"
+  description: >-
+    The shortest recomposition of the shared library: fetch the hourly step counts,
+    put them into the library schema, aggregate to daily features, summarise. One
+    signal, no cleaning, no plotting.
+
+    This dropped to a single signal when daily aggregation was split per signal.
+    Heart rate arrives from Zenodo at seconds resolution, so putting it on a daily
+    grid means resampling it first, and resampling is what the cleaning step is
+    for - a workflow that says it skips cleaning cannot then do the cleaning step's
+    job under another name. The step counts are already hourly, so they need
+    nothing. v2 of wf-minimal-summary.
+  version: "2.0"
+  tags:
+    - "activity"
+    - "reuse"
+    - "library"
+
+steps:
+  - id: "fetch-steps"
+    uses: "core.io.fetch-zenodo"
+    # default args fetch the hourly step counts
+
+  - id: "shape-steps"
+    uses: "core.reshape.select-columns"
+    dependsOn:
+      - "fetch-steps"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "fetch-steps"
+          outputId: "file"
+    args:
+      - "--rename"
+      - "Id:participant_id,ActivityHour:timestamp,StepTotal:steps"
+      - "--columns"
+      - "participant_id,timestamp,steps"
+
+  - id: "daily-steps"
+    uses: "sensing.steps.daily-features"
+    dependsOn:
+      - "shape-steps"
+    inputs:
+      - id: "steps"
+        source:
+          type: "step-output"
+          stepId: "shape-steps"
+          outputId: "selected"
+
+  - id: "summarise"
+    uses: "core.stats.summarise"
+    dependsOn:
+      - "daily-steps"
+    inputs:
+      - id: "table"
+        source:
+          type: "step-output"
+          stepId: "daily-steps"
+          outputId: "daily-steps"

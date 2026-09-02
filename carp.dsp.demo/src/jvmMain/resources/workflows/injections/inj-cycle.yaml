@@ -42,7 +42,7 @@ steps:
       name: "import-data"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/import_data.py"
+        - "scripts/mobgap/import_data.py"
         - "--imu-data"
         - "output.0"
         - "--config"
@@ -50,8 +50,8 @@ steps:
     inputs:
       - id: "aggregated-dmos-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "INJECTED back-edge to force a dependency cycle"
         source:
           type: "step-output"
@@ -60,13 +60,13 @@ steps:
     outputs:
       - id: "imu-data-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "IMU recording in body frame: acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z — one row per sample"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata: sampling_rate_hz, cohort, height_m, measurement_condition"
 
   # Step 2: GSD — detect gait sequences in the full recording
@@ -84,7 +84,7 @@ steps:
       name: "gsd"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/gsd.py"
+        - "scripts/mobgap/gsd.py"
         - "--imu-data"
         - "input.0"
         - "--config"
@@ -94,8 +94,8 @@ steps:
     inputs:
       - id: "imu-data-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Full IMU recording"
         source:
           type: "step-output"
@@ -103,8 +103,8 @@ steps:
           outputId: "imu-data-csv"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata"
         source:
           type: "step-output"
@@ -113,8 +113,8 @@ steps:
     outputs:
       - id: "gs-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Gait sequence list: gs_id (index), start (sample), end (sample) — recording-level indices"
 
   # Step 3: ICD — detect initial contacts, classify laterality, detect turns
@@ -132,7 +132,7 @@ steps:
       name: "icd"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/icd.py"
+        - "scripts/mobgap/icd.py"
         - "--imu-data"
         - "input.0"
         - "--gs-list"
@@ -146,8 +146,8 @@ steps:
     inputs:
       - id: "imu-data-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Full IMU recording"
         source:
           type: "step-output"
@@ -155,8 +155,8 @@ steps:
           outputId: "imu-data-csv"
       - id: "gs-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Gait sequence boundaries"
         source:
           type: "step-output"
@@ -164,8 +164,8 @@ steps:
           outputId: "gs-list-csv"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata"
         source:
           type: "step-output"
@@ -174,13 +174,13 @@ steps:
     outputs:
       - id: "ic-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Initial contacts: gs_id, ic_id, ic (recording-level sample), lr_label"
       - id: "turn-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Detected turns: gs_id, turn_id, start, end (recording-level samples), duration_s, direction"
 
   # Step 4: Per-second parameters — cadence, stride length, walking speed
@@ -198,7 +198,7 @@ steps:
       name: "per-sec-params"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/per_sec_params.py"
+        - "scripts/mobgap/per_sec_params.py"
         - "--imu-data"
         - "input.0"
         - "--gs-list"
@@ -212,8 +212,8 @@ steps:
     inputs:
       - id: "imu-data-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Full IMU recording"
         source:
           type: "step-output"
@@ -221,8 +221,8 @@ steps:
           outputId: "imu-data-csv"
       - id: "gs-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Gait sequence boundaries"
         source:
           type: "step-output"
@@ -230,8 +230,8 @@ steps:
           outputId: "gs-list-csv"
       - id: "ic-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Initial contacts with laterality"
         source:
           type: "step-output"
@@ -239,8 +239,8 @@ steps:
           outputId: "ic-list-csv"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata"
         source:
           type: "step-output"
@@ -249,8 +249,8 @@ steps:
     outputs:
       - id: "per-sec-params-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Per-second gait parameters: gs_id, sec_center (recording-level s), cadence_spm, stride_length_m, walking_speed_mps"
 
   # Step 5: WBA — assemble walking bouts from strides
@@ -268,7 +268,7 @@ steps:
       name: "wba"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/wba.py"
+        - "scripts/mobgap/wba.py"
         - "--ic-list"
         - "input.0"
         - "--per-sec-params"
@@ -282,8 +282,8 @@ steps:
     inputs:
       - id: "ic-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Initial contacts with laterality"
         source:
           type: "step-output"
@@ -291,8 +291,8 @@ steps:
           outputId: "ic-list-csv"
       - id: "per-sec-params-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Per-second gait parameters"
         source:
           type: "step-output"
@@ -300,8 +300,8 @@ steps:
           outputId: "per-sec-params-csv"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata"
         source:
           type: "step-output"
@@ -310,13 +310,13 @@ steps:
     outputs:
       - id: "stride-list-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Annotated stride list: s_id, start, end, lr_label, stride_duration_s, cadence_spm, stride_length_m, walking_speed_mps, wb_id"
       - id: "wb-params-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Walking bout parameters: wb_id, start, end, n_strides, mean stride_duration_s, cadence_spm, stride_length_m, walking_speed_mps"
 
   # Step 6: Aggregate — apply DMO thresholds and produce final summary
@@ -334,7 +334,7 @@ steps:
       name: "aggregate"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/aggregate.py"
+        - "scripts/mobgap/aggregate.py"
         - "--wb-params"
         - "input.0"
         - "--config"
@@ -344,8 +344,8 @@ steps:
     inputs:
       - id: "wb-params-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Walking bout parameters"
         source:
           type: "step-output"
@@ -353,8 +353,8 @@ steps:
           outputId: "wb-params-csv"
       - id: "config-json"
         descriptor:
-          type: "json"
-          format: "utf-8"
+          fileFormat: "json"
+          encoding: "utf-8"
           notes: "Recording metadata (cohort + measurement_condition for threshold selection)"
         source:
           type: "step-output"
@@ -363,8 +363,8 @@ steps:
     outputs:
       - id: "aggregated-dmos-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Final aggregated DMOs: single-row summary of walking speed, cadence, stride length, stride duration, and WB-level statistics"
 
   # Step 7: Plot WB-level trends
@@ -382,7 +382,7 @@ steps:
       name: "plot-wb-params"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/plot_wb_params.py"
+        - "scripts/mobgap/plot_wb_params.py"
         - "--wb-params"
         - "input.0"
         - "--output"
@@ -390,8 +390,8 @@ steps:
     inputs:
       - id: "wb-params-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Walking bout parameters"
         source:
           type: "step-output"
@@ -400,8 +400,8 @@ steps:
     outputs:
       - id: "wb-params-plot-png"
         descriptor:
-          type: "png"
-          format: "binary"
+          fileFormat: "png"
+          encoding: "binary"
           notes: "Line plots of WB-level cadence, stride length, stride duration, and walking speed"
 
   # Step 8: Plot aggregated DMO summary
@@ -419,7 +419,7 @@ steps:
       name: "plot-aggregated-dmos"
       executable: "python"
       args:
-        - "/Users/ngrec/Code/carp-dsp/carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/plot_aggregated_dmos.py"
+        - "scripts/mobgap/plot_aggregated_dmos.py"
         - "--aggregated-dmos"
         - "input.0"
         - "--output"
@@ -427,8 +427,8 @@ steps:
     inputs:
       - id: "aggregated-dmos-csv"
         descriptor:
-          type: "csv"
-          format: "utf-8"
+          fileFormat: "csv"
+          encoding: "utf-8"
           notes: "Final aggregated DMOs"
         source:
           type: "step-output"
@@ -437,7 +437,7 @@ steps:
     outputs:
       - id: "aggregated-dmos-plot-png"
         descriptor:
-          type: "png"
-          format: "binary"
+          fileFormat: "png"
+          encoding: "binary"
           notes: "Bar chart summary of aggregated mobility outcomes"
 

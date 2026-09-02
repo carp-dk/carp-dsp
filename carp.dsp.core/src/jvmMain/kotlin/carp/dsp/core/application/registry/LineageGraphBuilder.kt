@@ -1,7 +1,9 @@
 package carp.dsp.core.application.registry
 
+import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentDescriptor
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
+import carp.dsp.core.application.authoring.descriptor.ReferencedStepDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.packaging.protocolReferences
@@ -86,21 +88,29 @@ object LineageGraphBuilder {
         nodes: MutableList<LineageNode>,
         edges: MutableList<LineageEdge>,
     ) {
-        val stepId = step.id ?: step.task.name
+        // A referenced step (`uses:`) has no inline task/environment until resolved;
+        // fall back to its reference for identity and skip the environment edge.
+        val label = when (step) {
+            is DefinedStepDescriptor -> step.task.name
+            is ReferencedStepDescriptor -> step.uses
+        }
+        val stepId = step.id ?: label
         val stepVersion = step.metadata?.version ?: ""
-        nodes.add(LineageNode(id = stepId, version = stepVersion, type = "step", label = step.task.name))
+        nodes.add(LineageNode(id = stepId, version = stepVersion, type = "step", label = label))
 
-        val envId = step.environmentId
-        val envVersion = descriptor.environments[envId]?.let { envVersionOf(it) } ?: ""
-        edges.add(
-            LineageEdge(
-                fromId = stepId,
-                fromVersion = stepVersion,
-                toId = envId,
-                toVersion = envVersion,
-                relation = "USES"
+        if (step is DefinedStepDescriptor) {
+            val envId = step.environmentId
+            val envVersion = descriptor.environments[envId]?.let { envVersionOf(it) } ?: ""
+            edges.add(
+                LineageEdge(
+                    fromId = stepId,
+                    fromVersion = stepVersion,
+                    toId = envId,
+                    toVersion = envVersion,
+                    relation = "USES"
+                )
             )
-        )
+        }
 
         // Inputs bound to the same protocol collapse to a single edge.
         step.inputs

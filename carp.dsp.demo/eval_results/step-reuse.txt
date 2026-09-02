@@ -1,22 +1,45 @@
-========================================================================
-Step-reuse eval - 2026-07-16T12:38:09.404870800Z
-Library: scripts/hr_lib (open Fitbit data, Zenodo 53894)
+============================================================================
+Step-reuse eval - 2026-08-14T09:13:48.747478400Z
+Three HR/step pipelines (open Fitbit data, Zenodo 53894), authored two ways.
 
-Workflows planned (0 ERROR issues each): true  {activity-summary=true, anomaly-report=true, minimal-summary=true}
+Library compositions plan with 0 ERROR issues: true  {activity-summary=true, anomaly-report=true, minimal-summary=true}
 
-  library step      reuse    workflows
-  load-hr-steps     x3      [activity-summary, anomaly-report, minimal-summary]
-  clean-resample    x2      [activity-summary, anomaly-report]
-  daily-features    x3      [activity-summary, anomaly-report, minimal-summary]
-  summarise         x2      [activity-summary, minimal-summary]
-  detect-anomaly    x1      [anomaly-report]
-  visualise         x2      [activity-summary, anomaly-report]
+  library step         workflows                              refs
+  fetch-zenodo         activity-summary,anomaly-report,minimal-summary 5
+  select-columns       activity-summary,anomaly-report,minimal-summary 5
+  steps.clean          activity-summary,anomaly-report        2
+  heartrate.clean      activity-summary,anomaly-report        2
+  steps.daily-features activity-summary,anomaly-report,minimal-summary 3
+  heartrate.daily-features activity-summary,anomaly-report        2
+  join-tables          activity-summary,anomaly-report        3
+  activity.hr-activity-contrast activity-summary                       1
+  summarise            activity-summary,minimal-summary       2
+  visualise            activity-summary,anomaly-report        2
+  activity.detect-anomaly anomaly-report                         1
+  REFERENCES                                                  28
+  REPEATS AVOIDED                                             17
 
-Distinct library steps:        6
-References across workflows:   13
-Duplicated step bodies (CARP): 0  (workflows reference shared scripts)
-Monolithic build would inline: 13 copies -> 7 redundant (53% of inlined)
-Library size (written once):   159 SLOC across 6 steps
-Projected duplicated SLOC:     195 (monolithic)
-========================================================================
+                                         inline      uses:
+  --------------------------------------------------------
+  distinct steps                              6         11
+  references                                 13         28
+  repeats avoided                             7         17
+  step YAML authored (lines)                429        332
+  of which duplicated                       226          0
+  steps declared inline                      13          0
+  steps authored elsewhere                    0         11
+
+  Both share their scripts. What differs is the declaration: inline restates each
+  step's task, environment and typed ports per workflow, while `uses:` states them
+  once in the library and references them, so a second reference adds only wiring.
+
+  The two decompositions are not identical, and that is itself a result: composing
+  from generic library steps produced a finer pipeline (11 steps against 6), because a
+  generic step does less each. Read the totals as 'what you write to express this
+  analysis', not as the same pipeline measured twice.
+
+  Under `uses:` none of the 11 steps was written for these workflows - including the
+  one referenced once, which is reuse of a step someone else authored rather than
+  repeat use of your own.
+============================================================================
 
