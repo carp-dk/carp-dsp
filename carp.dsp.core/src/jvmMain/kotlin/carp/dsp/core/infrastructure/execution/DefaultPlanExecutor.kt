@@ -1,6 +1,9 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.application.execution.EnvironmentOutcome
 import carp.dsp.core.application.execution.ExecutionLogger
+import carp.dsp.core.infrastructure.execution.handlers.EnvironmentResolution
+import carp.dsp.core.infrastructure.execution.handlers.EnvironmentStore
 import carp.dsp.core.infrastructure.execution.workspace.WorkspaceProvisioner
 import carp.dsp.core.infrastructure.execution.workspace.WorkspaceProvisioning
 import carp.dsp.core.infrastructure.runtime.JvmCommandRunner
@@ -33,7 +36,7 @@ import kotlin.time.Clock
  * When [RunPolicy.stopOnFailure] is true any failed step causes remaining steps to
  * be recorded as [ExecutionStatus.SKIPPED].
  *
- * @param workspaceManager  Materializes the run workspace on disk and resolves step paths.
+ * @param workspaceManager  Materialises the run workspace on disk and resolves step paths.
  * @param artefactStore     Stores metadata about produced outputs/artefacts.
  * @param options           Optional execution dependencies (runner, ordering, validation, orchestrator, config, clock).
  */
@@ -113,7 +116,9 @@ class DefaultPlanExecutor(
         val environmentCoordinator = EnvironmentExecutionCoordinator(
             plan = plan,
             orchestrator = options.orchestrator,
-            config = options.environmentConfig
+            config = options.environmentConfig,
+            runId = runId,
+            executionLogger = options.executionLogger
         )
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
@@ -445,7 +450,9 @@ class DefaultPlanExecutor(
     private class EnvironmentExecutionCoordinator(
         private val plan: ExecutionPlan,
         private val orchestrator: EnvironmentOrchestrator,
-        private val config: EnvironmentConfig
+        private val config: EnvironmentConfig,
+        private val runId: UUID,
+        private val executionLogger: ExecutionLogger
     ) {
         private val setupEnvironments = mutableSetOf<String>()
         private val requiredRefs = plan.requiredEnvironmentRefs.values.distinctBy { it.id }
@@ -516,8 +523,16 @@ class DefaultPlanExecutor(
                 return false
             }
 
+            val name = displayNameOf(ref)
+            executionLogger.onEnvironmentSetupStarted(runId, ref.id, name)
+
+            val resolution = runCatching { EnvironmentStore.resolve(ref) }.getOrNull()
+
+            val startMs = System.currentTimeMillis()
             val setupResult = runCatching { orchestrator.setup(ref) }
+            val durationMs = System.currentTimeMillis() - startMs
             val setupOk = setupResult.getOrDefault(false)
+
             if (!setupOk) {
                 val ex = setupResult.exceptionOrNull()
                 val msg = buildString {
@@ -530,11 +545,32 @@ class DefaultPlanExecutor(
                     kind = ExecutionIssueKind.ORCHESTRATOR_ERROR,
                     message = msg
                 )
+                executionLogger.onEnvironmentFailed(runId, ref.id, name, msg)
                 return false
             }
 
+            executionLogger.onEnvironmentReady(
+                runId,
+                EnvironmentOutcome(
+                    environmentId = ref.id,
+                    name = name,
+                    durationMs = durationMs,
+                    match = resolution?.match?.name ?: EnvironmentResolution.BUILT.name,
+                    extras = resolution?.extras.orEmpty(),
+                ),
+            )
             setupEnvironments += environmentId
             return true
+        }
+
+        /**
+         * Get the display name of an environment reference for logging purposes.
+         */
+        private fun displayNameOf(ref: EnvironmentRef): String = when (ref) {
+            is PixiEnvironmentRef -> ref.name
+            is CondaEnvironmentRef -> ref.name
+            is REnvironmentRef -> ref.name
+            else -> ref.id
         }
 
         private fun wrapStepCommand(
@@ -568,8 +604,10 @@ class DefaultPlanExecutor(
         {
             val resolver = ArgResolver( bindings )
 
+            // Substitute the runtime token before quoting, so a runtime path containing a space is
             val args = spec.args
                 .map { resolver.resolve( it ) }
+                .map { TaskRuntime.substitute( it ) }
                 .joinToString( " " ) { shellQuote( it ) }
 
             return if ( args.isBlank() ) spec.executable else "${spec.executable} $args"

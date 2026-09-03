@@ -93,7 +93,7 @@ class CarpTabularData(
      */
     fun filterByTimeRange(startTimestamp: Long, endTimestamp: Long): CarpTabularData {
         val filteredRows = rows.filter {
-            it.sensorTimestamp >= startTimestamp && it.sensorTimestamp <= endTimestamp
+            it.sensorTimestamp in startTimestamp..endTimestamp
         }
         return CarpTabularData(filteredRows, originalBatch)
     }
@@ -103,16 +103,6 @@ class CarpTabularData(
      */
     fun filterBySequence(sequenceIndex: Int): CarpTabularData {
         val filteredRows = rows.filter { it.metadata.sequenceIndex == sequenceIndex }
-        return CarpTabularData(filteredRows, originalBatch)
-    }
-
-    /**
-     * Filter rows by trigger IDs.
-     */
-    fun filterByTriggerIds(triggerIds: List<Int>): CarpTabularData {
-        val filteredRows = rows.filter { row ->
-            triggerIds.any { triggerId -> row.metadata.triggerIds.contains(triggerId) }
-        }
         return CarpTabularData(filteredRows, originalBatch)
     }
 
@@ -139,14 +129,6 @@ class CarpTabularData(
      */
     fun groupByDataType(): Map<String, CarpTabularData> {
         return rows.groupBy { it.metadata.dataTypeString }
-            .mapValues { (_, groupedRows) -> CarpTabularData(groupedRows, originalBatch) }
-    }
-
-    /**
-     * Group rows by sequence index.
-     */
-    fun groupBySequence(): Map<Int, CarpTabularData> {
-        return rows.groupBy { it.metadata.sequenceIndex }
             .mapValues { (_, groupedRows) -> CarpTabularData(groupedRows, originalBatch) }
     }
 
@@ -189,13 +171,6 @@ class CarpTabularData(
         return filterByMeasurementType<HeartRateMeasurementRow>()
     }
 
-    /**
-     * Get all Generic measurements (unsupported data types).
-     */
-    fun getGenericRows(): List<GenericMeasurementRow> {
-        return filterByMeasurementType<GenericMeasurementRow>()
-    }
-
     // === Utility Operations ===
 
     /**
@@ -216,16 +191,6 @@ class CarpTabularData(
             studyDeploymentIds = studyDeploymentIds,
             dataTypes = dataTypes
         )
-    }
-
-    /**
-     * Convert back to a subset of the original DataStreamBatch containing only the filtered data.
-     * This preserves the CARP structure while applying the tabular filtering.
-     */
-    fun toDataStreamBatch(): DataStreamBatch {
-        // This would require reconstructing the batch from the filtered rows
-        // Implementation would depend on specific use cases
-        TODO("Implementation depends on specific reconstruction requirements")
     }
 }
 

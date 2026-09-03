@@ -31,6 +31,7 @@ fun interface ProtocolDataTypeProvider
  * the CARP data type it expects the protocol to collect. This validator checks
  * that declaration against the protocol's collected data types:
  *
+ * - binding missing its protocol id or its data type -> ERROR `PROTOCOL_BINDING_INCOMPLETE`
  * - data type not collected by the protocol -> ERROR `PROTOCOL_DATA_NOT_COLLECTED`
  * - referenced protocol unknown to the provider -> ERROR `PROTOCOL_NOT_FOUND`
  * - no [ProtocolDataTypeProvider] supplied at all -> single WARNING
@@ -134,7 +135,7 @@ class ProtocolCouplingValidator
 
     private fun incompleteBindingIssue( input: ProtocolBoundInput ) = PlanIssue(
         severity = PlanIssueSeverity.ERROR,
-        code = "PROTOCOL_DATA_NOT_COLLECTED",
+        code = "PROTOCOL_BINDING_INCOMPLETE",
         message = "Input '${input.inputName}' of step '${input.step.metadata.name}' is " +
             "bound to a study protocol but its binding is incomplete " +
             "(protocolId and dataType are both required).",

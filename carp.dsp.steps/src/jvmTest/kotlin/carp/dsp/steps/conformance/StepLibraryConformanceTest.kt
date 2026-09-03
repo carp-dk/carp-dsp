@@ -1,6 +1,7 @@
 package carp.dsp.steps.conformance
 
 import carp.dsp.core.application.authoring.descriptor.DefinedStepDescriptor
+import carp.dsp.core.application.authoring.descriptor.ImplementationDescriptor
 import carp.dsp.core.application.authoring.descriptor.LibraryDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
@@ -420,19 +421,36 @@ class StepLibraryConformanceTest
         )
     }
 
+    /**
+     * Returns the test files associated with an implementation.
+     *
+     * Kotlin tests are discovered under `impl/kotlin/test`, while Python and R
+     * tests are discovered beside their implementation files.
+     */
+    private fun testsFor(step: LibraryStep, implementation: ImplementationDescriptor): List<File>
+    {
+        val implementationDir = step.dir.resolve(implementation.path).parentFile ?: return emptyList()
+
+        return when (implementation.language.lowercase())
+        {
+            "kotlin" -> implementationDir.resolveSibling("test").listFiles().orEmpty()
+                .filter { it.isFile && it.name.endsWith("Test.kt") }
+            else -> implementationDir.listFiles().orEmpty()
+                .filter { it.isFile && it.name.startsWith("test_") }
+        }.toList()
+    }
+
     @Test
     fun `every step ships tests for its implementations`()
     {
         steps().forEach { step ->
             library(step).implementations.forEach { implementation ->
-                val implementationDir = step.dir.resolve(implementation.path).parentFile
-                val tests = implementationDir?.listFiles().orEmpty()
-                    .filter { it.isFile && it.name.startsWith("test_") }
                 assertTrue(
-                    tests.isNotEmpty(),
+                    testsFor(step, implementation).isNotEmpty(),
                     "${step.id}: the ${implementation.language} implementation ships no tests. " +
                         "A reference fixture shows the step was validated once; tests are what keep " +
-                        "it validated. Add test_*.py beside the implementation."
+                        "it validated. Add test_*.py beside the implementation, or, for Kotlin, " +
+                        "*Test.kt under impl/kotlin/test."
                 )
             }
         }

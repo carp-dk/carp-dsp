@@ -14,8 +14,7 @@ This file covers layout and local commands only. See also:
 ```
 carp.dsp.steps/
   src/jvmMain/
-    kotlin/carp/dsp/steps/          Kotlin (in-process) step implementations
-      core/  sensing/  analysis/
+    kotlin/carp/dsp/steps/          the library itself (ClasspathStepLibrary)
     resources/
       environments/                 environment catalogue - shared, reusable
       steps/                        step content, one directory per step
@@ -38,35 +37,33 @@ instead.
 Name environments `env-<interpreter>-<purpose>`, and give each a one-line
 `description`:
 
-| id | for |
-| --- | --- |
-| `env-python-data` | tabular data handling (pandas) |
+| id                  | for                                          |
+|---------------------|----------------------------------------------|
+| `env-python-data`   | tabular data handling (pandas)               |
 | `env-python-signal` | numerical / signal processing (numpy, scipy) |
-| `env-r-stats` | R statistical analysis |
-| `env-system` | no managed environment |
+| `env-r-stats`       | R statistical analysis                       |
+| `env-system`        | no managed environment                       |
 
 A step reuses a catalogue environment by inlining it under `environments:` in its
 `step.yaml`; the gate checks the inlined copy matches the catalogue. Propose a
 new environment only when none fits - it has to be justified in review.
 
-### Why implementations are split across two trees
+### A step is one directory, Kotlin included
 
-The specification describes a step as one self-contained directory. On disk that
-is *almost* true: everything except Kotlin lives together under
-`resources/steps/<tier>/<subject>/<step>/`, because Gradle must compile Kotlin
-from a source set, not from resources.
+Everything a step publishes lives under
+`resources/steps/<tier>/<subject>/<step>/`, whatever the language. For Kotlin
+that means the step tree is a Kotlin source root as well as a resource root:
+`impl/kotlin/main/` compiles into the module and `impl/kotlin/test/` into its
+tests, so the classes in the shared task runtime are compiled from exactly the
+files the step ships and `contentHash` covers.
 
-So:
+The `main/` and `test/` split is the one thing Kotlin cannot do the way Python
+does. Python keeps `test_foo.py` beside `foo.py`; a Kotlin directory belongs to
+one compilation, and the tests need the test classpath.
 
-| Content | Location |
-| --- | --- |
-| `step.yaml`, README, reference fixture, certification record | `resources/steps/<tier>/<subject>/<step>/` |
-| Python and R implementations | `resources/steps/<tier>/<subject>/<step>/impl/{python,r}/` |
-| Kotlin implementation | `kotlin/carp/dsp/steps/<tier>/<subject>/` |
-
-A Kotlin implementation is linked from `step.yaml` by its entry point, the same
-way a script implementation is linked by path, so the contract stays the single
-source of truth either way.
+A Kotlin step runs as an ordinary command task against the shared runtime, and is
+**first-party only** - see
+[docs/STEP_LIBRARY.md](../docs/STEP_LIBRARY.md#steps-written-in-kotlin).
 
 ### A step directory
 
@@ -76,6 +73,7 @@ resources/steps/sensing/heartrate/hrv-rmssd/
   impl/
     python/           implementation + its tests
     r/
+    kotlin/           main/ compiles into the module, test/ into its tests
   reference/          one fixture every implementation must reproduce
   README.md           what it does, assumptions, limitations, citation
   certification.yaml  review level and the reviewed content hash (certified only)
@@ -93,14 +91,22 @@ step.
 ./gradlew :carp.dsp.steps:validateStepLibrary   # the conformance gate
 ./gradlew :carp.dsp.steps:jvmTest               # same, directly
 ./gradlew :carp.dsp.steps:koverHtmlReport       # coverage (85% line / 70% branch)
+
+./gradlew :carp.dsp.steps:certifySteps          # refresh each step's contentHash
+./gradlew :carp.dsp.steps:installTaskRuntime    # (re)install the shared Kotlin runtime
+./gradlew :carp.dsp.steps:verifyTaskRuntime     # is the installed runtime current?
+./gradlew build -PskipIntegration               # skip the tests that need Docker
 ```
 
 The gate is ordinary test code, so `./gradlew build` and CI enforce it without
-extra wiring.
+extra wiring. `validateStepLibrary` also runs `verifyTaskRuntime`, which fails
+when the installed runtime was built from different Kotlin step sources than the
+ones on disk, and skips when no runtime is installed. Run `certifySteps` after
+changing anything a step ships - the gate refuses a stale hash.
 
 ## Excluding the library
 
-The library is vendored by default. A minimal install skips it and resolves every
+The library is vendored by default. A minimal installation skips it and resolves every
 `uses:` reference through the registry instead:
 
 ```bash
@@ -108,5 +114,5 @@ The library is vendored by default. A minimal install skips it and resolves ever
 ```
 
 or set `carpDspSteps=false` in `gradle.properties`. Resolution order is local
-first, then registry, so a minimal install degrades to retrieval rather than
+first, then registry, so a minimal installation degrades to retrieval rather than
 failing.

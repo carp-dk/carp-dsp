@@ -5,7 +5,6 @@ import dk.cachet.carp.analytics.application.exceptions.EnvironmentSetupException
 import dk.cachet.carp.analytics.application.plan.CondaEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import dk.cachet.carp.common.application.UUID
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
@@ -97,6 +96,25 @@ class REnvironmentHandlerTest {
         val command = handler.generateExecutionCommand(ref, "script.R arg1 arg2")
 
         assertTrue(command.contains("script.R arg1 arg2"))
+    }
+
+    @Test
+    fun `the R command does not embed the environment directory`() {
+        val ref = REnvironmentRef(
+            id = "r-env-001",
+            name = "r-test-env",
+            rVersion = "4.3.0",
+            rPackages = listOf("ggplot2"),
+            renvLockFile = "project/renv.lock"
+        )
+
+        val command = handler.generateExecutionCommand(ref, "Rscript script.R")
+
+        // renv activates from the working directory via .Rprofile, so the path
+        // never reaches the command line the way pixi's manifest does.
+        assertFalse(command.contains(".carp-dsp"), command)
+        assertFalse(command.contains("r-env-001"), command)
+        assertTrue(command.contains("--vanilla"), command)
     }
 
     @Test

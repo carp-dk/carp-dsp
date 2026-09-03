@@ -1,12 +1,9 @@
 package carp.dsp.demo.demos
 
 import carp.dsp.demo.io.DemoIo
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
-import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
-import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
-import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoRun
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Path
 import kotlin.io.path.*
@@ -37,28 +34,17 @@ class MobgapDemo {
             executeDemo()
         }
 
-        @OptIn(ExperimentalPathApi::class)
         private fun executeDemo() {
             val demoResultsDir = getDemoResultsDirectory()
             val runId = UUID.parse("00000000-0000-0000-0000-000000000002")
 
             try {
-                println("=" * 70)
-                println("Mobgap Gait Analysis Demo")
-                println("=" * 70)
-                println()
+                DemoRun.banner("Mobgap Gait Analysis Demo")
+                DemoRun.freshResultsDir(demoResultsDir)
 
-                // Clean up previous results
-                if (demoResultsDir.exists()) {
-                    println("Cleaning up previous results...")
-                    demoResultsDir.deleteRecursively()
-                }
-                demoResultsDir.createDirectories()
-
-                // 1. Load YAML workflow
-                val workflowYaml = loadWorkflowYaml()
-                val descriptor = WorkflowYamlCodec().decodeOrThrow(workflowYaml)
-                println("Workflow loaded: ${descriptor.metadata.name}")
+                // 1. Load the workflow. It is written into the results directory,
+                // which is what its steps.lock and relative inputs resolve against.
+                val loaded = DemoRun.loadWorkflow("workflows/mobgap-gait-analysis.yaml", demoResultsDir)
 
                 // 2. Set up workspace (scripts only — dataset is downloaded by the import step).
                 // Task script paths are relative to the execution root, which is the
@@ -68,40 +54,19 @@ class MobgapDemo {
                 setupWorkspaceFiles(executionRoot)
                 println("Workspace prepared at: $demoResultsDir")
 
-                // 3. Import and plan
-                val definition = WorkflowDescriptorImporter().import(descriptor)
-                val planner = DefaultExecutionPlanner()
-                val plan = planner.plan(definition)
-                plan.validate()
-                println("Execution plan generated (${plan.steps.size} steps)")
+                // 3. Resolve, import and plan.
+                val executor = WorkflowExecutor.filesystem(ClasspathStepLibrary(), demoResultsDir)
+                val prepared = executor.prepare(loaded.source, loaded.descriptor)
+                prepared.plan.validate()
+                println("Execution plan generated (${prepared.plan.steps.size} steps)")
 
-                // 4. Set up executor
-                val artefactStore = FileSystemArtefactStore(demoResultsDir.resolve("artifacts"))
-                val workspaceManager = DefaultWorkspaceManager(demoResultsDir)
-                val executor = DefaultPlanExecutor(
-                    workspaceManager = workspaceManager,
-                    artefactStore = artefactStore
-                )
+                // 4. Execute
+                DemoRun.execute(
+                    executor, prepared, runId,
+                    notice = "(Step 1 will download the LabExampleDataset on first run — this may take a moment)"
+                ) ?: return
 
-                // 5. Execute
-                println()
-                println("Executing workflow...")
-                println("(Step 1 will download the LabExampleDataset on first run — this may take a moment)")
-                println("-" * 70)
-                val report = executor.execute(plan, runId)
-                println("-" * 70)
-
-                if (report.status.toString() != "SUCCEEDED") {
-                    println("Workflow execution failed: ${report.status}")
-                    report.issues.forEach { issue ->
-                        println("   - ${issue.message}")
-                    }
-                    return
-                }
-                println("Workflow execution succeeded")
-                println()
-
-                // 6. Read and display aggregated DMO results
+                // 5. Read and display aggregated DMO results
                 val workflowName = "mobgap_gait_analysis_pipeline"
                 val outputFile = demoResultsDir.resolve(
                     "$workflowName/run_${runId}/steps/06_dmo_aggregation/outputs/aggregated-dmos-csv.csv"
@@ -120,10 +85,10 @@ class MobgapDemo {
                 printPlotLocations(runRoot)
 
                 println()
-                println("=" * 70)
+                DemoRun.divider()
                 println("Demo completed successfully!")
                 println("Results saved to: $demoResultsDir")
-                println("=" * 70)
+                DemoRun.divider()
 
             } catch (e: Exception) {
                 println("Error during demo execution: ${e.message}")
@@ -131,9 +96,7 @@ class MobgapDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml")
 
-        @OptIn(ExperimentalPathApi::class)
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("mobgap").toPath()
 
         /**

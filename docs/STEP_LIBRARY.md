@@ -160,6 +160,56 @@ what is inside. So one directory holds several implementations under
 `impl/<language>/`, all reproducing **one** shared reference fixture. That fixture
 turns cross-language equivalence into something tested rather than assumed.
 
+## Steps written in Kotlin
+
+Most steps are scripts. A step can also be a Kotlin application, which is how a
+step reaches something the JVM already has a client for - CARP's own services,
+say - without reimplementing it in Python.
+
+**It is an ordinary command task, not a new kind of step.** The task runs
+`java -cp {carp.taskRuntime} <entry point>`, and `{carp.taskRuntime}` is
+substituted with the installed runtime jar while the executor builds the command.
+Everything else - the contract, the gate, the fixture, the certification record -
+is unchanged, which is the point: an in-process step type would have meant a
+second gate path and a certification hash covering no behaviour.
+
+**One runtime, shared.** `carp-task-runtime.jar` carries this module, carp-dsp and
+carp-core, and is installed at `~/.carp-dsp/task-runtime/`, beside the
+environments `EnvironmentStore` provisions. The step's environment is an ordinary
+pixi environment whose only job is a pinned JDK.
+
+**The step still owns its source.** `impl/kotlin/main` is a source root of
+`carp.dsp.steps` and `impl/kotlin/test` a test source root, so the classes in the
+runtime jar are compiled from exactly the files the step publishes and
+`contentHash` covers. What the two conventions cannot share is the directory:
+Python keeps `test_foo.py` beside `foo.py`, while a Kotlin directory belongs to
+one compilation and tests need the test classpath.
+
+**The installed runtime is checked, because it is the one that runs.** A step's
+command names the installed jar, not anything a build produced, so an edit after
+the last install leaves it running code no longer in the library - and every test
+still passes, because tests compile from source. The jar records a hash of every
+Kotlin implementation source in the library; `verifyTaskRuntime` compares it
+against what is on disk, and the gate runs it.
+
+### Kotlin steps are first-party only
+
+A retrieved step travels as `LibraryStep.implFiles`, a `Map<String, String>` -
+text, staged into the workspace. A Python implementation runs from that text. A
+Kotlin one cannot: it needs compiled classes, and the only thing that compiles
+them is this repository's build.
+
+So a Kotlin step works when it is **vendored in this repository** and its sources
+went into the shared runtime. A third-party Kotlin step, or a vendored one used
+from a minimal install that resolves through the registry, has no runtime to run
+against. Carrying binaries in a package is a separate question - a distribution
+format, a trust model and a provenance story - and is deliberately not answered
+here.
+
+The practical rule: reach for Kotlin when the step needs the JVM ecosystem and
+will live in this library. Anything meant to be published for others to retrieve
+is a script.
+
 ## Contribution standard
 
 Two levels: **certified** steps are reviewed and carry a marker in package

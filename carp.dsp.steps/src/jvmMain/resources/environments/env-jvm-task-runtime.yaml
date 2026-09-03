@@ -1,0 +1,9 @@
+id: "env-jvm-task-runtime"
+name: "CARP task runtime"
+description: "JDK for library steps written in Kotlin. The step runs java against the task runtime classpath."
+kind: "pixi"
+spec:
+  pythonVersion:
+    - "3.11"
+  dependencies:
+    - "openjdk=17"

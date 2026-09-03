@@ -34,6 +34,7 @@ sensing/heartrate/hrv-rmssd/
   impl/
     python/  src + tests
     r/       src + tests
+    kotlin/  main/ + test/   (first-party only - see below)
   reference/          one fixture every implementation must reproduce
   README.md           what it does, assumptions, limitations, citation
   certification.yaml  added by a maintainer when certifying (not by you)
@@ -78,6 +79,42 @@ Run the gate before opening a pull request:
 ```bash
 ./gradlew :carp.dsp.steps:validateStepLibrary
 ```
+
+## If you are writing a Kotlin step
+
+Reach for Kotlin only when the step needs the JVM ecosystem *and* will live in
+this repository. A Kotlin step is **first-party only**: a retrieved step travels
+as text and is staged into the workspace, which a script can run and compiled
+classes cannot. Anything meant to be published for others to retrieve is a
+script. The reasoning is in
+[STEP_LIBRARY.md](STEP_LIBRARY.md#steps-written-in-kotlin).
+
+What differs from a script step:
+
+- **Source layout.** `impl/kotlin/main/` is a source root of `carp.dsp.steps` and
+  `impl/kotlin/test/` a test source root. Python keeps `test_foo.py` beside
+  `foo.py`; Kotlin cannot, because a directory belongs to one compilation and the
+  tests need the test classpath. Name tests `<Class>Test.kt`.
+- **Tests run with the module**, so `./gradlew :carp.dsp.steps:jvmTest` covers
+  them - there is no `pytest` step. `verifyStepImplementations` passes a Kotlin
+  step over.
+- **The task is a command, not a language task.** Declare
+  `executable: "java"` with `-cp {carp.taskRuntime} <entry point class>`; the
+  token is substituted with the installed runtime jar at execution. Name the
+  entry point with `@file:JvmName` so the class the contract names does not
+  depend on Kotlin's file-to-class convention.
+- **The environment is `env-jvm-task-runtime`**, a pixi environment whose job is
+  a pinned JDK.
+- **Reinstall the runtime after changing the source**, or the gate fails:
+
+```bash
+./gradlew :carp.dsp.steps:installTaskRuntime
+```
+
+- **A step that reads a service has no file input to fix.** Declare
+  `reference.expected` with no `input`, and pin the published fixture with a test
+  that seeds the source and asserts the step reproduces it. See
+  `core.io.fetch-study-data` for the whole shape.
 
 ## Script IO conventions
 

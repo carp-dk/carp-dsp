@@ -22,6 +22,28 @@ import kotlin.io.path.writeText
  *   Defaults to [JvmCommandRunner] for production.
  *
  */
+private const val NAME_PUNCTUATION = "._-"
+
+/**
+ * Returns [dependency] as a pixi requirement line.
+ */
+internal fun pixiRequirement(dependency: String): String {
+    val name = dependency.takeWhile { it.isLetterOrDigit() || it in NAME_PUNCTUATION }
+    val rest = dependency.drop(name.length).trim()
+
+    // A single '=' is how a catalogue entry pins an exact version, but pixi reads
+    // it as part of the constraint, so it is dropped. Range operators are passed
+    // through as written.
+    val constraint = when {
+        rest.isEmpty() -> "*"
+        rest.startsWith("==") || rest.startsWith(">=") || rest.startsWith("<=") -> rest
+        rest.startsWith("=") -> rest.removePrefix("=")
+        else -> rest
+    }.trim().ifEmpty { "*" }
+
+    return "$name = \"$constraint\""
+}
+
 class PixiEnvironmentHandler(
     private val runner: CommandRunner = JvmCommandRunner()
 ) : EnvironmentHandler {
@@ -37,7 +59,7 @@ class PixiEnvironmentHandler(
         return try {
             check(verifyPixiInstalled()) { "Pixi not found. Install pixi and add to PATH." }
 
-            val projectDir = getProjectDirectory(pixi.id)
+            val projectDir = getProjectDirectory(pixi)
             projectDir.createDirectories()
 
             generatePixiToml(projectDir, pixi)
@@ -45,6 +67,9 @@ class PixiEnvironmentHandler(
             installPixiEnvironment(projectDir)
 
             check(validate(pixi)) { "Environment created but validation failed" }
+
+            // Only write manifest if successful
+            EnvironmentStore.writeManifest(projectDir, pixi)
 
             true
         } catch (e: IllegalStateException) {
@@ -71,7 +96,7 @@ class PixiEnvironmentHandler(
 
     override fun generateExecutionCommand(environmentRef: EnvironmentRef, command: String): String {
         val pixi = environmentRef as PixiEnvironmentRef
-        val manifest = getProjectDirectory(pixi.id).resolve("pixi.toml")
+        val manifest = getProjectDirectory(pixi).resolve("pixi.toml")
         return "pixi run --manifest-path \"$manifest\" $command"
     }
 
@@ -79,7 +104,7 @@ class PixiEnvironmentHandler(
         val pixi = environmentRef as PixiEnvironmentRef
 
         return try {
-            val projectDir = getProjectDirectory(pixi.id)
+            val projectDir = getProjectDirectory(pixi)
             if (projectDir.toFile().exists()) {
                 projectDir.toFile().deleteRecursively()
             }
@@ -95,7 +120,7 @@ class PixiEnvironmentHandler(
         val pixi = environmentRef as PixiEnvironmentRef
 
         return try {
-            val projectDir = getProjectDirectory(pixi.id)
+            val projectDir = getProjectDirectory(pixi)
             if (!projectDir.toFile().exists()) return false
 
             val pythonExe = findPythonExecutable(projectDir) ?: return false
@@ -119,8 +144,10 @@ class PixiEnvironmentHandler(
         false
     }
 
-    private fun getProjectDirectory(envId: String): Path =
-        Path.of(System.getProperty("user.home"), ".carp-dsp", "envs", "pixi", envId)
+    /** See [EnvironmentStore]: the directory is what the environment is, not what it is called. */
+    private fun getProjectDirectory(pixi: PixiEnvironmentRef): Path =
+        EnvironmentStore.resolve(pixi)?.directory
+            ?: error("No provisioned directory for environment '${pixi.name}'")
 
     private fun generatePixiToml(projectDir: Path, pixi: PixiEnvironmentRef) {
         val channels = pixi.channels.joinToString(", ") { "\"$it\"" }
@@ -130,14 +157,11 @@ class PixiEnvironmentHandler(
 
         val condaSection = buildString {
             appendLine("python = \"${pixi.pythonVersion}.*\"")
-            condaDeps.forEach { appendLine("$it = \"*\"") }
+            condaDeps.forEach { appendLine(pixiRequirement(it)) }
         }
 
         val pypiSection = if (pypiDeps.isNotEmpty()) buildString {
-            pypiDeps.forEach { dep ->
-                val pkg = dep.removePrefix("pypi:")
-                appendLine("$pkg = \"*\"")
-            }
+            pypiDeps.forEach { dep -> appendLine(pixiRequirement(dep.removePrefix("pypi:"))) }
         } else null
 
         val tomlContent = buildString {
