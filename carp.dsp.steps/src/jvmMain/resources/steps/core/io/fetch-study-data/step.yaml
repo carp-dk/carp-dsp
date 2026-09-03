@@ -1,0 +1,94 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.io.fetch-study-data"
+  name: "Fetch a study's data"
+  description: >-
+    Read a CARP study's collected measurements and write them as a table. The
+    study, the deployments and device roles to read, the data types and the time
+    window are all arguments, so the step carries no study knowledge. Writes a
+    measurement table and, when asked, a provenance table keyed to it row by row.
+    The defaults name no study, so a reference overrides `--study-id` with
+    `args:`.
+  version: "1.0"
+  tags:
+    - "core"
+    - "io"
+    - "carp"
+    - "fetch"
+
+environments:
+  env-jvm-task-runtime:
+    name: "CARP task runtime"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "openjdk=17"
+
+steps:
+  - id: "fetch-study-data"
+    metadata:
+      name: "Fetch a study's data"
+      description: "Read a study's measurements and write them as a table"
+      version: "1.0"
+    environmentId: "env-jvm-task-runtime"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-core-io-fetch-study-data"
+      name: "fetch-study-data"
+      # {carp.taskRuntime} is substituted with the shared task runtime jar before
+      # the command is quoted, so the step names no path of its own.
+      executable: "java"
+      args:
+        - "-cp"
+        - "{carp.taskRuntime}"
+        - "carp.dsp.steps.data.FetchCarpStudyData"
+        - "--services"
+        - "in-memory"
+        - "--study-id"
+        - "00000000-0000-0000-0000-000000000000"
+        - "--format"
+        - "csv"
+        - "--output"
+        - "output.0"
+        - "--provenance-output"
+        - "output.1"
+    outputs:
+      - id: "measurements"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "One row per measurement, keyed by row_id; value columns are the union of the data types present"
+      - id: "provenance"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Deployment, device role, sequence and sync point for each row_id in the measurement table"
+
+# Library-only metadata. Ignored by the codec (strictMode = false), read separately
+# by the conformance gate. See docs/STEP_LIBRARY.md.
+library:
+  tier: "core"
+  subject: "io"
+  environment:
+    default: "env-jvm-task-runtime"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "java"
+        version: ">=17"
+  implementations:
+    - language: "kotlin"
+      path: "impl/kotlin/main/FetchCarpStudyData.kt"
+  method:
+    name: "CARP study data export"
+    citation: null
+  reference:
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

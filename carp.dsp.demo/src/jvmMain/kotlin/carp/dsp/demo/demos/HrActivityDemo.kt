@@ -3,12 +3,11 @@ package carp.dsp.demo.demos
 import carp.dsp.demo.io.DemoIo
 import carp.dsp.core.application.packaging.PackageBuilder
 import carp.dsp.core.application.translation.snakemake.DspToSnakemakeExporter
-import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
-import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
-import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.core.application.run.WorkflowSource
 import carp.dsp.core.infrastructure.registry.RegistryClient
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
-import carp.dsp.demo.WorkflowPreparation
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.common.application.UUID
 import health.workflows.interfaces.model.WorkflowArtifactPackage
 import io.ktor.client.HttpClient
@@ -28,7 +27,7 @@ import kotlin.math.abs
  * A three-step wearable data pipeline:
  *   1. Load — generate synthetic HR + step data (7 days, hourly)
  *   2. Compute Features — daily mean/resting/peak HR, steps, active hours
- *   3. Visualize — 2x2 summary PNG
+ *   3. Visualise — 2x2 summary PNG
  *
  * Run normally:
  *   ./gradlew :carp.dsp.demo:run --args="run hr-activity"
@@ -74,17 +73,13 @@ class HrActivityDemo {
             // and resolution pins it in a steps.lock there.
             val workflowFile = resultsDir.resolve("hr-activity-summary.yaml").toFile()
             workflowFile.writeText(yaml)
-            val prepared = WorkflowPreparation.prepare(workflowFile, descriptor)
-            val plan = prepared.plan
-            plan.validate()
+            val executor = WorkflowExecutor.filesystem(ClasspathStepLibrary(), resultsDir)
+            val prepared = executor.prepare(WorkflowSource.of(workflowFile.toPath()), descriptor)
+            prepared.plan.validate()
 
-            val executor = DefaultPlanExecutor(
-                workspaceManager = DefaultWorkspaceManager(resultsDir),
-                artefactStore = FileSystemArtefactStore(resultsDir.resolve("artifacts")),
-            )
             println("Running pipeline...")
             println("-" * 60)
-            val report = executor.run(plan, runId, prepared.provisioning)
+            val report = executor.run(prepared, runId)
             println("-" * 60)
 
             if (report.status.toString() != "SUCCEEDED") {

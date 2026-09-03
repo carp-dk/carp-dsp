@@ -1,11 +1,9 @@
 package carp.dsp.demo.demos
 
 import carp.dsp.demo.io.DemoIo
-import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
-import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
-import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
-import carp.dsp.demo.WorkflowPreparation
+import carp.dsp.demo.io.DemoRun
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Path
 import kotlin.io.path.*
@@ -37,7 +35,6 @@ class DbdpCovidDemo {
             executeDemo()
         }
 
-        @OptIn(ExperimentalPathApi::class)
         private fun executeDemo() {
             // Use persistent demo_results directory instead of temp dir
             val demoResultsDir = getDemoResultsDirectory()
@@ -46,22 +43,12 @@ class DbdpCovidDemo {
             val runId = UUID.parse("00000000-0000-0000-0000-000000000002")
 
             try {
-                println("=" * 70)
-                println("DBDP COVID Heart Rate & Steps Analysis Demo")
-                println("=" * 70)
-                println()
+                DemoRun.banner("DBDP COVID Heart Rate & Steps Analysis Demo")
+                DemoRun.freshResultsDir(demoResultsDir)
 
-                // 0. Clean up existing results before running
-                if (demoResultsDir.exists()) {
-                    println("Cleaning up previous results...")
-                    demoResultsDir.deleteRecursively()
-                }
-                demoResultsDir.createDirectories()
-
-                // 1. Load YAML workflow from resources
-                val workflowYaml = loadWorkflowYaml()
-                val descriptor = WorkflowYamlCodec().decodeOrThrow(workflowYaml)
-                println("Workflow loaded: ${descriptor.metadata.name}")
+                // 1. Load the workflow. It is written into the results directory,
+                // which is what its steps.lock and relative inputs resolve against.
+                val loaded = DemoRun.loadWorkflow("workflows/dbdp-covid-hr-steps.yaml", demoResultsDir)
 
                 // 2. Lay out the files the run needs. Task script paths are relative
                 // to the execution root (a command's working directory), while a
@@ -74,42 +61,17 @@ class DbdpCovidDemo {
                 println("Workspace prepared at: $demoResultsDir")
 
                 // 3. Resolve, import and plan. The workflow references a certified
-                // library step, so it is written beside the run first: resolution
-                // pins each reference in a steps.lock next to the workflow file.
-                val workflowFile = demoResultsDir.resolve("dbdp-covid-hr-steps.yaml").toFile()
-                workflowFile.writeText(workflowYaml)
-                val prepared = WorkflowPreparation.prepare(workflowFile, descriptor)
-                val plan = prepared.plan
-                plan.validate()
-                println("Execution plan generated (${plan.steps.size} steps)")
+                // library step; resolution pins each reference in a steps.lock next
+                // to the workflow file.
+                val executor = WorkflowExecutor.filesystem(ClasspathStepLibrary(), demoResultsDir)
+                val prepared = executor.prepare(loaded.source, loaded.descriptor)
+                prepared.plan.validate()
+                println("Execution plan generated (${prepared.plan.steps.size} steps)")
 
-                // 4. Set up executor infrastructure
-                val artefactStore = FileSystemArtefactStore(demoResultsDir.resolve("artifacts"))
-                val workspaceManager = DefaultWorkspaceManager(demoResultsDir)
-                val executor = DefaultPlanExecutor(
-                    workspaceManager = workspaceManager,
-                    artefactStore = artefactStore
-                )
+                // 4. Execute
+                DemoRun.execute(executor, prepared, runId) ?: return
 
-                // 5. Execute workflow
-                println()
-                println("Executing workflow...")
-                println("-" * 70)
-                val report = executor.run(plan, runId, prepared.provisioning)
-                println("-" * 70)
-
-                // 6. Verify execution succeeded
-                if (report.status.toString() != "SUCCEEDED") {
-                    println("Workflow execution failed: ${report.status}")
-                    report.issues.forEach { issue ->
-                        println("   - ${issue.message}")
-                    }
-                    return
-                }
-                println("Workflow execution succeeded")
-                println()
-
-                // 7. Read and display results from biomarker.json
+                // 5. Read and display results from biomarker.json
                 // The workflow creates a directory structure: <workflowName>/run_<runId>/steps/<stepIndex>_<stepName>/outputs/
                 val biomarkerFile = demoResultsDir.resolve(
                     "$workflowName/run_${runId}/steps/02_analyse_hr_and_steps_for_biomarkers/outputs/biomarker-json.json"
@@ -123,10 +85,10 @@ class DbdpCovidDemo {
                 }
 
                 println()
-                println("=" * 70)
+                DemoRun.divider()
                 println("Demo completed successfully!")
                 println("Results saved to: $demoResultsDir")
-                println("=" * 70)
+                DemoRun.divider()
 
             } catch (e: Exception) {
                 println("Error during demo execution: ${e.message}")
@@ -134,9 +96,7 @@ class DbdpCovidDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/dbdp-covid-hr-steps.yaml")
 
-        @OptIn(ExperimentalPathApi::class)
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("dbdp_covid").toPath()
 
         /**
@@ -148,7 +108,6 @@ class DbdpCovidDemo {
          * @param executionRoot The working directory a step's command runs in, so
          *   the scripts its task arguments name go here.
          */
-        @OptIn(ExperimentalPathApi::class)
         private fun setupWorkspaceFiles(workflowDir: Path, executionRoot: Path) {
             val dataDir = workflowDir.resolve("data")
             dataDir.createDirectories()

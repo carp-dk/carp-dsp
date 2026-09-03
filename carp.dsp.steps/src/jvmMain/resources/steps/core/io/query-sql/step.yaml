@@ -1,0 +1,95 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.io.query-sql"
+  name: "Query a database"
+  description: >-
+    Run one read statement against a database and write the result as a table.
+    Generic and domain-agnostic: the statement is an input, its parameters and
+    the row cap are arguments, and the database is named by the environment or a
+    connection file - so the step carries no knowledge of any schema. The
+    defaults run the reference fixture; override them with `args:` on the
+    reference to run your own query.
+  version: "1.0"
+  tags:
+    - "core"
+    - "io"
+    - "sql"
+    - "database"
+
+environments:
+  env-jvm-task-runtime:
+    name: "CARP task runtime"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "openjdk=17"
+
+steps:
+  - id: "query-sql"
+    metadata:
+      name: "Query a database"
+      description: "Run one read statement and write the result as CSV"
+      version: "1.0"
+    environmentId: "env-jvm-task-runtime"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-core-io-query-sql"
+      name: "query-sql"
+      # {carp.taskRuntime} is substituted with the shared task runtime jar before
+      # the command is quoted, so the step names no path of its own.
+      executable: "java"
+      args:
+        - "-cp"
+        - "{carp.taskRuntime}"
+        - "carp.dsp.steps.sql.QuerySql"
+        - "--query-file"
+        - "input.0"
+        - "--output"
+        - "output.0"
+        - "--param"
+        - "minId=1"
+    inputs:
+      - id: "query"
+        descriptor:
+          fileFormat: "txt"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_1964"
+          notes: >-
+            One SELECT or WITH statement, with :name placeholders for any
+            parameters. Carried as plain text because the library has no SQL
+            format.
+    outputs:
+      - id: "rows"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "The result set, one row per record, column names from the statement"
+
+# Library-only metadata. Ignored by the codec (strictMode = false), read separately
+# by the conformance gate. See docs/STEP_LIBRARY.md.
+library:
+  tier: "core"
+  subject: "io"
+  environment:
+    default: "env-jvm-task-runtime"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "java"
+        version: ">=17"
+  implementations:
+    - language: "kotlin"
+      path: "impl/kotlin/main/QuerySql.kt"
+  method:
+    name: "Database query"
+    citation: null
+  reference:
+    input: "reference/query.sql"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

@@ -1,7 +1,8 @@
 package carp.dsp.demo.eval
 
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
-import carp.dsp.demo.WorkflowPreparation
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.core.application.run.WorkflowSource
+import carp.dsp.steps.ClasspathStepLibrary
 import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import java.io.File
@@ -47,7 +48,7 @@ private val INLINE_WORKFLOWS = listOf(
     "minimal-summary" to "workflows/wf-minimal-summary.yaml",
 )
 
-/** The same three pipelines, composed from the certified library. */
+/** The same three pipelines, composed of the certified library. */
 private val LIBRARY_WORKFLOWS = listOf(
     "activity-summary" to "workflows/wf-activity-summary-v2.yaml",
     "anomaly-report" to "workflows/wf-anomaly-report-v2.yaml",
@@ -130,7 +131,6 @@ private data class Strategy(
 }
 
 fun main() {
-    val codec = WorkflowYamlCodec()
 
     val inline = measure("inline", INLINE_WORKFLOWS, restatesDeclaration = true) { block ->
         // Inline: the step's identity is the script it runs. Two workflows that
@@ -149,7 +149,8 @@ fun main() {
     for ((label, resource) in LIBRARY_WORKFLOWS) {
         val file = File(scratch, resource.substringAfterLast('/'))
         DemoIo.copyResource(resource, file.toPath())
-        val prepared = WorkflowPreparation.prepare(file, codec.decodeOrThrow(file.readText()))
+        val prepared = WorkflowExecutor.filesystem(ClasspathStepLibrary(), scratch.toPath())
+            .prepare(WorkflowSource.of(file.toPath()))
         accepted[label] = prepared.plan.issues.none { it.severity == PlanIssueSeverity.ERROR }
     }
     scratch.deleteRecursively()

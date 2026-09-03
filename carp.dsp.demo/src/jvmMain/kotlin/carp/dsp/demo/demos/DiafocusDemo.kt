@@ -1,12 +1,9 @@
 package carp.dsp.demo.demos
 
 import carp.dsp.demo.io.DemoIo
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
-import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
-import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
-import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.demo.io.DemoRun
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.common.application.UUID
 import java.nio.file.Path
 import kotlin.io.path.*
@@ -38,7 +35,6 @@ class DiafocusDemo {
             executeDemo()
         }
 
-        @OptIn(ExperimentalPathApi::class)
         private fun executeDemo() {
             // Use persistent demo_results directory instead of temp dir
             val demoResultsDir = getDemoResultsDirectory()
@@ -47,22 +43,12 @@ class DiafocusDemo {
             val runId = UUID.parse("00000000-0000-0000-0000-000000000001")
 
             try {
-                println("=" * 70)
-                println("DiaFocus Blood Glucose & Steps Analysis Demo")
-                println("=" * 70)
-                println()
+                DemoRun.banner("DiaFocus Blood Glucose & Steps Analysis Demo")
+                DemoRun.freshResultsDir(demoResultsDir)
 
-                // 0. Clean up existing results before running
-                if (demoResultsDir.exists()) {
-                    println("Cleaning up previous results...")
-                    demoResultsDir.deleteRecursively()
-                }
-                demoResultsDir.createDirectories()
-
-                // 1. Load YAML workflow from resources
-                val workflowYaml = loadWorkflowYaml()
-                val descriptor = WorkflowYamlCodec().decodeOrThrow(workflowYaml)
-                println("Workflow loaded: ${descriptor.metadata.name}")
+                // 1. Load the workflow. It is written into the results directory,
+                // which is what its steps.lock and relative inputs resolve against.
+                val loaded = DemoRun.loadWorkflow("workflows/diafocus-bgm-steps.yaml", demoResultsDir)
 
                 // 2. Lay out the files the run needs. Task script paths are relative
                 // to the execution root (a command's working directory), while a
@@ -74,40 +60,16 @@ class DiafocusDemo {
                 setupWorkspaceFiles(executionRoot)
                 println("Workspace prepared at: $demoResultsDir")
 
-                // 3. Import workflow descriptor and generate execution plan
-                val definition = WorkflowDescriptorImporter().import(descriptor)
-                val planner = DefaultExecutionPlanner()
-                val plan = planner.plan(definition)
-                plan.validate()
-                println("Execution plan generated (${plan.steps.size} steps)")
+                // 3. Resolve, import and plan.
+                val executor = WorkflowExecutor.filesystem(ClasspathStepLibrary(), demoResultsDir)
+                val prepared = executor.prepare(loaded.source, loaded.descriptor)
+                prepared.plan.validate()
+                println("Execution plan generated (${prepared.plan.steps.size} steps)")
 
-                // 4. Set up executor infrastructure
-                val artefactStore = FileSystemArtefactStore(demoResultsDir.resolve("artifacts"))
-                val workspaceManager = DefaultWorkspaceManager(demoResultsDir)
-                val executor = DefaultPlanExecutor(
-                    workspaceManager = workspaceManager,
-                    artefactStore = artefactStore
-                )
+                // 4. Execute
+                DemoRun.execute(executor, prepared, runId) ?: return
 
-                // 5. Execute workflow
-                println()
-                println("Executing workflow...")
-                println("-" * 70)
-                val report = executor.execute(plan, runId)
-                println("-" * 70)
-
-                // 6. Verify execution succeeded
-                if (report.status.toString() != "SUCCEEDED") {
-                    println("Workflow execution failed: ${report.status}")
-                    report.issues.forEach { issue ->
-                        println("   - ${issue.message}")
-                    }
-                    return
-                }
-                println("Workflow execution succeeded")
-                println()
-
-                // 7. Read and display results from summary.json
+                // 5. Read and display results from summary.json
                 // The workflow creates a directory structure: <workflowName>/run_<runId>/steps/<stepIndex>_<stepName>/outputs/
                 val summaryFile = demoResultsDir.resolve(
                     "$workflowName/run_${runId}/steps/03_analyse_bgm_and_steps/outputs/summary-json.json"
@@ -119,10 +81,10 @@ class DiafocusDemo {
                 }
 
                 println()
-                println("=" * 70)
+                DemoRun.divider()
                 println("Demo completed successfully!")
                 println("Results saved to: $demoResultsDir")
-                println("=" * 70)
+                DemoRun.divider()
 
             } catch (e: Exception) {
                 println("Error during demo execution: ${e.message}")
@@ -130,9 +92,7 @@ class DiafocusDemo {
             }
         }
 
-        private fun loadWorkflowYaml(): String = DemoIo.loadResource("workflows/diafocus-bgm-steps.yaml")
 
-        @OptIn(ExperimentalPathApi::class)
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("diafocus").toPath()
 
         /**
@@ -144,7 +104,6 @@ class DiafocusDemo {
          * from the working directory as written, rather than being staged there.
          * Both the dataset and the scripts therefore sit under the execution root.
          */
-        @OptIn(ExperimentalPathApi::class)
         private fun setupWorkspaceFiles(executionRoot: Path) {
             val dataDir = executionRoot.resolve("data")
             dataDir.createDirectories()

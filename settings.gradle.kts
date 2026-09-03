@@ -15,144 +15,66 @@ dependencyResolutionManagement {
     }
 }
 
-// ---- Local development: composite build with core ----
-println("🔍 Environment detection:")
-println("  - Current directory: ${rootDir.absolutePath}")
-println("  - USE_LOCAL_CORE env: ${System.getenv("USE_LOCAL_CORE")}")
-println("  - CI environment: ${System.getenv("CI") ?: "false"}")
+// ---- Local development: composite build with carp.core-kotlin ----
 
-// Check multiple possible paths for CARP core
+val verboseCoreSetup = (extra.properties["coreSetupVerbose"] as String?)?.toBoolean() ?: false
+
+fun trace(message: String) {
+    if (verboseCoreSetup) println(message)
+}
+
 val possibleCorePaths = listOf(
-    file("../carp.core-kotlin"),           // Local development (parent/carp.core-kotlin)
-    file("../carp"),                       // Alternative sibling structure
-    file("./carp.core-kotlin"),           // Same directory
-    file("carp.core-kotlin")              // Subdirectory
+    file("../carp.core-kotlin"),  // sibling checkout - the normal case
+    file("../carp"),              // alternative sibling name
+    file("carp.core-kotlin"),     // nested checkout
 )
 
-println("🔍 Checking for CARP core in possible locations:")
-possibleCorePaths.forEachIndexed { index, path ->
-    try {
-        val exists = path.exists()
-        val absolutePath = path.absolutePath
-        println("  ${index + 1}. $absolutePath -> ${if (exists) "✅ EXISTS" else "❌ NOT FOUND"}")
-        if (exists && path.isDirectory) {
-            val settingsFile = File(path, "settings.gradle.kts")
-            val buildFile = File(path, "build.gradle.kts")
-            println("     - settings.gradle.kts: ${if (settingsFile.exists()) "✅" else "❌"}")
-            println("     - build.gradle.kts: ${if (buildFile.exists()) "✅" else "❌"}")
+fun looksLikeCore(path: File): Boolean =
+    path.isDirectory &&
+        (File(path, "settings.gradle.kts").exists() || File(path, "build.gradle.kts").exists())
 
-            // Check if this looks like a valid CARP core repository
-            if (settingsFile.exists() || buildFile.exists()) {
-                println("     - Valid CARP core structure detected")
-            }
-        }
-    } catch (e: Exception) {
-        println("  ${index + 1}. ${path.path} -> ❌ ERROR: ${e.message}")
-    }
+trace("carp-dsp: looking for carp.core-kotlin (USE_LOCAL_CORE=${System.getenv("USE_LOCAL_CORE")})")
+possibleCorePaths.forEach {
+    trace("  ${it.absolutePath} -> ${if (looksLikeCore(it)) "usable" else "not found"}")
 }
 
-// Find the first valid CARP core path
-val corePath = possibleCorePaths.firstOrNull { path ->
-    try {
-        path.exists() && path.isDirectory && (
-            File(path, "settings.gradle.kts").exists() ||
-            File(path, "build.gradle.kts").exists()
-        )
-    } catch (e: Exception) {
-        println("⚠️ Error checking path ${path.absolutePath}: ${e.message}")
-        false
-    }
-}
-val useLocalCore = corePath != null && (System.getenv("USE_LOCAL_CORE") != "false")
+val corePath = possibleCorePaths.firstOrNull(::looksLikeCore)
 
-if (useLocalCore && corePath != null) {
-    println("🔗 Using local composite build for carp.core-kotlin")
-    println("  - Path: ${corePath.absolutePath}")
-    println("  - Canonical path: ${corePath.canonicalPath}")
+if (corePath != null && System.getenv("USE_LOCAL_CORE") != "false") {
+    // A directory that looks like the repo but has no settings file is a partial
+    // clone, and the failure it causes later is unrecognisable. Say so here.
+    if (!File(corePath, "settings.gradle.kts").exists()) {
+        throw GradleException(
+            """
+            carp.core-kotlin at ${corePath.absolutePath} has no settings.gradle.kts.
 
-    try {
-        // Verify the core project structure
-        val coreSettingsFile = File(corePath, "settings.gradle.kts")
-        if (!coreSettingsFile.exists()) {
-            val errorMsg = """
-                ❌ CARP CORE BUILD FAILURE: Missing settings.gradle.kts
-                
-                Expected: ${coreSettingsFile.absolutePath}
-                
-                The CARP core repository at '${corePath.absolutePath}' appears to be incomplete.
-                Please ensure:
-                1. The repository is properly cloned
-                2. It's on the correct branch (feature/core-analytics)
-                3. The settings.gradle.kts file exists
-                
-                This is a failure in the dependent repository (carp.core-kotlin), not carp-dsp.
+            The checkout looks incomplete. Check that it cloned fully and that it
+            is on the branch this build expects (feature/core-analytics).
             """.trimIndent()
+        )
+    }
 
-            println(errorMsg)
-            throw GradleException(errorMsg)
-        }
+    println("carp-dsp: carp.core-kotlin from ${corePath.absolutePath}")
 
-        println("✅ CARP core structure validation passed")
-
-        includeBuild(corePath) {
-            dependencySubstitution {
-                println("🔄 Setting up dependency substitution for CARP core modules...")
-
-                // Map published modules to local Gradle projects.
-                val mappings = mapOf(
-                    "carp-core-common" to ":carp.common",
-                    "carp-core-data" to ":carp.data.core",
-                    "carp-core-analytics" to ":carp.analytics.core",
-                    "carp-core-protocols" to ":carp.protocols.core",
-                )
-                val group = "dk.cachet.carp"
-
-                mappings.forEach { (artifact, projectPath) ->
-                    substitute(module("$group:$artifact")).using(project(projectPath))
-                    println("  - $group:$artifact -> $projectPath")
-                }
-
-                println("✅ Dependency substitution configured successfully")
+    includeBuild(corePath) {
+        dependencySubstitution {
+            mapOf(
+                "carp-core-common" to ":carp.common",
+                "carp-core-data" to ":carp.data.core",
+                "carp-core-analytics" to ":carp.analytics.core",
+                "carp-core-protocols" to ":carp.protocols.core",
+                "carp-core-studies" to ":carp.studies.core",
+                "carp-core-deployments" to ":carp.deployments.core",
+            ).forEach { (artifact, projectPath) ->
+                substitute(module("dk.cachet.carp:$artifact")).using(project(projectPath))
+                trace("  dk.cachet.carp:$artifact -> $projectPath")
             }
         }
-
-        println("✅ CARP core composite build setup completed successfully")
-                // TODO: Make the not found to not found continuing
-    } catch (e: GradleException) {
-        // Re-throw GradleExceptions as-is
-        throw e
-    } catch (e: Exception) {
-        val errorMessage = """
-            ❌ CARP CORE BUILD FAILURE: Composite build setup failed
-            
-            Error: ${e.message ?: "Unknown error"}
-            Error type: ${e::class.simpleName}
-            CARP core path: ${corePath.absolutePath}
-            
-            This is a failure in the dependent repository (carp.core-kotlin), not carp-dsp.
-            
-            Troubleshooting steps:
-            1. Verify CARP core is on branch: feature/core-analytics
-            2. Ensure CARP core builds independently: cd '${corePath.absolutePath}' && ./gradlew build
-            3. Check CARP core project structure and Gradle files
-            4. Verify the CARP core repository was cloned completely
-        """.trimIndent()
-
-        println(errorMessage)
-        throw GradleException(errorMessage, e)
     }
-
 } else {
-    if (corePath == null) {
-        println("📦 No local CARP core found - falling back to published artifacts")
-        println("  Searched paths:")
-        possibleCorePaths.forEach { path ->
-            println("    - ${path.absolutePath}")
-        }
-    } else {
-        println("📦 USE_LOCAL_CORE disabled - falling back to published artifacts")
-    }
-    println("📦 Using published dk.cachet.carp artifacts from Maven Central")
+    val why = if (corePath == null) "no local checkout found" else "USE_LOCAL_CORE=false"
+    println("carp-dsp: carp.core-kotlin from Maven Central ($why)")
+    possibleCorePaths.forEach { trace("  looked in ${it.absolutePath}") }
 }
 
 // ---- Composite build: health-workflow-interfaces ----
