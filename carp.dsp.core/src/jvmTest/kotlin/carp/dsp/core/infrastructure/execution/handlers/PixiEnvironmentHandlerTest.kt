@@ -10,7 +10,9 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PixiEnvironmentHandlerTest {
@@ -48,15 +50,37 @@ class PixiEnvironmentHandlerTest {
         )
 
         val command = handler.generateExecutionCommand(ref, "python script.py")
+        val sep = FileSystems.getDefault().separator
+        val envs = "${System.getProperty("user.home")}$sep.carp-dsp${sep}envs${sep}pixi$sep"
 
-        val expected = "pixi run --manifest-path \"${System.getProperty("user.home")}${
-            FileSystems.getDefault().separator
-        }.carp-dsp${FileSystems.getDefault().separator}envs${FileSystems.getDefault().separator}pixi${
-            FileSystems.getDefault().separator
-        }test-001${
-            FileSystems.getDefault().separator
-        }pixi.toml\" python script.py"
-        kotlin.test.assertEquals(expected, command)
+        assertTrue(command.startsWith("pixi run --manifest-path \"$envs"), command)
+        assertTrue(command.endsWith("${sep}pixi.toml\" python script.py"), command)
+        // Test directory is named for the environment, not for its id.
+        assertTrue(command.contains("test-pixi-"), command)
+        assertFalse(command.contains("test-001"), command)
+    }
+
+    @Test
+    fun `the same spec resolves to the same directory, a different one does not`() {
+        fun pathFor(id: String, deps: List<String>, python: String = "3.11"): String =
+            handler.generateExecutionCommand(
+                PixiEnvironmentRef(
+                    id = id,
+                    name = "shared-pixi",
+                    dependencies = deps,
+                    pythonVersion = python
+                ),
+                "python x.py"
+            )
+
+        val first = pathFor("run-1", listOf("numpy", "pandas"))
+
+        // Same spec under a different id, and with the dependencies reordered.
+        assertEquals(first, pathFor("run-2", listOf("pandas", "numpy")))
+
+        // A changed dependency, and a changed python version, each earn their own.
+        assertNotEquals(first, pathFor("run-1", listOf("numpy")))
+        assertNotEquals(first, pathFor("run-1", listOf("numpy", "pandas"), python = "3.12"))
     }
 
     @Test

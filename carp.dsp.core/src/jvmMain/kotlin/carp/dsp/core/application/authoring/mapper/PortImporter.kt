@@ -266,27 +266,26 @@ internal object PortImporter
      * @param path The file path
      * @return Inferred FileFormat or CSV as fallback
      */
-    private fun inferFormatFromPath( path: String ): FileFormat
-    {
-        val extension = path.substringAfterLast( "." ).lowercase()
-        return when ( extension )
-        {
-            "csv" -> FileFormat.CSV
-            "json" -> FileFormat.JSON
-            "parquet" -> FileFormat.PARQUET
-            "avro" -> FileFormat.AVRO
-            "xml" -> FileFormat.XML
-            "xlsx", "xls" -> FileFormat.EXCEL
-            "bin" -> FileFormat.BINARY
-            "tsv" -> FileFormat.TSV
-            "yaml", "yml" -> FileFormat.YAML
-            "txt" -> FileFormat.TXT
-            else -> FileFormat.UNKNOWN // Default for files with no/unknown extension
-        }
-    }
+    private fun inferFormatFromPath( path: String ): FileFormat =
+        EXTENSION_FORMATS[ path.substringAfterLast( "." ).lowercase() ] ?: FileFormat.UNKNOWN
 
     private fun resolvePortId( id: String?, workflowNamespace: UUID?, kind: String ): UUID =
         id?.let { tryParseUuid( it ) }
             ?: workflowNamespace?.let { DeterministicUUID.v5( it, "port:$kind:${id ?: "unnamed"}" ) }
             ?: UUID.randomUUID()
 }
+
+/**
+ * File extension to [FileFormat], derived from the enum so a newly added format
+ * is recognised here without a second edit. The map appended below covers
+ * spellings the enum does not carry as its canonical extension.
+ */
+private val EXTENSION_FORMATS: Map<String, FileFormat> =
+    FileFormat.entries
+        .filter { it.extension.isNotEmpty() }
+        .associateBy { it.extension } +
+        mapOf(
+            "yml" to FileFormat.YAML,
+            "xls" to FileFormat.EXCEL,
+            "jpeg" to FileFormat.JPEG,
+        )

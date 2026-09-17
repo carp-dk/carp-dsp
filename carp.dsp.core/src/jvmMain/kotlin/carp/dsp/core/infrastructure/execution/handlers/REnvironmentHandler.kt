@@ -42,7 +42,7 @@ class REnvironmentHandler(
         return try {
             check(verifyRInstalled(r)) { "R ${r.rVersion} not found. Install R and add to PATH." }
 
-            val envDir = getREnvironmentDirectory(r.id)
+            val envDir = getREnvironmentDirectory(r)
             envDir.createDirectories()
 
             if (r.renvLockFile != null) {
@@ -52,6 +52,8 @@ class REnvironmentHandler(
             }
 
             check(validate(r)) { "Environment created but validation failed" }
+
+            EnvironmentStore.writeManifest(envDir, r)
 
             true
         } catch (e: IllegalStateException) {
@@ -90,7 +92,7 @@ class REnvironmentHandler(
         val r = environmentRef as REnvironmentRef
 
         return try {
-            val envDir = getREnvironmentDirectory(r.id)
+            val envDir = getREnvironmentDirectory(r)
             if (envDir.toFile().exists()) {
                 envDir.toFile().deleteRecursively()
             }
@@ -158,8 +160,10 @@ class REnvironmentHandler(
         return (0 until segmentsToMatch).all { idx -> requestedParts[idx] == installedParts[idx] }
     }
 
-    private fun getREnvironmentDirectory(envId: String): Path =
-        Path.of(System.getProperty("user.home"), ".carp-dsp", "envs", "r", envId)
+    /** See [EnvironmentStore]: the directory is what the environment is, not what it is called. */
+    private fun getREnvironmentDirectory(r: REnvironmentRef): Path =
+        EnvironmentStore.resolve(r)?.directory
+            ?: error("No provisioned directory for environment '${r.name}'")
 
     private fun setupRenv(envDir: Path, r: REnvironmentRef): Boolean = try {
         val lockFilePath = Path.of(r.renvLockFile!!)

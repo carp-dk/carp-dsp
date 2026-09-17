@@ -1,15 +1,12 @@
 package carp.dsp.demo
 
 import carp.dsp.core.application.execution.ExecutionLogger
-import java.io.File
-import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
-import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
-import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.core.application.run.WorkflowSource
+import carp.dsp.steps.ClasspathStepLibrary
+import dk.cachet.carp.analytics.application.execution.ExecutionStatus
 import dk.cachet.carp.common.application.UUID
 import kotlin.io.path.Path
-import kotlin.io.path.createDirectories
-import kotlin.io.path.readText
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -23,73 +20,59 @@ fun main(args: Array<String>) {
 }
 
 /**
- * Runs a workflow YAML end to end: parse, resolve references, import, plan,
- * then execute - staging library impl files and provisioning declared file inputs
- * into the run workspace. Prints progress and returns a process exit code
- * (0 success, 1 failure). Shared by the CLI entry point and the library demo.
+ * Runs a workflow YAML end to end and prints progress, returning a process exit
+ * code (0 success, 1 failure).
+ *
+ * Argument parsing and console output are all this adds - the life cycle itself
+ * is [WorkflowExecutor], which the demos and any service use too.
  */
 fun runWorkflow(workflowPath: String, workspacePath: String): Int {
-    // 1. Load and validate YAML
-    val yamlText = try {
-        Path(workflowPath).readText()
-    } catch (e: Exception) {
-        System.err.println("Failed to read workflow file '$workflowPath': ${e.message}")
-        return 1
-    }
-
-    val descriptor = try {
-        WorkflowYamlCodec().decodeOrThrow(yamlText)
-    } catch (e: Exception) {
-        System.err.println("Failed to parse workflow YAML: ${e.message}")
-        return 1
-    }
-
-    println("Workflow: ${descriptor.metadata.name}")
-
-    // 2. Resolve `uses:` references, import, plan, and collect what the run needs
-    // staged. Writes/updates steps.lock beside the workflow; a no-op for an
-    // all-inline workflow.
-    val prepared = try {
-        WorkflowPreparation.prepare(File(workflowPath), descriptor)
-    } catch (e: Exception) {
-        System.err.println("Failed to prepare workflow: ${e.message}")
-        return 1
-    }
-    val plan = prepared.plan
-    plan.validate()
-    println("Plan: ${plan.steps.size} step(s)")
-    println()
-
-    // 3. Set up workspace (absolute - the workspace manager rejects relative roots)
-    val workspaceDir = Path(workspacePath).toAbsolutePath()
-    workspaceDir.createDirectories()
-
-    val artefactStore = FileSystemArtefactStore(workspaceDir.resolve("artifacts"))
-    val workspaceManager = DefaultWorkspaceManager(workspaceDir)
-
-    // 4. Execute with console progress logger.
-    val consoleLogger = ConsoleExecutionLogger()
-    val executor = DefaultPlanExecutor(
-        workspaceManager = workspaceManager,
-        artefactStore = artefactStore,
-        options = DefaultPlanExecutor.Options(executionLogger = consoleLogger)
+    val executor = WorkflowExecutor.filesystem(
+        stepLibrary = ClasspathStepLibrary(),
+        workspaceRoot = Path(workspacePath),
+        options = WorkflowExecutor.Options(executionLogger = ConsoleExecutionLogger()),
     )
 
-    val runId = UUID.randomUUID()
-    val report = executor.run(plan, runId, prepared.provisioning)
-
-    // 5. Print final status
-    println()
-    val failedStep = report.stepResults.firstOrNull {
-        it.status.toString() == "FAILED"
+    // Read, resolve `uses:` references, import and plan. Writes/updates steps.lock
+    // beside the workflow; a no-op for an all-inline workflow.
+    val prepared = try {
+        executor.prepare(WorkflowSource.of(workflowPath))
+    } catch (e: Exception) {
+        System.err.println("Failed to prepare workflow '$workflowPath': ${e.message}")
+        return 1
     }
 
-    return if (report.status.toString() == "SUCCEEDED") {
+    println("Workflow: ${prepared.descriptor.metadata.name}")
+    println("Plan: ${prepared.plan.steps.size} step(s)")
+
+    // Structural checks the executor does not make: a plan with no steps, or with
+    // no name, is a bad plan rather than a failed run, and should say so here.
+    try {
+        prepared.plan.validate()
+    } catch (e: IllegalArgumentException) {
+        System.err.println("Invalid plan: ${e.message}")
+        return 1
+    }
+
+    if (!prepared.plan.isRunnable()) {
+        System.err.println("Plan has errors and will not be run:")
+        prepared.plan.issues.forEach { System.err.println("  - ${it.message}") }
+        return 1
+    }
+
+    println()
+
+    val report = executor.run(prepared, UUID.randomUUID())
+
+    println()
+    return if (report.status == ExecutionStatus.SUCCEEDED) {
         println("Workflow complete: SUCCESS")
-        println("Outputs written to: $workspaceDir")
+        println("Outputs written to: ${Path(workspacePath).toAbsolutePath()}")
         0
     } else {
-        val failedName = failedStep?.stepMetadata?.name ?: "unknown"
+        val failedName = report.stepResults
+            .firstOrNull { it.status == ExecutionStatus.FAILED }
+            ?.stepMetadata?.name ?: "unknown"
         println("FAILED at step: $failedName")
         report.issues.forEach { println("  - ${it.message}") }
         1

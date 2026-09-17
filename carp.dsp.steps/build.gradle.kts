@@ -1,5 +1,6 @@
 import java.security.MessageDigest
 import java.time.LocalDate
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -14,6 +15,9 @@ repositories {
     mavenCentral()
 }
 
+/** DIR for publishedf steps and root for Kolin step src */
+val stepLibraryRoot = "src/jvmMain/resources/steps"
+
 kotlin {
     jvmToolchain(17)
 
@@ -26,6 +30,9 @@ kotlin {
                 implementation("dk.cachet.carp:carp-core-common")
                 implementation("dk.cachet.carp:carp-core-data")
                 implementation("dk.cachet.carp:carp-core-analytics")
+                implementation("dk.cachet.carp:carp-core-studies")
+                implementation("dk.cachet.carp:carp-core-deployments")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.kotlinx.coroutines.get()}")
             }
         }
 
@@ -35,11 +42,29 @@ kotlin {
             }
         }
 
+        // Step directories contain Kotlin source code in addition to resources, so
+        // they must be registered as source roots during the build.
+        jvmMain {
+            kotlin.srcDir(stepLibraryRoot)
+            kotlin.exclude("**/impl/kotlin/test/**")
+
+            dependencies {
+                implementation("org.postgresql:postgresql:42.7.4")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+            }
+        }
+
         jvmTest {
+            kotlin.srcDir(stepLibraryRoot)
+            kotlin.exclude("**/impl/kotlin/main/**")
+
             dependencies {
                 implementation(project(":carp.dsp.core"))
                 implementation(libs.kaml)
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
+                implementation("dk.cachet.carp:carp-core-protocols")
+                implementation("com.h2database:h2:2.3.232")
             }
         }
     }
@@ -58,6 +83,24 @@ tasks.named<Copy>("jvmProcessResources") {
     )
 }
 
+// ── Integration test filtering ───────────────────────────────────────────────
+// PostgresQueryIntegrationTest starts a Postgres in Docker, so it fails on a
+// machine without one. Skip it with:
+//
+//   ./gradlew build -PskipIntegration
+val skipIntegrationTests = project.hasProperty("skipIntegration") ||
+    System.getenv("CI") == "true" ||
+    System.getenv("SKIP_INTEGRATION") == "true"
+
+tasks.named<Test>("jvmTest") {
+    if (skipIntegrationTests) {
+        exclude("**/PostgresQueryIntegrationTest*")
+        // Belt and braces: the @BeforeClass consults the variable itself, so a
+        // filter that misses still leaves no container started.
+        environment("SKIP_INTEGRATION", "true")
+    }
+}
+
 // ── Library conformance check ──────────────────────────────────────────────────
 //
 // The automated half of contribution review, running as ordinary tests so
@@ -68,6 +111,7 @@ tasks.named<Copy>("jvmProcessResources") {
 //   - naming and tier placement are valid, checked against declared data types
 //   - every declared implementation and reference fixture is present
 //   - the published content hash still matches what the step ships
+//   - the installed task runtime was built from the Kotlin sources now on disk
 //
 // What is still NOT verified is that a step reproduces its fixture in the
 // environment it *declares*: the tests run against whatever interpreter is on PATH.
@@ -75,6 +119,7 @@ tasks.register("validateStepLibrary") {
     group = "verification"
     description = "Runs the step library conformance check"
     dependsOn("jvmTest")
+    dependsOn("verifyTaskRuntime")
 }
 
 // ── Step scaffolding ──────────────────────────────────────────────────────────
@@ -114,7 +159,7 @@ tasks.register("newStep") {
         }
 
         val target = layout.projectDirectory
-            .dir("src/jvmMain/resources/steps/$tier/$subject/$step").asFile
+            .dir("$stepLibraryRoot/$tier/$subject/$step").asFile
         require(!target.exists()) { "Step already exists at $target" }
 
         // A readable name derived from the step slug: "hrv-rmssd" -> "Hrv rmssd".
@@ -155,12 +200,12 @@ tasks.register("newStep") {
 
 /** Every published step directory, i.e. every directory holding a `step.yaml`. */
 fun stepDirectories(): List<File> =
-    layout.projectDirectory.dir("src/jvmMain/resources/steps").asFile
+    layout.projectDirectory.dir(stepLibraryRoot).asFile
         .walkTopDown().filter { it.name == "step.yaml" }.map { it.parentFile }
         .sortedBy { it.invariantSeparatorsPath }.toList()
 
 fun stepIdOf(dir: File): String =
-    dir.relativeTo(layout.projectDirectory.dir("src/jvmMain/resources/steps").asFile)
+    dir.relativeTo(layout.projectDirectory.dir(stepLibraryRoot).asFile)
         .invariantSeparatorsPath.replace('/', '.')
 
 /** Left behind by running a step's tests; produced by working with a step, not published by it. */
@@ -487,5 +532,140 @@ tasks.register("reviewSteps") {
         if (only != null && reviewed != only.size) {
             logger.warn("Requested ${only.size} step(s) but matched $reviewed - check the ids")
         }
+    }
+}
+
+// ── Task runtime ──────────────────────────────────────────────────────────────
+//
+// Library steps written in Kotlin are mini applications, that run in
+// their own JVM against a classpath provided with the library.
+//
+// The jar is installed beside the provisioned environments, at
+//   ~/.carp-dsp/task-runtime/carp-task-runtime.jar
+// which mirrors where EnvironmentStore keeps environments. A step's command
+// resolves to that path.
+//
+//   ./gradlew :carp.dsp.steps:installTaskRuntime
+
+val taskRuntimeName = "carp-task-runtime.jar"
+val taskRuntimeStampName = "carp-task-runtime.properties"
+val taskRuntimeStampEntry = "META-INF/$taskRuntimeStampName"
+
+/** Every Kotlin implementation source the library publishes, in a stable order. */
+fun kotlinStepSources(): List<File> =
+    stepDirectories()
+        .map { it.resolve("impl/kotlin/main") }
+        .filter { it.isDirectory }
+        .flatMap { dir -> dir.walkTopDown().filter { it.isFile && it.extension == "kt" } }
+        .sortedBy { it.invariantSeparatorsPath }
+
+/**
+ * SHA-256 over those sources, each contributing its library-relative path then its
+ * bytes - the shape a step's content hash uses, taken across the whole library
+ * rather than one step, because the runtime they compile into is shared.
+ */
+fun kotlinImplementationHash(): String {
+    val root = layout.projectDirectory.dir(stepLibraryRoot).asFile
+    val digest = MessageDigest.getInstance("SHA-256")
+    kotlinStepSources().forEach { file ->
+        digest.update(file.relativeTo(root).invariantSeparatorsPath.toByteArray())
+        digest.update(file.readBytes())
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+// A step's command names the installed jar, not anything this build produced, so
+// an edit after the last install leaves a runtime that runs code nobody is
+// looking at - and every test still passes, because the tests compile from source.
+// The jar records what it was built from; `verifyTaskRuntime` compares that
+// against the step directories as they stand.
+val taskRuntimeStamp by tasks.registering {
+    group = "step library"
+    description = "Record which step sources the task runtime was built from"
+
+    val stamp = layout.buildDirectory.file("task-runtime/stamp/$taskRuntimeStampName")
+    outputs.file(stamp)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        stamp.get().asFile
+            .apply { parentFile.mkdirs() }
+            .writeText("implementationHash=${kotlinImplementationHash()}\n")
+    }
+}
+
+val taskRuntimeJar by tasks.registering(Jar::class) {
+    group = "step library"
+    description = "Assemble the classpath Kotlin library steps run against"
+
+    archiveFileName.set(taskRuntimeName)
+    destinationDirectory.set(layout.buildDirectory.dir("task-runtime"))
+
+    // Dependencies overlap on stdlib metadata and service files; first wins -
+    // so the stamp is copied first and nothing can shadow it.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(taskRuntimeStamp) { into("META-INF") }
+
+    val jvmMain = kotlin.jvm().compilations.getByName("main")
+    from(jvmMain.output.allOutputs)
+    from({
+        jvmMain.runtimeDependencyFiles
+            .filter { it.name.endsWith(".jar") }
+            .map { zipTree(it) }
+    })
+
+    // Signatures do not survive being merged, and a module descriptor from one
+    // dependency would describe the whole jar.
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "module-info.class")
+}
+
+tasks.register<Copy>("installTaskRuntime") {
+    group = "step library"
+    description = "Install the task runtime where a step's command expects it"
+
+    from(taskRuntimeJar)
+    into(File(System.getProperty("user.home"), ".carp-dsp/task-runtime"))
+
+    doLast {
+        logger.lifecycle("Task runtime installed: ${destinationDir.resolve(taskRuntimeName)}")
+    }
+}
+
+tasks.register("verifyTaskRuntime") {
+    group = "verification"
+    description = "Checks the installed task runtime was built from the step sources on disk"
+
+    doLast {
+        val installed = File(System.getProperty("user.home"), ".carp-dsp/task-runtime/$taskRuntimeName")
+        if (!installed.isFile) {
+            logger.lifecycle("Skipping: no task runtime at $installed.")
+            logger.lifecycle("Install one with ./gradlew :carp.dsp.steps:installTaskRuntime")
+            return@doLast
+        }
+
+        val stamped = ZipFile(installed).use { jar ->
+            jar.getEntry(taskRuntimeStampEntry)
+                ?.let { jar.getInputStream(it).bufferedReader().use { reader -> reader.readText() } }
+        }
+            ?.lineSequence()
+            ?.firstOrNull { it.startsWith("implementationHash=") }
+            ?.substringAfter('=')
+            ?.trim()
+            ?: throw GradleException(
+                "$installed carries no source stamp, so it predates this check. " +
+                    "Reinstall it: ./gradlew :carp.dsp.steps:installTaskRuntime"
+            )
+
+        val current = kotlinImplementationHash()
+        if (stamped != current) {
+            throw GradleException(
+                "The installed task runtime was not built from the step sources on disk, so a " +
+                    "Kotlin step would run code that is no longer in the library. " +
+                    "Runtime carries $stamped, the sources hash to $current. " +
+                    "Reinstall it: ./gradlew :carp.dsp.steps:installTaskRuntime"
+            )
+        }
+        logger.lifecycle("Task runtime matches the step sources ($current).")
     }
 }

@@ -1,0 +1,100 @@
+schemaVersion: "1.0"
+
+metadata:
+  id: "core.io.decode-carp-data-streams"
+  name: "Decode stored CARP data streams"
+  description: >-
+    Turn a queried table of CARP data-stream rows into the measurement and
+    provenance tables the library works in. Pairs with core.io.query-sql, which
+    produces the input: together they read a study from the database rather than
+    through the service, and produce what core.io.fetch-study-data produces from
+    the service.
+  version: "1.0"
+  tags:
+    - "core"
+    - "io"
+    - "carp"
+    - "decode"
+
+environments:
+  env-jvm-task-runtime:
+    name: "CARP task runtime"
+    kind: "pixi"
+    spec:
+      pythonVersion:
+        - "3.11"
+      dependencies:
+        - "openjdk=17"
+
+steps:
+  - id: "decode-carp-data-streams"
+    metadata:
+      name: "Decode stored CARP data streams"
+      description: "Rebuild measurements from stored data-stream snapshots"
+      version: "1.0"
+    environmentId: "env-jvm-task-runtime"
+    dependsOn: []
+    task:
+      type: "command"
+      id: "task-core-io-decode-carp-data-streams"
+      name: "decode-carp-data-streams"
+      # {carp.taskRuntime} is substituted with the shared task runtime jar before
+      # the command is quoted, so the step names no path of its own.
+      executable: "java"
+      args:
+        - "-cp"
+        - "{carp.taskRuntime}"
+        - "carp.dsp.steps.datastream.DecodeCarpDataStreams"
+        - "--input"
+        - "input.0"
+        - "--measurements"
+        - "output.0"
+        - "--provenance"
+        - "output.1"
+    inputs:
+      - id: "rows"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: >-
+            A queried data-stream table: study_deployment_id, device_role_name,
+            data_type, first_sequence_id and snapshot, ordered by stream and
+            first sequence id.
+    outputs:
+      - id: "measurements"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "One row per measurement, keyed by row_id; value columns are the union of the data types present"
+      - id: "provenance"
+        descriptor:
+          fileFormat: "csv"
+          encoding: "utf-8"
+          formatRef: "http://edamontology.org/format_3752"
+          notes: "Deployment, device role, sequence and sync point for each row_id in the measurement table"
+
+# Library-only metadata. Ignored by the codec (strictMode = false), read separately
+# by the conformance gate. See docs/STEP_LIBRARY.md.
+library:
+  tier: "core"
+  subject: "io"
+  environment:
+    default: "env-jvm-task-runtime"
+    requires:
+      kind: ["pixi"]
+      interpreter:
+        name: "java"
+        version: ">=17"
+  implementations:
+    - language: "kotlin"
+      path: "impl/kotlin/main/DecodeCarpDataStreams.kt"
+  method:
+    name: "CARP data stream decoding"
+    citation: null
+  reference:
+    input: "reference/input.csv"
+    expected: "reference/expected.csv"
+    tolerance:
+      float: 1.0e-6

@@ -123,6 +123,28 @@ class ProtocolCouplingValidatorTest
     }
 
     @Test
+    fun `incomplete protocol binding is its own failure, not a data type mismatch`()
+    {
+        val provider = StudyProtocolSnapshotDataTypeProvider( snapshot( dataTypes = listOf( HEART_RATE ) ) )
+        // Marked protocol-sourced, but says nothing about what it expects.
+        val noDataType = InputDataSpec(
+            id = UUID.randomUUID(),
+            name = "hr",
+            location = FileLocation(
+                path = "",
+                format = FileFormat.UNKNOWN,
+                metadata = mapOf( "source" to "protocol", "protocolId" to protocolId.toString() )
+            )
+        )
+
+        val issues = validator.validate( listOf( step( "import", listOf( noDataType ) ) ), provider )
+
+        assertEquals( 1, issues.size )
+        assertEquals( "PROTOCOL_BINDING_INCOMPLETE", issues[0].code )
+        assertEquals( PlanIssueSeverity.ERROR, issues[0].severity )
+    }
+
+    @Test
     fun `passes protocol input whose data type is collected`()
     {
         val provider = StudyProtocolSnapshotDataTypeProvider(
