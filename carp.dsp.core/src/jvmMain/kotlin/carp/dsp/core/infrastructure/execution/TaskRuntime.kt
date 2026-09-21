@@ -4,6 +4,9 @@ import java.nio.file.Path
 
 private const val RUNTIME_JAR = "carp-task-runtime.jar"
 
+/** Names the directory the runtime is installed in, when it is not the default. */
+const val TASK_RUNTIME_VARIABLE: String = "CARP_DSP_TASK_RUNTIME"
+
 /**
  * The classpath library steps written in Kotlin run against.
  *
@@ -19,8 +22,9 @@ object TaskRuntime
     /**
      * Where the runtime is installed.
      *
-     * Defaults beside the provisioned environments. Assignable so a test can
-     * point at a directory it controls.
+     * [TASK_RUNTIME_VARIABLE] when it is set, and beside the provisioned
+     * environments otherwise. Assignable so a test can point at a directory it
+     * controls.
      */
     var directory: Path = defaultDirectory()
 
@@ -31,6 +35,11 @@ object TaskRuntime
     fun substitute(argument: String): String =
         if (TOKEN in argument) argument.replace(TOKEN, jar.toString()) else argument
 
-    private fun defaultDirectory(): Path =
-        Path.of(System.getProperty("user.home"), ".carp-dsp", "task-runtime")
+    /** Returns the directory [environment] names, or the one beside the provisioned environments. */
+    internal fun defaultDirectory(environment: Map<String, String> = System.getenv()): Path =
+        // A container keeps its home on a volume, which outlives the image: a jar
+        // installed there would survive the rebuild that should have replaced it.
+        // The variable lets an image carry its own runtime outside that volume.
+        environment[TASK_RUNTIME_VARIABLE]?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+            ?: Path.of(System.getProperty("user.home"), ".carp-dsp", "task-runtime")
 }

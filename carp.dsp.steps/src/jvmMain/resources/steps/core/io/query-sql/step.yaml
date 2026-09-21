@@ -25,7 +25,7 @@ environments:
       pythonVersion:
         - "3.11"
       dependencies:
-        - "openjdk=17"
+        - "openjdk=17.*"
 
 steps:
   - id: "query-sql"
