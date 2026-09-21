@@ -56,7 +56,24 @@ class TaskRuntimeTest {
 
     @Test
     fun `the runtime defaults beside the provisioned environments`() {
-        assertTrue(original.toString().contains(".carp-dsp"), original.toString())
-        assertTrue(original.endsWith("task-runtime"), original.toString())
+        val default = TaskRuntime.defaultDirectory(emptyMap())
+
+        assertTrue(default.toString().contains(".carp-dsp"), default.toString())
+        assertTrue(default.endsWith("task-runtime"), default.toString())
+    }
+
+    @Test
+    fun `the environment can name the runtime's directory`() {
+        val named = TaskRuntime.defaultDirectory(mapOf(TASK_RUNTIME_VARIABLE to "/app/task-runtime"))
+
+        assertEquals(Path.of("/app/task-runtime"), named)
+    }
+
+    @Test
+    fun `a blank variable is treated as unset`() {
+        val default = TaskRuntime.defaultDirectory(mapOf(TASK_RUNTIME_VARIABLE to " "))
+
+        assertTrue(default.endsWith("task-runtime"), default.toString())
+        assertTrue(default.toString().contains(".carp-dsp"), default.toString())
     }
 }
