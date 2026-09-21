@@ -17,6 +17,8 @@ Usage: query-sql --query-file <path> --output <path> [options]
   --query-file <path>        one SELECT or WITH statement (required)
   --output <path>            CSV file to write (required)
   --param <name>=<value>     repeatable; bound to a :name in the statement
+  --from <date-time>         window start, bound to :from (ISO-8601, UTC)
+  --to <date-time>           window end, bound to :to; unset bounds bind NULL
   --connection-file <path>   properties file: url, user, password
   --max-rows <n>             fail rather than return more than n rows
   --fetch-size <n>           rows the driver reads at a time
@@ -41,7 +43,14 @@ fun querySql(args: List<String>, environment: Map<String, String> = System.geten
     val config = parseQuerySqlArgs(args)
 
     val target = sqlConnectionFrom(config.connectionFile, environment)
-    val query = sqlQueryFrom(config.queryFile, config.params, config.fetchSize, config.maxRows)
+    val query = sqlQueryFrom(
+        file = config.queryFile,
+        values = config.params,
+        fetchSize = config.fetchSize,
+        maxRows = config.maxRows,
+        from = config.from,
+        to = config.to,
+    )
         .copy(requireRows = config.requireRows)
 
     return QuerySqlStep().run(target, query, config.output)

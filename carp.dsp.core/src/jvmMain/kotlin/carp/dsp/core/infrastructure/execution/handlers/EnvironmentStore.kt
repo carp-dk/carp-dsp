@@ -7,16 +7,20 @@ import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Instant
 import kotlin.io.path.createDirectories
+import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.name
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 private const val DIGEST_CHARS = 16
 private const val SLUG_CHARS = 32
 private const val MANIFEST = "carp-env.json"
+private const val USED_MARKER = "carp-env.used"
 
 /** Outcome of resolving a requested environment. */
 enum class EnvironmentResolution { BUILT, EXACT, SUPERSET }
@@ -37,6 +41,23 @@ data class ResolvedEnvironment(
 )
 
 /**
+ * An environment directory on disk, solved or not.
+ *
+ * @property ref What the environment was built from, or null for a build that
+ *   failed or was interrupted before it finished.
+ * @property builtAt When the build finished, or null if it never did.
+ * @property lastUsedAt When a run last built or reused it, or null if none has
+ *   been recorded.
+ */
+data class EnvironmentEntry(
+    val kind: String,
+    val directory: Path,
+    val ref: EnvironmentRef?,
+    val builtAt: Instant?,
+    val lastUsedAt: Instant?,
+)
+
+/**
  * Stores and locates provisioned environments.
  *
  * Environments are keyed by a digest derived from their effective definition
@@ -49,7 +70,10 @@ data class ResolvedEnvironment(
  */
 object EnvironmentStore {
 
-    private val root: Path = Path.of(System.getProperty("user.home"), ".carp-dsp", "envs")
+    /**
+     * Where environments are kept.
+     */
+    var root: Path = Path.of(System.getProperty("user.home"), ".carp-dsp", "envs")
 
     /**
      * `encodeDefaults` matters here. A manifest is a durable record of what an
@@ -111,6 +135,44 @@ object EnvironmentStore {
 
     /** Every provisioned environment of a kind. What an environments view lists. */
     fun list(kind: String): List<Pair<Path, EnvironmentRef>> = candidates(kind)
+
+    /**
+     * Records that a run has built or used the environment at [directory].
+     * Does nothing when there is no such directory.
+     */
+    fun markUsed(directory: Path) {
+        // Only a directory the store already holds: a kind this store does not
+        // manage would otherwise appear here as a build that never finished.
+        if (!directory.isDirectory()) return
+        directory.resolve(USED_MARKER).writeText(Instant.now().toString())
+    }
+
+    /**
+     * Returns every environment directory of every kind, in any state.
+     */
+    fun entries(): List<EnvironmentEntry> {
+        if (!root.isDirectory()) return emptyList()
+
+        return root.listDirectoryEntries()
+            .filter { it.isDirectory() }
+            .flatMap { kindRoot ->
+                kindRoot.listDirectoryEntries()
+                    .filter { it.isDirectory() }
+                    .map { dir ->
+                        EnvironmentEntry(
+                            kind = kindRoot.name,
+                            directory = dir,
+                            ref = manifestOf(dir),
+                            builtAt = modifiedAt(dir.resolve(MANIFEST)),
+                            lastUsedAt = modifiedAt(dir.resolve(USED_MARKER)),
+                        )
+                    }
+            }
+            .sortedWith(compareBy({ it.kind }, { it.directory.name }))
+    }
+
+    private fun modifiedAt(file: Path): Instant? =
+        file.takeIf { it.isRegularFile() }?.getLastModifiedTime()?.toInstant()
 
     private fun candidates(kind: String): List<Pair<Path, EnvironmentRef>> {
         val kindRoot = root.resolve(kind)

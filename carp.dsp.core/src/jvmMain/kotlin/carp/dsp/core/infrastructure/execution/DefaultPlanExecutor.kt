@@ -549,6 +549,8 @@ class DefaultPlanExecutor(
                 return false
             }
 
+            resolution?.let { runCatching { EnvironmentStore.markUsed(it.directory) } }
+
             executionLogger.onEnvironmentReady(
                 runId,
                 EnvironmentOutcome(
