@@ -1,4 +1,4 @@
-@file:Suppress("SqlResolve", "PackageDirectoryMismatch")
+@file:Suppress("SqlResolve", "PackageDirectoryMismatch", "FunctionName")
 
 package carp.dsp.steps.sql
 
@@ -7,6 +7,7 @@ import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -85,7 +86,7 @@ class JdbcQuerySourceTest {
         requireRows: Boolean = true,
     ): Pair<Long, Recorder> {
         val source = if (open == null) JdbcQuerySource() else JdbcQuerySource(open)
-        val query = SqlQuery(sql, params, maxRows = maxRows, requireRows = requireRows)
+        val query = SqlQuery(sql, params.map(SqlValue::Text), maxRows = maxRows, requireRows = requireRows)
         return source.read(target, query, sink) to sink
     }
 
@@ -158,6 +159,24 @@ class JdbcQuerySourceTest {
         )
 
         assertEquals(0L, count)
+    }
+
+    @Test
+    fun `a timestamp is bound as one, and a null bound leaves the window open`() {
+        keepAlive.createStatement().use {
+            it.execute("CREATE TABLE arrival (id INT, created_at TIMESTAMP)")
+            it.execute("INSERT INTO arrival VALUES (1, '2026-10-12 09:59:59'), (2, '2026-10-12 10:00:00')")
+        }
+        val sql = "SELECT id FROM arrival WHERE (? IS NULL OR created_at >= ?) ORDER BY id"
+        val source = JdbcQuerySource()
+
+        val from = SqlValue.Timestamp(Instant.parse("2026-10-12T10:00:00Z"))
+        val windowed = Recorder().also { source.read(target, SqlQuery(sql, listOf(from, from)), it) }
+        val open = SqlValue.Timestamp(null)
+        val unbounded = Recorder().also { source.read(target, SqlQuery(sql, listOf(open, open)), it) }
+
+        assertEquals(listOf(listOf<String?>("2")), windowed.rows)
+        assertEquals(listOf(listOf<String?>("1"), listOf<String?>("2")), unbounded.rows)
     }
 
     // ── The two guards on a result ───────────────────────────────────────────

@@ -9,6 +9,7 @@ import org.junit.BeforeClass
 import java.io.IOException
 import java.sql.Connection
 import java.sql.DriverManager
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -32,6 +33,18 @@ private const val STUDY_DATA = """
              JOIN recruitment_participant_groups g
                   ON g.group_id = i.study_deployment_id AND g.is_deployed
     WHERE g.study_id = ?
+      AND (CAST(? AS timestamp) IS NULL OR s.created_at >= ?)
+      AND (CAST(? AS timestamp) IS NULL OR s.created_at < ?)
+      AND NOT EXISTS (
+          SELECT 1
+          FROM data_stream_sequence o
+          WHERE o.data_stream_id = s.data_stream_id
+            AND o.id <> s.id
+            AND o.first_sequence_id <= s.first_sequence_id
+            AND o.last_sequence_id >= s.last_sequence_id
+            AND (o.first_sequence_id < s.first_sequence_id
+                OR o.last_sequence_id > s.last_sequence_id
+                OR o.id < s.id))
     ORDER BY i.id, s.first_sequence_id
 """
 
@@ -147,6 +160,16 @@ class PostgresQueryIntegrationTest
     private fun target(user: String = USER, database: String = USER) =
         SqlConnection(url.replace("/$USER", "/$database"), user, USER)
 
+    /** The documented statement for the seeded study, over [from] to [to]; null leaves a side open. */
+    private fun studyData(from: Instant? = null, to: Instant? = null) = SqlQuery(
+        STUDY_DATA,
+        listOf(
+            SqlValue.Text(study),
+            SqlValue.Timestamp(from), SqlValue.Timestamp(from),
+            SqlValue.Timestamp(to), SqlValue.Timestamp(to),
+        ),
+    )
+
     private fun refused(target: SqlConnection, query: SqlQuery): String =
         assertFailsWith<SqlAccessException> { source.read(target, query, Rows()) }.message.orEmpty()
 
@@ -156,9 +179,10 @@ class PostgresQueryIntegrationTest
         assumeTrue("Skipping Postgres integration", System.getenv("SKIP_INTEGRATION") != "true")
 
         val sink = Rows()
-        val rows = source.read(target(), SqlQuery(STUDY_DATA, listOf(study)), sink)
+        val rows = source.read(target(), studyData(), sink)
 
-        // Two sequences on the deployed group's stream; the staged group has none.
+        // Two sequences on the deployed group's stream, not counting the re-upload
+        // they cover; the staged group has none.
         assertEquals(2L, rows)
 
         // jsonb comes back as text with its keys reordered, so nothing may depend
@@ -168,16 +192,34 @@ class PostgresQueryIntegrationTest
     }
 
     @Test
+    fun `the documented window selects by arrival time`()
+    {
+        assumeTrue("Skipping Postgres integration", System.getenv("SKIP_INTEGRATION") != "true")
+
+        // Sequence 1 arrived at 10:00 and sequence 2 at 10:15; [10:00, 10:15) holds only the first.
+        val sink = Rows()
+        val rows = source.read(
+            target(),
+            studyData(Instant.parse("2026-10-12T10:00:00Z"), Instant.parse("2026-10-12T10:15:00Z")),
+            sink,
+        )
+
+        assertEquals(1L, rows)
+        assertEquals("0", sink.values.single()[sink.columns.indexOf("first_sequence_id")])
+    }
+
+    @Test
     fun `a parameter is sent as text, so comparing it to a number needs a cast`()
     {
         assumeTrue("Skipping Postgres integration", System.getenv("SKIP_INTEGRATION") != "true")
 
         // Postgres has no `integer = varchar` and H2 never showed this, because it
         // coerces. The fix belongs in the statement: the step cannot know the column.
-        val uncast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = ?", listOf("1"))
+        val one = listOf(SqlValue.Text("1"))
+        val uncast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = ?", one)
         assertContains(refused(target(), uncast), "refused the statement")
 
-        val cast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = CAST(? AS integer)", listOf("1"))
+        val cast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = CAST(? AS integer)", one)
         val sink = Rows()
 
         source.read(target(), cast, sink)
@@ -191,7 +233,7 @@ class PostgresQueryIntegrationTest
     {
         assumeTrue("Skipping Postgres integration", System.getenv("SKIP_INTEGRATION") != "true")
 
-        val query = SqlQuery(STUDY_DATA, listOf(study))
+        val query = studyData()
 
         assertContains(refused(target(user = "nobody"), query), "credentials")
         assertContains(refused(target(database = "no-such-db"), query), "does not exist")

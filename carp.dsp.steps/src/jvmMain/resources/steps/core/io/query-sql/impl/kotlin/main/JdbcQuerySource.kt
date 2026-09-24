@@ -5,7 +5,11 @@ package carp.dsp.steps.sql
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.sql.PreparedStatement
 import java.sql.SQLException
+import java.sql.Types
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.Properties
 
 /**
@@ -61,7 +65,7 @@ class JdbcQuerySource(private val open: (SqlConnection) -> Connection = ::connec
                     // One more than the cap so the drain can check it rather than truncating.
                     query.maxRows?.let { statement.maxRows = it + 1 }
 
-                    query.params.forEachIndexed { index, value -> statement.setString(index + 1, value) }
+                    query.params.forEachIndexed { index, value -> statement.bind(index + 1, value) }
 
                     statement.executeQuery().use { rows -> drain(rows, query, sink) }
                 }
@@ -71,6 +75,20 @@ class JdbcQuerySource(private val open: (SqlConnection) -> Connection = ::connec
         {
             throw sqlFailure(failure, target)
         }
+
+    private fun PreparedStatement.bind(index: Int, value: SqlValue)
+    {
+        when (value)
+        {
+            is SqlValue.Text -> setString(index, value.value)
+
+            // A LocalDateTime is sent as `timestamp without time zone`, the type of
+            // CARP's created_at columns, which the web service writes in UTC.
+            is SqlValue.Timestamp ->
+                if (value.value == null) setNull(index, Types.TIMESTAMP)
+                else setObject(index, LocalDateTime.ofInstant(value.value, ZoneOffset.UTC))
+        }
+    }
 
     private fun drain(rows: ResultSet, query: SqlQuery, sink: SqlRowSink): Long
     {

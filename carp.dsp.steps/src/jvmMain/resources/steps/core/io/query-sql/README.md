@@ -36,8 +36,8 @@ One input: the statement to run.
 The statement must be a single `SELECT` or `WITH`. Anything else is refused
 before a connection is opened - comments and quoted text are ignored when
 deciding, so a `;` or a keyword inside a literal does not count. That rejects
-mistakes, not attackers: a read-only database role is what actually prevents a
-write.
+mistakes, not attackers: a read-only database role is what actually prevents
+writing to the database.
 
 ## What you get
 
@@ -64,8 +64,8 @@ consume as if it were whole.
    the names in the order their placeholders appear.
 2. Open a connection from the connection file, with any environment variable
    overriding it, and set it read-only.
-3. Bind each `--param` by name and stream the result, a fetch-size batch at a
-   time.
+3. Bind each `--param` by name, and `--from` and `--to` to `:from` and `:to`,
+   then stream the result a fetch-size batch at a time.
 4. Write the rows beside the output and move the file into place.
 
 ## Choices and limits
@@ -93,6 +93,14 @@ on a command line carries no type, so every `--param` is bound as a string.
 Postgres has no `integer = varchar` and refuses `WHERE id = :id` outright; write
 `WHERE id = CAST(:id AS integer)`. Databases that coerce will take either.
 
+**A time window is two flags, not two parameters.** `--from` and `--to` take an
+ISO-8601 date-time with an offset, or a date, and are bound to `:from` and `:to`
+as timestamps in UTC. An unset bound binds NULL, so
+`(CAST(:from AS timestamp) IS NULL OR created_at >= :from)` reads everything
+until a window is given. Postgres needs that cast: a NULL carries no type, and
+`IS NULL` gives it none to infer. Being flags, they can be found and set without reading the statement;
+a date written into the statement itself cannot.
+
 **Everything is text.** Dates, numbers and JSON all arrive as the driver's string
 form, which differs between databases. A workflow that needs a type converts
 downstream.
@@ -102,15 +110,17 @@ to run a setup statement first, and no way to hold a cursor across steps.
 
 ## Options
 
-| Option              | Default            | Meaning                                       |
-|---------------------|--------------------|-----------------------------------------------|
+| Option              | Default              | Meaning                                     |
+|---------------------|----------------------|---------------------------------------------|
 | `--query-file`      | required (`input.0`) | The statement to run                        |
-| `--output`          | required           | CSV file to write                             |
-| `--param`           | none               | Repeatable `name=value`, bound to a `:name`   |
-| `--connection-file` | none               | Properties file: `url`, `user`, `password`    |
-| `--max-rows`        | no cap             | Fail rather than return more than this many   |
-| `--fetch-size`      | 1000               | Rows the driver reads at a time               |
-| `--allow-empty`     | off                | Treat a result with no rows as a result       |
+| `--output`          | required             | CSV file to write                           |
+| `--param`           | none                 | Repeatable `name=value`, bound to a `:name` |
+| `--from`            | open (NULL)          | Window start, inclusive, bound to `:from`   |
+| `--to`              | open (NULL)          | Window end, exclusive, bound to `:to`       |
+| `--connection-file` | none                 | Properties file: `url`, `user`, `password`  |
+| `--max-rows`        | no cap               | Fail rather than return more than this many |
+| `--fetch-size`      | 1000                 | Rows the driver reads at a time             |
+| `--allow-empty`     | off                  | Treat a result with no rows as a result     |
 
 Override these per use with `args:` on a `uses:` reference - the defaults here
 run the reference fixture, so a real use always supplies at least its own query.

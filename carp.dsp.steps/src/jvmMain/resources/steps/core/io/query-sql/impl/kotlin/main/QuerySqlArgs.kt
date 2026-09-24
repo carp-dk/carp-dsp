@@ -3,6 +3,11 @@
 package carp.dsp.steps.sql
 
 import java.io.File
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeParseException
 
 private const val FLAG_PREFIX = "--"
 
@@ -16,6 +21,8 @@ data class QuerySqlConfig(
     val queryFile: File,
     val output: File,
     val params: Map<String, String?> = emptyMap(),
+    val from: Instant? = null,
+    val to: Instant? = null,
     val connectionFile: File? = null,
     val maxRows: Int? = null,
     val fetchSize: Int = DEFAULT_FETCH_SIZE,
@@ -41,6 +48,8 @@ fun parseQuerySqlArgs(args: List<String>): QuerySqlConfig
         queryFile = queryFile,
         output = output,
         params = flags.all("--param").associate(::parseParameter),
+        from = flags.single("--from") { parseInstant("--from", it) },
+        to = flags.single("--to") { parseInstant("--to", it) },
         connectionFile = flags.single("--connection-file") { File(it) },
         maxRows = flags.single("--max-rows") { it.toPositiveIntOrThrow("--max-rows") },
         fetchSize = flags.single("--fetch-size") { it.toPositiveIntOrThrow("--fetch-size") }
@@ -57,6 +66,26 @@ private fun parseParameter(raw: String): Pair<String, String?>
 
     return name to raw.substringAfter('=')
 }
+
+/**
+ * Reads an ISO-8601 date-time with an offset (`2026-10-12T10:00:00Z`) or a date
+ * (`2026-10-12`, taken as its start in UTC).
+ */
+private fun parseInstant(flag: String, raw: String): Instant =
+    try
+    {
+        if (raw.length == DATE_LENGTH) LocalDate.parse(raw).atStartOfDay().toInstant(ZoneOffset.UTC)
+        else OffsetDateTime.parse(raw).toInstant()
+    }
+    catch (failure: DateTimeParseException)
+    {
+        throw IllegalArgumentException(
+            "$flag '$raw' is not a date-time with an offset, like 2026-10-12T10:00:00Z, or a date.",
+            failure,
+        )
+    }
+
+private const val DATE_LENGTH = "yyyy-MM-dd".length
 
 private fun String.toPositiveIntOrThrow(flag: String): Int
 {
@@ -86,7 +115,7 @@ private class Flags(private val values: Map<String, List<String>>)
 }
 
 private val KNOWN_FLAGS = setOf(
-    "--query-file", "--output", "--param", "--connection-file",
+    "--query-file", "--output", "--param", "--from", "--to", "--connection-file",
     "--max-rows", "--fetch-size", "--allow-empty",
 )
 
