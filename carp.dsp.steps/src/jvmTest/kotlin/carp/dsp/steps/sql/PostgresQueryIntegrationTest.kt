@@ -215,10 +215,11 @@ class PostgresQueryIntegrationTest
 
         // Postgres has no `integer = varchar` and H2 never showed this, because it
         // coerces. The fix belongs in the statement: the step cannot know the column.
-        val uncast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = ?", listOf(SqlValue.Text("1")))
+        val one = listOf(SqlValue.Text("1"))
+        val uncast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = ?", one)
         assertContains(refused(target(), uncast), "refused the statement")
 
-        val cast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = CAST(? AS integer)", listOf(SqlValue.Text("1")))
+        val cast = SqlQuery("SELECT count(*) FROM data_stream_ids WHERE id = CAST(? AS integer)", one)
         val sink = Rows()
 
         source.read(target(), cast, sink)

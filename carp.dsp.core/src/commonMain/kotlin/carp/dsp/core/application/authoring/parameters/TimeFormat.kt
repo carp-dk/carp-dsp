@@ -6,6 +6,10 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
+// 12 to 14 digits spans 2001 to 5138; a shorter number is a count, not a time.
+private const val MIN_EPOCH_MILLIS_DIGITS = 12
+private const val MAX_EPOCH_MILLIS_DIGITS = 14
+
 /**
  * How a time value is written in a step argument.
  *
@@ -28,9 +32,8 @@ enum class TimeFormat
         {
             ISO_DATE_TIME -> Instant.parse(value)
             ISO_DATE -> LocalDate.parse(value).atStartOfDayIn(TimeZone.UTC)
-            // 12 to 14 digits spans 2001 to 5138; a shorter number is a count, not a time.
             EPOCH_MILLIS ->
-                value.takeIf { it.length in 12..14 && it.all(Char::isDigit) }
+                value.takeIf { it.length in MIN_EPOCH_MILLIS_DIGITS..MAX_EPOCH_MILLIS_DIGITS && it.all(Char::isDigit) }
                     ?.let { Instant.fromEpochMilliseconds(it.toLong()) }
         }
     }.getOrNull()
