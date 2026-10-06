@@ -151,8 +151,8 @@ class CarpTabularCsvTest {
 
     // ── Types without a row of their own ──────────────────────────────────────
 
-    private fun unknown(type: String, source: String) = GenericMeasurementRow(
-        1000L, null, DataType("dk.cachet.carp", type),
+    private fun unknown(type: String, source: String, namespace: String = "dk.cachet.carp") = GenericMeasurementRow(
+        1000L, null, DataType(namespace, type),
         metadata(0, 0, "phone", type),
         createDefaultJSON().decodeFromString(DataSerializer, source),
     )
@@ -180,5 +180,19 @@ class CarpTabularCsvTest {
             csv[0],
         )
         assertTrue(csv[1].endsWith(""","{""identifier"":""who5.task""}",submitted,"""), csv[1])
+    }
+
+    @Test
+    fun `a type in a namespace below carp's keeps it in its columns`() {
+        val wrapper = unknown(
+            "survey",
+            """{"__type":"dk.cachet.carp.completedapptask.survey","taskName":"WHO-5"}""",
+            namespace = "dk.cachet.carp.completedapptask",
+        )
+        val survey = unknown("survey", """{"__type":"dk.cachet.carp.survey","status":"submitted"}""")
+
+        val header = lines(CarpTabularCsv.measurements(tabular(wrapper, survey)))[0]
+
+        assertTrue(header.endsWith(",completedapptask.survey.taskName,survey.status"), header)
     }
 }

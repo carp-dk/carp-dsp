@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonObject
 
 private const val ROW_ID = "row_id"
 private const val TYPE_KEY = "__type"
+private const val CARP_PREFIX = "dk.cachet.carp."
 
 /**
  * Writes [CarpTabularData] as CSV.
@@ -99,10 +100,14 @@ object CarpTabularCsv
 
     /**
      * Returns a row's values keyed by fully qualified column name.
+     *
+     * The prefix is the data type without CARP's own namespace: `stepcount.steps`,
+     * but `completedapptask.survey.taskData`, which would otherwise share columns
+     * with `survey`.
      */
     private fun namedValuesOf(row: CarpMeasurementRow): Map<String, String>
     {
-        val prefix = row.dataType.name
+        val prefix = "${row.dataType.namespace}.${row.dataType.name}".removePrefix(CARP_PREFIX)
         return valuesOf(row).mapKeys { (field, _) -> "$prefix.$field" }
     }
 
