@@ -24,6 +24,9 @@ import kotlin.concurrent.thread
  * When a timeout is provided and exceeded, the process is destroyed and a [CommandResult]
  * with [CommandResult.timedOut] set to `true` and [CommandResult.exitCode] set to [timeoutExitCode] is returned.
  *
+ * Environment: a process inherits the JVM's environment, with [environment]
+ * laid over it. The same values resolve environment-variable arguments.
+ *
  * Working directory resolution:
  * - Use [run] (interface method) when no workspace root is available; the process inherits the JVM's CWD.
  * - Use [run] with an explicit workspaceRoot to resolve [CommandPolicy.workingDirectory] safely
@@ -31,7 +34,8 @@ import kotlin.concurrent.thread
  */
 class JvmCommandRunner(
     private val timeoutExitCode: Int = -1,
-    private val charset: Charset = StandardCharsets.UTF_8
+    private val charset: Charset = StandardCharsets.UTF_8,
+    private val environment: Map<String, String> = emptyMap(),
 ) : CommandRunner
 {
     private val logger = KotlinLogging.logger {}
@@ -100,11 +104,13 @@ class JvmCommandRunner(
                 is ExpandedArg.Literal -> arg.value
                 is ExpandedArg.DataReference -> arg.id.toString()
                 is ExpandedArg.PathSubstitution -> arg.template.replace( "()", arg.id.toString() )
-                is ExpandedArg.EnvironmentVariable -> arg.template.replace( "()", System.getenv( arg.name ) ?: "" )
+                is ExpandedArg.EnvironmentVariable ->
+                    arg.template.replace( "()", environment[arg.name] ?: System.getenv( arg.name ) ?: "" )
             }
         }
 
         val builder = ProcessBuilder( listOf( command.executable ) + resolvedArgs )
+        builder.environment().putAll( environment )
 
         if ( workspaceRoot != null )
         {
