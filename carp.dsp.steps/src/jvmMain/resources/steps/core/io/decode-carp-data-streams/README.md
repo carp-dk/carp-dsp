@@ -88,9 +88,11 @@ row's column says fails, because a table labelled with the wrong type is worse
 than a table that did not arrive.
 
 **A data type this library does not know still arrives.** carp-core wraps an
-unresolvable type as `CustomData` rather than failing, and it lands in the
-table's generic `value` column. The web service registers several such types -
-consent, diagnosis, date of birth - so this is the normal case, not an edge.
+unresolvable type as `CustomData` rather than failing, keeping its original
+JSON. Each top-level field becomes a column, `<type>.<field>`: `stepevent.steps`,
+`location.latitude`. A nested field - a survey's `result` - is one cell of JSON.
+Every CAMS type arrives this way, as do the web service's own consent, diagnosis
+and date of birth, so this is the normal case, not an edge.
 
 **An empty result fails**, whether the input holds no rows or the window matches
 none of them. An empty measurement table downstream is much harder to notice.

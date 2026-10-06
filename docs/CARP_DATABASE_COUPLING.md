@@ -142,6 +142,7 @@ path, and that is worth finding out rather than working around.
 **The web service registers `Data` subclasses carp-dsp does not have** - consent,
 diagnosis, phone number, date of birth and others. carp-core wraps an
 unresolvable `__type` as `CustomData` instead of failing and recovers the type
-from `data.className`, so those rows survive and land in the generic column.
+from `data.className`, so those rows survive, with a column per top-level
+field of their original JSON.
 They are also mostly participant details: the statement is the only thing
 scoping what comes out.

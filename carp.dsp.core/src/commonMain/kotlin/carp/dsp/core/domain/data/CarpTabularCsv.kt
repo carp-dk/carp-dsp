@@ -1,6 +1,15 @@
 package carp.dsp.core.domain.data
 
+import dk.cachet.carp.common.application.data.Data
+import dk.cachet.carp.common.infrastructure.serialization.DataSerializer
+import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+
 private const val ROW_ID = "row_id"
+private const val TYPE_KEY = "__type"
 
 /**
  * Writes [CarpTabularData] as CSV.
@@ -117,8 +126,30 @@ object CarpTabularCsv
 
         is HeartRateMeasurementRow -> mapOf("bpm" to row.bpm.toString())
 
-        // An unsupported type still has a value worth writing; dropping it would
-        // lose data the batch actually carried.
-        is GenericMeasurementRow -> mapOf("value" to row.originalData.toString())
+        // Any other type gets a column per top-level field, read off its JSON, so
+        // a new data type needs no code here.
+        is GenericMeasurementRow -> fieldsOf(row.originalData)
+    }
+
+    private val json = createDefaultJSON()
+
+    /**
+     * Returns the top-level fields of [data], keyed by field name.
+     *
+     * A scalar is written as its value, a nested object or array as its JSON, and
+     * a null as an empty cell. The type discriminator is left out; the row
+     * already carries the type.
+     */
+    private fun fieldsOf(data: Data): Map<String, String> =
+        // A type carp-core does not know - every CAMS type - is held as its original
+        // JSON, and the serializer gives that back unchanged.
+        json.encodeToJsonElement(DataSerializer, data).jsonObject
+            .filterKeys { it != TYPE_KEY }
+            .mapValues { (_, value) -> cellOf(value) }
+
+    private fun cellOf(value: JsonElement): String = when (value) {
+        is JsonNull -> ""
+        is JsonPrimitive -> value.content
+        else -> value.toString()
     }
 }
