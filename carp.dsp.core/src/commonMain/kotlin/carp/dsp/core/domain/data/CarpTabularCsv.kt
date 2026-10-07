@@ -1,8 +1,10 @@
 package carp.dsp.core.domain.data
 
 import dk.cachet.carp.common.application.data.Data
-import dk.cachet.carp.common.infrastructure.serialization.DataSerializer
+import dk.cachet.carp.common.infrastructure.serialization.UnknownPolymorphicWrapper
 import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
+import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -145,12 +147,19 @@ object CarpTabularCsv
      * a null as an empty cell. The type discriminator is left out; the row
      * already carries the type.
      */
-    private fun fieldsOf(data: Data): Map<String, String> =
-        // A type carp-core does not know - every CAMS type - is held as its original
-        // JSON, and the serializer gives that back unchanged.
-        json.encodeToJsonElement(DataSerializer, data).jsonObject
+    private fun fieldsOf(data: Data): Map<String, String>
+    {
+        val element = when (data)
+        {
+            // A type carp-core does not know - every CAMS type - is held as its
+            // original JSON.
+            is UnknownPolymorphicWrapper -> Json.parseToJsonElement(data.jsonSource)
+            else -> json.encodeToJsonElement(PolymorphicSerializer(Data::class), data)
+        }
+        return element.jsonObject
             .filterKeys { it != TYPE_KEY }
             .mapValues { (_, value) -> cellOf(value) }
+    }
 
     private fun cellOf(value: JsonElement): String = when (value) {
         is JsonNull -> ""

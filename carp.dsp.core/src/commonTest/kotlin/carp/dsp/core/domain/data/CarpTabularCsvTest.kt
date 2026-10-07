@@ -5,6 +5,8 @@ import dk.cachet.carp.common.application.data.Acceleration
 import dk.cachet.carp.common.application.data.DataType
 import dk.cachet.carp.common.application.data.HeartRate
 import dk.cachet.carp.common.application.data.StepCount
+import dk.cachet.carp.common.application.data.TriggeredTask
+import dk.cachet.carp.common.application.triggers.TaskControl
 import dk.cachet.carp.common.infrastructure.serialization.DataSerializer
 import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
 import dk.cachet.carp.data.application.DataStreamId
@@ -194,5 +196,19 @@ class CarpTabularCsvTest {
         val header = lines(CarpTabularCsv.measurements(tabular(wrapper, survey)))[0]
 
         assertTrue(header.endsWith(",completedapptask.survey.taskName,survey.status"), header)
+    }
+
+    @Test
+    fun `a type carp-core knows but has no row for gets a column per field`() {
+        val row = GenericMeasurementRow(
+            1000L, null, DataType("dk.cachet.carp", "triggeredtask"),
+            metadata(0, 0, "phone", "triggeredtask"),
+            TriggeredTask(5, "Background Sensing Task", "phone", TaskControl.Control.Start),
+        )
+
+        val csv = lines(CarpTabularCsv.measurements(tabular(row)))
+
+        assertTrue(csv[0].contains(",triggeredtask.taskName,"), csv[0])
+        assertTrue(csv[1].contains(",Background Sensing Task,"), csv[1])
     }
 }
