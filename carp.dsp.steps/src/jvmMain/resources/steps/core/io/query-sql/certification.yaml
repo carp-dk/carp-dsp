@@ -1,7 +1,7 @@
 id: "core.io.query-sql"
 version: "1.0"
 level: "gated"
-contentHash: "b5c479cba3d52ff23d97b82c8313b8b6f8cabe54c3faf103d0bf2ef9e552c348"
+contentHash: "fc5d99c4012e491850328b518adee595fb6df1508c157a903bc3a0f5ae214473"
 reviewedOn: null
 reviewer: null
 reviewedPr: null

@@ -19,6 +19,10 @@ import kotlinx.serialization.encoding.Encoder
  * @property inputs Data-port descriptors for the step's input slots. On a
  *   referenced step these carry only the port id and `source` binding; the port
  *   descriptor is filled from the library step.
+ * @property cache Whether a run may reuse this step's outputs from an earlier run
+ *   with the same command and the same inputs. Null means yes. Set it to `false`
+ *   on a step that reads from outside the run, such as a database, whose answer
+ *   can change; set it to `true` on such a step when its source is fixed.
  */
 @Serializable(with = StepDescriptor.Serializer::class)
 sealed interface StepDescriptor
@@ -27,6 +31,7 @@ sealed interface StepDescriptor
     val metadata: StepMetadataDescriptor?
     val dependsOn: List<String>
     val inputs: List<DataPortDescriptor>
+    val cache: Boolean?
 
     /**
      * Content-based polymorphic serializer.
@@ -66,6 +71,7 @@ data class DefinedStepDescriptor(
     val task: TaskDescriptor,
     override val inputs: List<DataPortDescriptor> = emptyList(),
     val outputs: List<DataPortDescriptor> = emptyList(),
+    override val cache: Boolean? = null,
 ) : StepDescriptor
 
 /**
@@ -89,6 +95,7 @@ data class ReferencedStepDescriptor(
     override val dependsOn: List<String> = emptyList(),
     override val inputs: List<DataPortDescriptor> = emptyList(),
     val args: List<String>? = null,
+    override val cache: Boolean? = null,
 ) : StepDescriptor
 
 /**
@@ -107,6 +114,7 @@ private data class StepSurrogate(
     val inputs: List<DataPortDescriptor> = emptyList(),
     val outputs: List<DataPortDescriptor> = emptyList(),
     val args: List<String>? = null,
+    val cache: Boolean? = null,
 )
 {
     fun toStep(): StepDescriptor
@@ -119,7 +127,7 @@ private data class StepSurrogate(
                     "Step '$label' has both 'uses' and 'task' - a step is one or the other."
                 )
             uses != null ->
-                ReferencedStepDescriptor(id, metadata, uses, version, dependsOn, inputs, args)
+                ReferencedStepDescriptor(id, metadata, uses, version, dependsOn, inputs, args, cache)
             task != null ->
                 DefinedStepDescriptor(
                     id = id,
@@ -130,6 +138,7 @@ private data class StepSurrogate(
                     task = task,
                     inputs = inputs,
                     outputs = outputs,
+                    cache = cache,
                 )
             else ->
                 throw SerializationException("Step '$label' has neither 'uses' nor 'task'.")
@@ -148,6 +157,7 @@ private data class StepSurrogate(
                 task = step.task,
                 inputs = step.inputs,
                 outputs = step.outputs,
+                cache = step.cache,
             )
             is ReferencedStepDescriptor -> StepSurrogate(
                 id = step.id,
@@ -157,6 +167,7 @@ private data class StepSurrogate(
                 dependsOn = step.dependsOn,
                 inputs = step.inputs,
                 args = step.args,
+                cache = step.cache,
             )
         }
     }

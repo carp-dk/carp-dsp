@@ -35,6 +35,9 @@ steps:
       version: "1.0"
     environmentId: "env-jvm-task-runtime"
     dependsOn: []
+    # Reads from outside the run, whose answer can change: never reused from an
+    # earlier run. A workflow whose source is fixed can set `cache: true`.
+    cache: false
     task:
       type: "command"
       id: "task-core-io-fetch-study-data"

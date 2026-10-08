@@ -105,6 +105,20 @@ a date written into the statement itself cannot.
 form, which differs between databases. A workflow that needs a type converts
 downstream.
 
+**`--incremental` fetches only what has arrived.** It keeps what earlier runs
+fetched, in `CARP_DSP_QUERY_STORE` or `~/.carp-dsp/query-store`, one store per
+statement, parameters, window start and database. A run fetches `[last --to,
+--to)`, appends the rows and writes the whole store, so a schedule moving `--to`
+forward reads each row once. Rows come in the order they were fetched, not the
+statement's `ORDER BY`. A row changed after its window closed is not fetched
+again, and `--max-rows` caps each fetch, not the whole. An earlier `--to` starts
+the store again with one full read. Runs of one store take turns, so two
+workflows with the same query can share it.
+
+**It is not reused from an earlier run.** Its answer can change, so the step
+says `cache: false`. A workflow whose window lies in the past can set
+`cache: true` on its reference, and the engine then reads it once.
+
 **One statement, one connection, no transaction of your own.** There is no way
 to run a setup statement first, and no way to hold a cursor across steps.
 
@@ -121,6 +135,7 @@ to run a setup statement first, and no way to hold a cursor across steps.
 | `--max-rows`        | no cap               | Fail rather than return more than this many |
 | `--fetch-size`      | 1000                 | Rows the driver reads at a time             |
 | `--allow-empty`     | off                  | Treat a result with no rows as a result     |
+| `--incremental`     | off                  | Fetch only rows since the last `--to`; needs `--to` |
 
 Override these per use with `args:` on a `uses:` reference - the defaults here
 run the reference fixture, so a real use always supplies at least its own query.

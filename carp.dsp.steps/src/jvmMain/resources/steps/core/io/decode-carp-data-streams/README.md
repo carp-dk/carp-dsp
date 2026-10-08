@@ -39,9 +39,12 @@ One input: a table with these columns, whatever the query joined to get them.
   what places it in the `core` tier.
 - **Missing data**: an empty cell in any of the five columns fails the row.
 
-**Order matters.** Sequences of one stream have to arrive in sequence order, so
-the query needs `ORDER BY` on the stream and its first sequence id. Without it
-the step fails rather than producing a scrambled table.
+**Rows may come in any order, and in batches.** The step puts each stream's
+sequences in order, and leaves out a sequence another one already holds - a
+re-upload - as the documented query does; of two identical ones the first row is
+kept. So rows read in several batches (`core.io.query-sql --incremental`) decode
+as one read would. Two sequences that overlap without one holding the other
+still fail the step.
 
 ## What you get
 
