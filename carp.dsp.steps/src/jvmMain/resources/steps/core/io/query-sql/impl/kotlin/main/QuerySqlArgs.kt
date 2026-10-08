@@ -27,6 +27,7 @@ data class QuerySqlConfig(
     val maxRows: Int? = null,
     val fetchSize: Int = DEFAULT_FETCH_SIZE,
     val requireRows: Boolean = true,
+    val incremental: Boolean = false,
 )
 
 /**
@@ -55,6 +56,7 @@ fun parseQuerySqlArgs(args: List<String>): QuerySqlConfig
         fetchSize = flags.single("--fetch-size") { it.toPositiveIntOrThrow("--fetch-size") }
             ?: DEFAULT_FETCH_SIZE,
         requireRows = !flags.present("--allow-empty"),
+        incremental = flags.present("--incremental"),
     )
 }
 
@@ -116,7 +118,7 @@ private class Flags(private val values: Map<String, List<String>>)
 
 private val KNOWN_FLAGS = setOf(
     "--query-file", "--output", "--param", "--from", "--to", "--connection-file",
-    "--max-rows", "--fetch-size", "--allow-empty",
+    "--max-rows", "--fetch-size", "--allow-empty", "--incremental",
 )
 
 private fun readFlags(args: List<String>): Flags

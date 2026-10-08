@@ -20,7 +20,10 @@ import dk.cachet.carp.analytics.infrastructure.execution.EnvironmentOrchestrator
 import dk.cachet.carp.analytics.infrastructure.execution.SetupTiming
 import dk.cachet.carp.common.application.UUID
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import kotlin.time.Clock
 
 /**
@@ -79,7 +82,8 @@ class DefaultPlanExecutor(
         plan: ExecutionPlan,
         runId: UUID,
         provisioning: WorkspaceProvisioning,
-        policy: RunPolicy = DefaultRunPolicy()
+        policy: RunPolicy = DefaultRunPolicy(),
+        reusable: (PlannedStep) -> Boolean = { true }
     ): ExecutionReport {
         // Plan-time check: a plan carrying ERROR issues is never executed
         if (!plan.isRunnable()) {
@@ -87,7 +91,7 @@ class DefaultPlanExecutor(
         }
 
         logger.info { "Executing plan '${plan.workflowName}' (${plan.steps.size} step(s), runId=$runId)" }
-        val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy, provisioning)
+        val (context, environmentCoordinator) = initializeExecutionContext(plan, runId, policy, provisioning, reusable)
 
         try {
             executeSteps(plan, policy, context, environmentCoordinator)
@@ -108,7 +112,8 @@ class DefaultPlanExecutor(
         plan: ExecutionPlan,
         runId: UUID,
         policy: RunPolicy,
-        provisioning: WorkspaceProvisioning
+        provisioning: WorkspaceProvisioning,
+        reusable: (PlannedStep) -> Boolean
     ): Pair<KnownStepExecutionContext, EnvironmentExecutionCoordinator> {
         val workspace = workspaceManager.create(plan, runId)
         WorkspaceProvisioner().provision(workspace, provisioning)
@@ -129,7 +134,9 @@ class DefaultPlanExecutor(
             stepRunner = stepRunner,
             environmentCoordinator = environmentCoordinator,
             stepResults = stepResults,
-            runIssues = runIssues
+            runIssues = runIssues,
+            environments = plan.requiredEnvironmentRefs,
+            reusable = reusable
         )
         return Pair(context, environmentCoordinator)
     }
@@ -238,7 +245,8 @@ class DefaultPlanExecutor(
         ),
         val environmentConfig: EnvironmentConfig = EnvironmentConfig(),
         val clock: Clock = Clock.System,
-        val executionLogger: ExecutionLogger = Slf4jExecutionLogger()
+        val executionLogger: ExecutionLogger = Slf4jExecutionLogger(),
+        val stepCache: StepCache? = null
     )
 
     private data class KnownStepExecutionContext(
@@ -248,7 +256,9 @@ class DefaultPlanExecutor(
         val stepRunner: CommandStepRunner,
         val environmentCoordinator: EnvironmentExecutionCoordinator,
         val stepResults: MutableList<StepRunResult>,
-        val runIssues: MutableList<ExecutionIssue>
+        val runIssues: MutableList<ExecutionIssue>,
+        val environments: Map<UUID, EnvironmentRef> = emptyMap(),
+        val reusable: (PlannedStep) -> Boolean = { true }
     )
 
     private fun handleUnknownStep(
@@ -301,10 +311,80 @@ class DefaultPlanExecutor(
             return failedResult
         }
 
+        val key = fingerprintOf(step, context)
+        reuse(step, key, context)?.let { reused ->
+            context.stepResults += reused
+            return reused
+        }
+
         val result = context.stepRunner.run(preparedStep, context.workspace, context.policy)
         context.stepResults += result
         context.runIssues += context.stepRunner.drainIssues(step.metadata.id)
+        if (key != null && result.status == ExecutionStatus.SUCCEEDED) {
+            options.stepCache?.store(key, step, context.workspace, context.runId.toString(), logText(result, context))
+        }
         return result
+    }
+
+    // Step cache: a step that would compute what an earlier run already did reuses its outputs.
+
+    private fun fingerprintOf(step: PlannedStep, context: KnownStepExecutionContext): String? {
+        val cache = options.stepCache ?: return null
+        if (!context.reusable(step)) return null
+        return try {
+            cache.fingerprint(step, context.workspace, step.environmentRef?.let { context.environments[it] })
+        } catch (e: Exception) {
+            logger.warn(e) { "Could not fingerprint step '${step.metadata.name}'; it runs" }
+            null
+        }
+    }
+
+    private fun reuse(step: PlannedStep, key: String?, context: KnownStepExecutionContext): StepRunResult? {
+        val cache = options.stepCache ?: return null
+        if (key == null) return null
+        return try {
+            val hit = cache.find(key) ?: return null
+            val startedAt = options.clock.now()
+            workspaceManager.prepareStepDirectories(context.workspace, step.metadata.id)
+            if (!cache.restore(hit, step, context.workspace)) return null
+
+            logger.info { "Reusing the outputs of step '${step.metadata.name}' from run ${hit.firstRun}" }
+            val root = Paths.get(context.workspace.executionRoot)
+            StepRunResult(
+                stepMetadata = step.metadata,
+                status = ExecutionStatus.SUCCEEDED,
+                startedAt = startedAt,
+                finishedAt = options.clock.now(),
+                outputs = FileSystemArtefactRecorder().recordArtefacts(step, root, artefactStore),
+                detail = StepRunDetail(
+                    workingDirectory = context.workspace.stepDir(step.metadata.id),
+                    exitCode = 0,
+                    stdout = reusedLog(step, hit, root),
+                    metrics = mapOf(StepCache.REUSED_METRIC to 1.0)
+                )
+            )
+        } catch (e: Exception) {
+            logger.warn(e) { "Could not reuse the outputs of step '${step.metadata.name}'; it runs" }
+            null
+        }
+    }
+
+    private fun reusedLog(step: PlannedStep, hit: StepCache.Hit, root: java.nio.file.Path): ResourceRef {
+        val relative = "logs/${step.metadata.id}-reused.log"
+        val file = root.resolve(relative)
+        Files.createDirectories(file.parent)
+        file.writeText(
+            "Reused: the same step ran on the same inputs in run ${hit.firstRun ?: "?"} " +
+                "(${hit.createdAt ?: "?"}), so its outputs were taken from there.\n\n" +
+                (hit.stdout ?: "")
+        )
+        return ResourceRef(kind = ResourceKind.RELATIVE_PATH, value = relative)
+    }
+
+    private fun logText(result: StepRunResult, context: KnownStepExecutionContext): String? {
+        val ref = result.detail?.stdout ?: return null
+        if (ref.kind != ResourceKind.RELATIVE_PATH) return null
+        return runCatching { Paths.get(context.workspace.executionRoot).resolve(ref.value).readText() }.getOrNull()
     }
 
     /**

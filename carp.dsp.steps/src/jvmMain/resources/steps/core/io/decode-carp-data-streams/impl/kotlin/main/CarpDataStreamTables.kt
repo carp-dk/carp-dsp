@@ -5,6 +5,7 @@ package carp.dsp.steps.datastream
 import carp.dsp.core.application.DataStreamBatchConverter
 import carp.dsp.core.domain.data.CarpTabularData
 import carp.dsp.core.domain.data.CsvTable
+import dk.cachet.carp.data.application.DataStreamSequence
 import dk.cachet.carp.data.application.MutableDataStreamBatch
 import dk.cachet.carp.data.application.applyToTimestamp
 
@@ -28,28 +29,44 @@ fun carpDataStreamRows(table: CsvTable): List<CarpDataStreamRow> =
 /**
  * Returns [rows] as one table, with the same structure of  `[core.io.fetch-study-data]`.
  *
- * @throws IllegalArgumentException when a snapshot does not decode, or when the
- *   rows do not form a batch - sequences of one stream have to arrive in
- *   sequence order.
+ * Sequences are put in order within each stream, and a sequence whose range lies
+ * inside another of the same stream - a re-upload - is left out, as the database
+ * query does. Of two identical ranges the first row is kept. So rows read in
+ * several batches decode as one read would.
+ *
+ * @throws IllegalArgumentException when a snapshot does not decode, or when two
+ *   sequences of one stream overlap without one holding the other.
  */
 fun carpTabularDataOf(rows: List<CarpDataStreamRow>): CarpTabularData
 {
     val batch = MutableDataStreamBatch()
 
-    rows.forEach { row ->
-        val sequence = row.toSequence()
-
-        runCatching { batch.appendSequence(sequence) }.getOrElse { failure ->
-            throw IllegalArgumentException(
-                "Could not add $row to the batch: ${failure.message} " +
-                    "Sequences of one stream have to arrive in order, so the query needs " +
-                    "ORDER BY on the stream and its first sequence id.",
-                failure,
-            )
+    // One stream decoded at a time, so only its sequences are held beside the batch.
+    rows.groupBy { Triple(it.studyDeploymentId, it.deviceRoleName, it.dataType) }.values.forEach { stream ->
+        withoutCovered(stream.map { row -> row to row.toSequence() }).forEach { (row, sequence) ->
+            runCatching { batch.appendSequence(sequence) }.getOrElse { failure ->
+                throw IllegalArgumentException(
+                    "Could not add $row to the batch: ${failure.message} " +
+                        "It overlaps another sequence of the same stream without holding it or being held by it.",
+                    failure,
+                )
+            }
         }
     }
 
     return DataStreamBatchConverter().toTabularData(batch)
+}
+
+/** Returns one stream's sequences in range order, without those another one already holds. */
+private fun <T> withoutCovered(stream: List<Pair<T, DataStreamSequence<*>>>): List<Pair<T, DataStreamSequence<*>>>
+{
+    var reached = Long.MIN_VALUE
+    return stream
+        .sortedWith(compareBy<Pair<T, DataStreamSequence<*>>> { it.second.range.first }.thenByDescending { it.second.range.last })
+        .filter { (_, sequence) ->
+            val range = sequence.range
+            (range.isEmpty() || range.last > reached).also { kept -> if (kept && !range.isEmpty()) reached = range.last }
+        }
 }
 
 /**
