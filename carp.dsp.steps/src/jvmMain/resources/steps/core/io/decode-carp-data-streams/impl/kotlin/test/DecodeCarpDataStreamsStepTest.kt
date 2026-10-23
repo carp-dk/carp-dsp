@@ -81,6 +81,60 @@ class DecodeCarpDataStreamsStepTest {
 
     // ── Nothing half-written ─────────────────────────────────────────────────
 
+    // ── Rows read in batches ────────────────────────────────────────────────
+
+    private fun steps(vararg rows: Pair<String, String>): List<String> {
+        DecodeCarpDataStreamsStep().run(
+            table(*rows.map { (first, snap) -> listOf(deployment, "phone", "dk.cachet.carp.stepcount", first, snap) }.toTypedArray()),
+            measurements,
+        )
+        val lines = measurements.readLines().filter { it.isNotEmpty() }
+        val column = lines.first().split(",").indexOf("stepcount.steps")
+        return lines.drop(1).map { it.split(",")[column] }
+    }
+
+    @Test
+    fun `a re-upload held by another sequence is left out`() {
+        val decoded = steps(
+            "0" to snapshot(1_000_000L to 1, 2_000_000L to 2, 3_000_000L to 3),
+            "1" to snapshot(2_000_000L to 2),
+        )
+
+        assertEquals(listOf("1", "2", "3"), decoded)
+    }
+
+    @Test
+    fun `of two identical sequences the first is kept`() {
+        val decoded = steps(
+            "0" to snapshot(1_000_000L to 1),
+            "0" to snapshot(1_000_000L to 99),
+        )
+
+        assertEquals(listOf("1"), decoded)
+    }
+
+    @Test
+    fun `sequences arriving out of order are put in order`() {
+        val decoded = steps(
+            "1" to snapshot(2_000_000L to 2),
+            "0" to snapshot(1_000_000L to 1),
+        )
+
+        assertEquals(listOf("1", "2"), decoded)
+    }
+
+    @Test
+    fun `a sequence that partly overlaps another is refused`() {
+        val failure = assertFailsWith<IllegalArgumentException> {
+            steps(
+                "0" to snapshot(1_000_000L to 1, 2_000_000L to 2),
+                "1" to snapshot(2_000_000L to 2, 3_000_000L to 3),
+            )
+        }
+
+        assertTrue(failure.message.orEmpty().contains("overlaps"), failure.message)
+    }
+
     @Test
     fun `a snapshot that does not decode leaves no measurement table`() {
         val input = table(listOf(deployment, "phone", "dk.cachet.carp.stepcount", "0", "{ not json"))

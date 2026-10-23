@@ -39,9 +39,12 @@ One input: a table with these columns, whatever the query joined to get them.
   what places it in the `core` tier.
 - **Missing data**: an empty cell in any of the five columns fails the row.
 
-**Order matters.** Sequences of one stream have to arrive in sequence order, so
-the query needs `ORDER BY` on the stream and its first sequence id. Without it
-the step fails rather than producing a scrambled table.
+**Rows may come in any order, and in batches.** The step puts each stream's
+sequences in order, and leaves out a sequence another one already holds - a
+re-upload - as the documented query does; of two identical ones the first row is
+kept. So rows read in several batches (`core.io.query-sql --incremental`) decode
+as one read would. Two sequences that overlap without one holding the other
+still fail the step.
 
 ## What you get
 
@@ -88,9 +91,11 @@ row's column says fails, because a table labelled with the wrong type is worse
 than a table that did not arrive.
 
 **A data type this library does not know still arrives.** carp-core wraps an
-unresolvable type as `CustomData` rather than failing, and it lands in the
-table's generic `value` column. The web service registers several such types -
-consent, diagnosis, date of birth - so this is the normal case, not an edge.
+unresolvable type as `CustomData` rather than failing, keeping its original
+JSON. Each top-level field becomes a column, `<type>.<field>`: `stepevent.steps`,
+`location.latitude`. A nested field - a survey's `result` - is one cell of JSON.
+Every CAMS type arrives this way, as do the web service's own consent, diagnosis
+and date of birth, so this is the normal case, not an edge.
 
 **An empty result fails**, whether the input holds no rows or the window matches
 none of them. An empty measurement table downstream is much harder to notice.

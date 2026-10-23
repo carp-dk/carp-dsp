@@ -158,12 +158,20 @@ class WorkflowExecutor(
      * A plan carrying errors is refused rather than run: the returned report has
      * status FAILED and an issue naming them. Nothing is created and no step runs.
      */
-    fun run( prepared: PreparedWorkflow, runId: UUID = UUID.randomUUID() ): ExecutionReport =
-        DefaultPlanExecutor(
+    fun run( prepared: PreparedWorkflow, runId: UUID = UUID.randomUUID() ): ExecutionReport
+    {
+        // A step's `cache: false` keeps it running every time; the planned step only
+        // carries its descriptor id, so the setting is looked up by that.
+        val noReuse = prepared.descriptor.steps.filter { it.cache == false }.mapNotNull { it.id }.toSet()
+
+        return DefaultPlanExecutor(
             workspaceManager = workspaceManager,
             artefactStore = artefactStore,
             options = options.executorOptions.copy( executionLogger = options.executionLogger ),
-        ).run( prepared.plan, runId, prepared.provisioning, options.runPolicy )
+        ).run( prepared.plan, runId, prepared.provisioning, options.runPolicy ) { step ->
+            step.metadata.descriptorId !in noReuse
+        }
+    }
 
     /** [prepare] then [run]. */
     fun run( source: WorkflowSource, runId: UUID = UUID.randomUUID() ): ExecutionReport =

@@ -1,6 +1,18 @@
 package carp.dsp.core.domain.data
 
+import dk.cachet.carp.common.application.data.Data
+import dk.cachet.carp.common.infrastructure.serialization.UnknownPolymorphicWrapper
+import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
+import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+
 private const val ROW_ID = "row_id"
+private const val TYPE_KEY = "__type"
+private const val CARP_PREFIX = "dk.cachet.carp."
 
 /**
  * Writes [CarpTabularData] as CSV.
@@ -90,10 +102,14 @@ object CarpTabularCsv
 
     /**
      * Returns a row's values keyed by fully qualified column name.
+     *
+     * The prefix is the data type without CARP's own namespace: `stepcount.steps`,
+     * but `completedapptask.survey.taskData`, which would otherwise share columns
+     * with `survey`.
      */
     private fun namedValuesOf(row: CarpMeasurementRow): Map<String, String>
     {
-        val prefix = row.dataType.name
+        val prefix = "${row.dataType.namespace}.${row.dataType.name}".removePrefix(CARP_PREFIX)
         return valuesOf(row).mapKeys { (field, _) -> "$prefix.$field" }
     }
 
@@ -117,8 +133,37 @@ object CarpTabularCsv
 
         is HeartRateMeasurementRow -> mapOf("bpm" to row.bpm.toString())
 
-        // An unsupported type still has a value worth writing; dropping it would
-        // lose data the batch actually carried.
-        is GenericMeasurementRow -> mapOf("value" to row.originalData.toString())
+        // Any other type gets a column per top-level field, read off its JSON, so
+        // a new data type needs no code here.
+        is GenericMeasurementRow -> fieldsOf(row.originalData)
+    }
+
+    private val json = createDefaultJSON()
+
+    /**
+     * Returns the top-level fields of [data], keyed by field name.
+     *
+     * A scalar is written as its value, a nested object or array as its JSON, and
+     * a null as an empty cell. The type discriminator is left out; the row
+     * already carries the type.
+     */
+    private fun fieldsOf(data: Data): Map<String, String>
+    {
+        val element = when (data)
+        {
+            // A type carp-core does not know - every CAMS type - is held as its
+            // original JSON.
+            is UnknownPolymorphicWrapper -> Json.parseToJsonElement(data.jsonSource)
+            else -> json.encodeToJsonElement(PolymorphicSerializer(Data::class), data)
+        }
+        return element.jsonObject
+            .filterKeys { it != TYPE_KEY }
+            .mapValues { (_, value) -> cellOf(value) }
+    }
+
+    private fun cellOf(value: JsonElement): String = when (value) {
+        is JsonNull -> ""
+        is JsonPrimitive -> value.content
+        else -> value.toString()
     }
 }
