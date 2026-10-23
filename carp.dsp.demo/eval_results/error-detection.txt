@@ -138,3 +138,25 @@ Steps executed before detection: 0 / 8 for every fault (0% wasted compute).
 ======================================================================
 
 Plan-time gate cost: 2 ms
+======================================================================
+Error-detection eval (CARP arm) - 2026-10-23T11:40:58.846867900Z
+Control workflows/mobgap-gait-analysis.yaml (8 steps): 0 ERROR issue(s) (expected 0)
+Control workflows/wf-activity-summary-v2.yaml (13 steps): 0 ERROR issue(s) (expected 0)
+
+Injected faults - detection stage is plan-time for all (0 steps executed):
+
+  fault               detected   expected code                     matched
+  type-mismatch       true       DEPENDENCY_TYPE_MISMATCH          true
+  missing-producer    true       DEPENDENCY_PRODUCER_NOT_FOUND     true
+      codes emitted: [DEPENDENCY_PRODUCER_NOT_FOUND, MISSING_PRODUCER_STEP]
+  missing-output      true       DEPENDENCY_OUTPUT_NOT_FOUND       true
+      codes emitted: [DEPENDENCY_OUTPUT_NOT_FOUND, MISSING_PRODUCER_OUTPUT]
+  cycle               true       WORKFLOW_CYCLE_DETECTED           true
+  missing-env         true       MISSING_ENVIRONMENT_DEFINITION    true
+  data-type-mismatch  true       DEPENDENCY_DATA_TYPE_MISMATCH     true
+
+All faults caught at plan time with the expected code: true
+Steps executed before detection: 0 for every fault (0% wasted compute).
+======================================================================
+
+Plan-time gate cost: 7 ms

@@ -415,7 +415,7 @@ steps:
         - "--output"
         - "output.0"
     inputs:
-      - id: "aggregated-dmos-csv-UNDECLARED"
+      - id: "aggregated-dmos-csv"
         descriptor:
           fileFormat: "csv"
           encoding: "utf-8"
@@ -423,7 +423,7 @@ steps:
         source:
           type: "step-output"
           stepId: "aggregate"
-          outputId: "aggregated-dmos-csv"
+          outputId: "aggregated-dmos-csv-UNDECLARED"
     outputs:
       - id: "aggregated-dmos-plot-png"
         descriptor:

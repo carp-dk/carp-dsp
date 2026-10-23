@@ -123,6 +123,15 @@ tasks.register<JavaExec>("runWorkflow") {
 // Paper evaluation harnesses (Section: Evaluation)
 // ./gradlew :carp.dsp.demo:evalPlannerDeterminism [-Pargs="100"]
 // ./gradlew :carp.dsp.demo:evalMobgapTiming [-Pargs="2"]
+//
+// Add -PpaperDir=<path to carp-dsp-sys-paper> to also copy the artefacts the paper
+// uses into that repo (figures to images/, tables and macros to generated/). Without
+// it, results go to eval_results/ only.
+// A relative path is resolved from the directory Gradle was run in, like any CLI argument.
+val paperDir: File? = (findProperty("paperDir") as String?)?.takeIf { it.isNotBlank() }?.let { path ->
+    File(path).takeIf { it.isAbsolute } ?: gradle.startParameter.currentDir.resolve(path)
+}?.canonicalFile
+
 fun registerEvalTask(name: String, main: String, description: String) {
     tasks.register<JavaExec>(name) {
         group = "evaluation"
@@ -133,6 +142,7 @@ fun registerEvalTask(name: String, main: String, description: String) {
         if (project.hasProperty("args")) {
             args = (project.property("args") as String).trim().split(Regex("\\s+"))
         }
+        paperDir?.let { systemProperty("carp.paperDir", it.absolutePath) }
         standardOutput = System.out
     }
 }
@@ -150,7 +160,7 @@ registerEvalTask(
 registerEvalTask(
     "evalErrorDetection",
     "carp.dsp.demo.eval.ErrorDetectionEvalKt",
-    "Plan 5 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
+    "Plan 6 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
 )
 registerEvalTask(
     "evalReuse",
@@ -221,10 +231,13 @@ tasks.register("evalErrorDetectionFull") {
         }
         // ad-hoc arm (runs the eight mobgap steps in the provisioned env)
         pixi("adhoc_baseline.py")
-        // rebuild Fig A; drop it straight into the paper repo if it sits beside this one
-        val paperFig = rootProject.projectDir.parentFile.resolve("carp-dsp-sys-paper/images/fig-error-detection.pdf")
-        if (paperFig.parentFile.exists()) pixi("plot_error_detection.py", "--out", paperFig.absolutePath)
-        else pixi("plot_error_detection.py")
+        // rebuild Fig A into eval_results; with -PpaperDir also write it into the paper
+        pixi("plot_error_detection.py")
+        paperDir?.let { dir ->
+            val paperFig = dir.resolve("images/fig-error-detection.pdf")
+            if (!paperFig.parentFile.isDirectory) throw GradleException("Paper images/ not found: ${paperFig.parentFile}")
+            pixi("plot_error_detection.py", "--out", paperFig.absolutePath)
+        }
     }
 }
 

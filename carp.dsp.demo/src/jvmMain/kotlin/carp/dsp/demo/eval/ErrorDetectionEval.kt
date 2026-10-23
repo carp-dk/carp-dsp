@@ -1,9 +1,11 @@
 package carp.dsp.demo.eval
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
+import carp.dsp.core.application.authoring.resolve.UsesResolver
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import carp.dsp.demo.io.DemoIo
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
@@ -11,9 +13,11 @@ import dk.cachet.carp.common.application.UUID
 /**
  * Error-detection eval.
  *
- * Plans five fault-injected copies of the mobgap workflow and records, for each, the
- * stage at which the framework catches the fault and how much of the pipeline had to run
- * to catch it.
+ * Plans six fault-injected workflows and records, for each, the stage at which the
+ * framework catches the fault and how much of the pipeline had to run to catch it.
+ * Five are copies of the mobgap workflow. The sixth is a copy of the library-step
+ * activity workflow, because a data-type fault needs ports that declare CARP data
+ * types and the mobgap workflow declares none.
  * Since every fault is structural, the planner surfaces all of them as
  * plan-time `PlanIssue` ERRORs - so nothing executes and no compute is wasted.
  *
@@ -23,8 +27,11 @@ import dk.cachet.carp.common.application.UUID
  *   missing-output   -> DEPENDENCY_OUTPUT_NOT_FOUND
  *   cycle            -> WORKFLOW_CYCLE_DETECTED
  *   missing-env      -> MISSING_ENVIRONMENT_DEFINITION
+ *   data-type-mismatch (wf-activity-summary-v2) -> DEPENDENCY_DATA_TYPE_MISMATCH
+ *     a step-count input reads the cleaned heart-rate output; both are csv, so the
+ *     format check alone would pass it
  *
- * The clean workflow is planned first as a control (expect zero ERROR issues).
+ * Each clean base workflow is planned first as a control (expect zero ERROR issues).
  *
  * Run:
  *   ./gradlew :carp.dsp.demo:evalErrorDetection
@@ -37,12 +44,16 @@ import dk.cachet.carp.common.application.UUID
 /** Same fixed namespace as other evals */
 private val ED_FIXED_NAMESPACE: UUID = UUID.parse("d3b7f2a0-0000-5000-8000-6d6f62676170")
 
-private const val STEP_COUNT = 8
+private data class BaseWorkflow(val resource: String, val steps: Int)
+
+private val MOBGAP = BaseWorkflow("workflows/mobgap-gait-analysis.yaml", steps = 8)
+private val ACTIVITY_V2 = BaseWorkflow("workflows/wf-activity-summary-v2.yaml", steps = 13)
 
 private data class Injection(
     val fault: String,
     val resource: String,
-    val expectedCode: String
+    val expectedCode: String,
+    val base: BaseWorkflow = MOBGAP
 )
 
 private val INJECTIONS = listOf(
@@ -50,11 +61,18 @@ private val INJECTIONS = listOf(
     Injection("missing-producer", "workflows/injections/inj-missing-producer.yaml", "DEPENDENCY_PRODUCER_NOT_FOUND"),
     Injection("missing-output", "workflows/injections/inj-missing-output.yaml", "DEPENDENCY_OUTPUT_NOT_FOUND"),
     Injection("cycle", "workflows/injections/inj-cycle.yaml", "WORKFLOW_CYCLE_DETECTED"),
-    Injection("missing-env", "workflows/injections/inj-missing-env.yaml", "MISSING_ENVIRONMENT_DEFINITION")
+    Injection("missing-env", "workflows/injections/inj-missing-env.yaml", "MISSING_ENVIRONMENT_DEFINITION"),
+    Injection(
+        "data-type-mismatch",
+        "workflows/injections/inj-data-type-mismatch.yaml",
+        "DEPENDENCY_DATA_TYPE_MISMATCH",
+        base = ACTIVITY_V2
+    )
 )
 
 private data class CarpResult(
     val fault: String,
+    val base: BaseWorkflow,
     val expectedCode: String,
     val detected: Boolean,
     val matchedExpected: Boolean,
@@ -64,15 +82,17 @@ private data class CarpResult(
 fun main() {
     val codec = WorkflowYamlCodec()
 
-    // Control: the clean workflow should plan with zero ERROR issues.
-    val cleanPlan = planWorkflow(codec, DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml"))
-    val cleanErrors = errorIssues(cleanPlan)
+    // Control: each clean base workflow should plan with zero ERROR issues.
+    val cleanErrors = INJECTIONS.map { it.base }.distinct().associateWith { base ->
+        errorIssues(planWorkflow(codec, DemoIo.loadResource(base.resource)))
+    }
 
     val results = INJECTIONS.map { inj ->
         val plan = planWorkflow(codec, DemoIo.loadResource(inj.resource))
         val codes = errorIssues(plan).map { it.code }
         CarpResult(
             fault = inj.fault,
+            base = inj.base,
             expectedCode = inj.expectedCode,
             detected = codes.isNotEmpty(),
             matchedExpected = codes.contains(inj.expectedCode),
@@ -83,16 +103,16 @@ fun main() {
     val report = buildString {
         appendLine("=".repeat(70))
         appendLine("Error-detection eval (CARP arm) - ${java.time.Instant.now()}")
-        appendLine("Workflow: mobgap-gait-analysis.yaml ($STEP_COUNT steps)")
-        appendLine()
-        appendLine("Control (clean workflow): ${cleanErrors.size} ERROR issue(s) (expected 0)")
+        cleanErrors.forEach { (base, errors) ->
+            appendLine("Control ${base.resource} (${base.steps} steps): ${errors.size} ERROR issue(s) (expected 0)")
+        }
         appendLine()
         appendLine("Injected faults - detection stage is plan-time for all (0 steps executed):")
         appendLine()
-        appendLine("  %-16s  %-9s  %-32s  %s".format("fault", "detected", "expected code", "matched"))
+        appendLine("  %-18s  %-9s  %-32s  %s".format("fault", "detected", "expected code", "matched"))
         results.forEach { r ->
             appendLine(
-                "  %-16s  %-9s  %-32s  %s".format(
+                "  %-18s  %-9s  %-32s  %s".format(
                     r.fault, r.detected.toString(), r.expectedCode, r.matchedExpected.toString()
                 )
             )
@@ -101,9 +121,9 @@ fun main() {
             }
         }
         appendLine()
-        val allMatched = cleanErrors.isEmpty() && results.all { it.matchedExpected }
+        val allMatched = cleanErrors.values.all { it.isEmpty() } && results.all { it.matchedExpected }
         appendLine("All faults caught at plan time with the expected code: $allMatched")
-        appendLine("Steps executed before detection: 0 / $STEP_COUNT for every fault (0% wasted compute).")
+        appendLine("Steps executed before detection: 0 for every fault (0% wasted compute).")
         appendLine("=".repeat(70))
     }
     println(report)
@@ -120,11 +140,14 @@ fun main() {
     // Machine-readable CSV for the plot (CARP arm). plan_ms is this machine's measured
     // cost of catching the fault; steps_executed is 0 because nothing runs.
     val csv = buildString {
-        appendLine("fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,plan_ms,outcome,codes")
+        appendLine(
+            "fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,plan_ms,outcome,codes,workflow"
+        )
         results.forEach { r ->
             val outcome = if (r.matchedExpected) "caught_plan_time" else if (r.detected) "caught_other_code" else "undetected"
             appendLine(
-                "${r.fault},carp,${r.detected},plan-time,$STEP_COUNT,0,0.0,$planMs,$outcome,${r.errorCodes.joinToString("|")}"
+                "${r.fault},carp,${r.detected},plan-time,${r.base.steps},0,0.0,$planMs,$outcome," +
+                    "${r.errorCodes.joinToString("|")},${r.base.resource.substringAfterLast('/')}"
             )
         }
     }
@@ -132,8 +155,11 @@ fun main() {
     println("Wrote error-detection.txt and error-detection-carp.csv to: ${dir.absolutePath}")
 }
 
+private val STEP_LIBRARY = ClasspathStepLibrary()
+
 private fun planWorkflow(codec: WorkflowYamlCodec, yaml: String): ExecutionPlan {
-    val descriptor = codec.decodeOrThrow(yaml)
+    // Library references (`uses:`) are expanded first; a workflow with none is unchanged.
+    val descriptor = UsesResolver(STEP_LIBRARY).resolve(codec.decodeOrThrow(yaml)).workflow
     val definition = WorkflowDescriptorImporter(ED_FIXED_NAMESPACE).import(descriptor)
     return DefaultExecutionPlanner().plan(definition)
 }
