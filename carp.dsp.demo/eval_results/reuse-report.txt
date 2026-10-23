@@ -17,3 +17,67 @@ Planner:
 Reuse claim holds (only import-data changed, planner accepts, DAG unchanged): true
 ======================================================================
 
+======================================================================
+Retargeting eval - 2026-10-23T13:38:26.928488500Z
+
+Case 'cohort': Gait pipeline, MS -> HA cohort (mobgap LabExampleDataset)
+  workflows/mobgap-gait-analysis.yaml -> workflows/mobgap-gait-analysis-ha.yaml
+  Steps changed:          [import-data]
+  Unexpected changes:     0 of 8 steps (expected 0)
+  YAML lines added/removed: 4 / 0
+  Planner accepts variant: true
+  Plan identical to base:  true  (same step UUIDs + topological order)
+  Static claim holds:      true
+  Executed:
+    base:    SUCCEEDED, 8 / 8 steps succeeded
+    variant: SUCCEEDED, 8 / 8 steps succeeded
+    Steps whose outputs changed: 8 of 8
+    Walking bouts:          5 -> 1
+    Walking duration (min): 1.5841666666666665 -> 0.1055
+
+Case 'period': Activity workflow, Apr-May -> Mar-Apr 2016 (Zenodo 53894)
+  workflows/wf-activity-summary-v2.yaml -> workflows/wf-activity-summary-v2-2016-03.yaml
+  Steps changed:          [fetch-steps, fetch-hr]
+  Unexpected changes:     0 of 13 steps (expected 0)
+  YAML lines added/removed: 8 / 1
+  Planner accepts variant: true
+  Plan identical to base:  true  (same step UUIDs + topological order)
+  Static claim holds:      true
+  Executed:
+    base:    SUCCEEDED, 13 / 13 steps succeeded
+    variant: SUCCEEDED, 13 / 13 steps succeeded
+    Steps whose outputs changed: 13 of 13
+======================================================================
+
+======================================================================
+Retargeting eval - 2026-10-23T13:49:44.851375Z
+
+Case 'cohort': Gait pipeline, MS -> HA cohort (mobgap LabExampleDataset)
+  workflows/mobgap-gait-analysis.yaml -> workflows/mobgap-gait-analysis-ha.yaml
+  Steps changed:          [import-data]
+  Unexpected changes:     0 of 8 steps (expected 0)
+  YAML lines added/removed: 2 / 0
+  Planner accepts variant: true
+  Plan identical to base:  true  (same step UUIDs + topological order)
+  Static claim holds:      true
+  Executed:
+    base:    SUCCEEDED, 8 / 8 steps succeeded
+    variant: SUCCEEDED, 8 / 8 steps succeeded
+    Steps whose outputs changed: 8 of 8
+    Walking bouts:          5 -> 6
+    Walking duration (min): 1.5841666666666665 -> 0.7041666666666666
+
+Case 'period': Activity workflow, Apr-May -> Mar-Apr 2016 (Zenodo 53894)
+  workflows/wf-activity-summary-v2.yaml -> workflows/wf-activity-summary-v2-2016-03.yaml
+  Steps changed:          [fetch-steps, fetch-hr]
+  Unexpected changes:     0 of 13 steps (expected 0)
+  YAML lines added/removed: 8 / 1
+  Planner accepts variant: true
+  Plan identical to base:  true  (same step UUIDs + topological order)
+  Static claim holds:      true
+  Executed:
+    base:    SUCCEEDED, 13 / 13 steps succeeded
+    variant: SUCCEEDED, 13 / 13 steps succeeded
+    Steps whose outputs changed: 13 of 13
+======================================================================
+

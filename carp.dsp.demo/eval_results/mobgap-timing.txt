@@ -433,3 +433,132 @@ Output determinism across 3 runs (same machine):
   Identical: 0 / 0, differing: 0
 
 
+======================================================================
+Mobgap timed run 1 - 2026-10-23T13:35:48.211479400Z
+Status: SUCCEEDED
+Total wall clock: 62900 ms
+(run 1 includes env setup + dataset download - use later runs for steady state)
+
+Framework phases (ms):
+  decode-yaml             227
+  import                   77
+  plan                    357
+  validate                  0
+  stage-workspace          13
+  execute-total         62107
+  bundle                   57
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total= 19086  compute= 18311  overhead=  775
+  Gait Sequence Detection                  total= 15951  compute= 15221  overhead=  730
+  Initial Contact Detection                total=  8263  compute=  7634  overhead=  629
+  Per-Second Parameter Estimation          total=  5599  compute=  4977  overhead=  622
+  Walking Bout Assembly                    total=  2558  compute=  2073  overhead=  485
+  DMO Aggregation                          total=  1998  compute=  1554  overhead=  444
+  Plot Walking Bout Parameters             total=  6175  compute=  5654  overhead=  521
+  Plot Aggregated DMOs                     total=  2442  compute=  1912  overhead=  530
+
+  TOTALS: step total=62072 ms | compute=57336 ms | overhead=4736 ms (7.6% of total)
+  Mean per-step overhead: 592 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 731 ms
+
+Outputs (bytes, sha256):
+  steps/01_import_imu_data/outputs/config-json.json                   115  ca0acc2040992b62eb4a544bf9dbc90341f01ad5cf9b60433c71af235b8c8088
+  steps/01_import_imu_data/outputs/imu-data-csv.csv               3215135  da6fcbd714f3cccb0185085e88996ab8eef18c430f4ea674ee73f877fc9fb812
+  steps/02_gait_sequence_detection/outputs/gs-list-csv.csv            116  e8ee4cb62770fb3347a6741ce2bc60827b16ea9427c85fb588f06540c5a692ee
+  steps/03_initial_contact_detection/outputs/ic-list-csv.csv         2297  aa3381f9efedf7a18f2d9ffc592b3c67f12a3b3e85123f439f9a77c92ba42906
+  steps/03_initial_contact_detection/outputs/turn-list-csv.csv        558  4afca0f6b021ce9603d21e5ed70cf6735c0af8d66ad0095a495541f64a1a981b
+  steps/04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv       6856  b2d8bc45d0b3a6b44e5a3a8b8f7067a1ca0145c695c8ef22c897f239ba74be8b
+  steps/05_walking_bout_assembly/outputs/stride-list-csv.csv        10583  2cdd8b3ff1bc8c8a8d0d4e505b86a9de858f73356d941167ec0f761010731a0a
+  steps/05_walking_bout_assembly/outputs/wb-params-csv.csv            834  556add711e9f9a5c4618eb7f62b0cef7f44aac336569e744adaa9807604633f6
+  steps/06_dmo_aggregation/outputs/aggregated-dmos-csv.csv            974  baf373a1dd38c11d6d7721817b2c48d31a70a5dd027f7025f7cf2529b49c5917
+  steps/07_plot_walking_bout_parameters/outputs/wb-params-plot-png.png     169053  e9697b64921e44290a6b9235d5dfd84e669560e350f5268ad870b4d7e9e925d8
+  steps/08_plot_aggregated_dmos/outputs/aggregated-dmos-plot-png.png      58040  aea9a1d4ebb4f57993b9d46c541b060c565cd0f07188d4c5915c53b26e61a55b
+
+======================================================================
+Mobgap timed run 2 - 2026-10-23T13:35:48.220633200Z
+Status: SUCCEEDED
+Total wall clock: 29780 ms
+
+Framework phases (ms):
+  decode-yaml              42
+  import                   16
+  plan                      2
+  validate                  0
+  stage-workspace          21
+  execute-total         29566
+  bundle                   13
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=  2505  compute=  1997  overhead=  508
+  Gait Sequence Detection                  total=  4812  compute=  4261  overhead=  551
+  Initial Contact Detection                total=  7037  compute=  6362  overhead=  675
+  Per-Second Parameter Estimation          total=  4196  compute=  3479  overhead=  717
+  Walking Bout Assembly                    total=  3043  compute=  2453  overhead=  590
+  DMO Aggregation                          total=  2146  compute=  1647  overhead=  499
+  Plot Walking Bout Parameters             total=  2987  compute=  2458  overhead=  529
+  Plot Aggregated DMOs                     total=  2835  compute=  2275  overhead=  560
+
+  TOTALS: step total=29561 ms | compute=24932 ms | overhead=4629 ms (15.7% of total)
+  Mean per-step overhead: 579 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 94 ms
+
+Outputs (bytes, sha256):
+  steps/01_import_imu_data/outputs/config-json.json                   115  ca0acc2040992b62eb4a544bf9dbc90341f01ad5cf9b60433c71af235b8c8088
+  steps/01_import_imu_data/outputs/imu-data-csv.csv               3215135  da6fcbd714f3cccb0185085e88996ab8eef18c430f4ea674ee73f877fc9fb812
+  steps/02_gait_sequence_detection/outputs/gs-list-csv.csv            116  e8ee4cb62770fb3347a6741ce2bc60827b16ea9427c85fb588f06540c5a692ee
+  steps/03_initial_contact_detection/outputs/ic-list-csv.csv         2297  aa3381f9efedf7a18f2d9ffc592b3c67f12a3b3e85123f439f9a77c92ba42906
+  steps/03_initial_contact_detection/outputs/turn-list-csv.csv        558  4afca0f6b021ce9603d21e5ed70cf6735c0af8d66ad0095a495541f64a1a981b
+  steps/04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv       6856  b2d8bc45d0b3a6b44e5a3a8b8f7067a1ca0145c695c8ef22c897f239ba74be8b
+  steps/05_walking_bout_assembly/outputs/stride-list-csv.csv        10583  2cdd8b3ff1bc8c8a8d0d4e505b86a9de858f73356d941167ec0f761010731a0a
+  steps/05_walking_bout_assembly/outputs/wb-params-csv.csv            834  556add711e9f9a5c4618eb7f62b0cef7f44aac336569e744adaa9807604633f6
+  steps/06_dmo_aggregation/outputs/aggregated-dmos-csv.csv            974  baf373a1dd38c11d6d7721817b2c48d31a70a5dd027f7025f7cf2529b49c5917
+  steps/07_plot_walking_bout_parameters/outputs/wb-params-plot-png.png     169053  e9697b64921e44290a6b9235d5dfd84e669560e350f5268ad870b4d7e9e925d8
+  steps/08_plot_aggregated_dmos/outputs/aggregated-dmos-plot-png.png      58040  aea9a1d4ebb4f57993b9d46c541b060c565cd0f07188d4c5915c53b26e61a55b
+
+======================================================================
+Mobgap timed run 3 - 2026-10-23T13:35:48.221632500Z
+Status: SUCCEEDED
+Total wall clock: 28879 ms
+
+Framework phases (ms):
+  decode-yaml              16
+  import                   13
+  plan                      2
+  validate                  0
+  stage-workspace          19
+  execute-total         28699
+  bundle                    3
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=  2806  compute=  2246  overhead=  560
+  Gait Sequence Detection                  total=  5373  compute=  4681  overhead=  692
+  Initial Contact Detection                total=  6569  compute=  5939  overhead=  630
+  Per-Second Parameter Estimation          total=  3697  compute=  3130  overhead=  567
+  Walking Bout Assembly                    total=  2589  compute=  2104  overhead=  485
+  DMO Aggregation                          total=  2021  compute=  1478  overhead=  543
+  Plot Walking Bout Parameters             total=  2741  compute=  2244  overhead=  497
+  Plot Aggregated DMOs                     total=  2898  compute=  2340  overhead=  558
+
+  TOTALS: step total=28694 ms | compute=24162 ms | overhead=4532 ms (15.8% of total)
+  Mean per-step overhead: 567 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 53 ms
+
+Outputs (bytes, sha256):
+  steps/01_import_imu_data/outputs/config-json.json                   115  ca0acc2040992b62eb4a544bf9dbc90341f01ad5cf9b60433c71af235b8c8088
+  steps/01_import_imu_data/outputs/imu-data-csv.csv               3215135  da6fcbd714f3cccb0185085e88996ab8eef18c430f4ea674ee73f877fc9fb812
+  steps/02_gait_sequence_detection/outputs/gs-list-csv.csv            116  e8ee4cb62770fb3347a6741ce2bc60827b16ea9427c85fb588f06540c5a692ee
+  steps/03_initial_contact_detection/outputs/ic-list-csv.csv         2297  aa3381f9efedf7a18f2d9ffc592b3c67f12a3b3e85123f439f9a77c92ba42906
+  steps/03_initial_contact_detection/outputs/turn-list-csv.csv        558  4afca0f6b021ce9603d21e5ed70cf6735c0af8d66ad0095a495541f64a1a981b
+  steps/04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv       6856  b2d8bc45d0b3a6b44e5a3a8b8f7067a1ca0145c695c8ef22c897f239ba74be8b
+  steps/05_walking_bout_assembly/outputs/stride-list-csv.csv        10583  2cdd8b3ff1bc8c8a8d0d4e505b86a9de858f73356d941167ec0f761010731a0a
+  steps/05_walking_bout_assembly/outputs/wb-params-csv.csv            834  556add711e9f9a5c4618eb7f62b0cef7f44aac336569e744adaa9807604633f6
+  steps/06_dmo_aggregation/outputs/aggregated-dmos-csv.csv            974  baf373a1dd38c11d6d7721817b2c48d31a70a5dd027f7025f7cf2529b49c5917
+  steps/07_plot_walking_bout_parameters/outputs/wb-params-plot-png.png     169053  e9697b64921e44290a6b9235d5dfd84e669560e350f5268ad870b4d7e9e925d8
+  steps/08_plot_aggregated_dmos/outputs/aggregated-dmos-plot-png.png      58040  aea9a1d4ebb4f57993b9d46c541b060c565cd0f07188d4c5915c53b26e61a55b
+
+======================================================================
+Output determinism across 3 runs (same machine):
+  Identical: 11 / 11, differing: 0
+
+

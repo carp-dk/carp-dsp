@@ -129,6 +129,13 @@ tasks.register<JavaExec>("runWorkflow") {
 // it, results go to eval_results/ only.
 // A relative path is resolved from the directory Gradle was run in, like any CLI argument.
 val paperDir: File? = (findProperty("paperDir") as String?)?.takeIf { it.isNotBlank() }?.let { path ->
+    // "C:Users..." is what an unquoted C:\Users\... becomes once a POSIX shell drops the backslashes.
+    if (Regex("^[A-Za-z]:[^/\\\\]").containsMatchIn(path)) {
+        throw GradleException(
+            "-PpaperDir=$path looks like a Windows path whose backslashes were removed by the shell. " +
+                "Use forward slashes (C:/Users/...) or quote the path."
+        )
+    }
     File(path).takeIf { it.isAbsolute } ?: gradle.startParameter.currentDir.resolve(path)
 }?.canonicalFile
 
@@ -165,7 +172,7 @@ registerEvalTask(
 registerEvalTask(
     "evalReuse",
     "carp.dsp.demo.eval.ReuseEvalKt",
-    "Compare the MS and HA cohort workflows: authoring diff + planner acceptance (Use Case 2 / Reuse)"
+    "Retarget two workflows to new data (cohort, collection period): diff, plan and execute (AU3)"
 )
 registerEvalTask(
     "evalStepReuse",

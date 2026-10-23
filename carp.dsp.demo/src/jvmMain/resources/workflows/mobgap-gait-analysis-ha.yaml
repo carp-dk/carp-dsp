@@ -1,8 +1,8 @@
-# Use Case 2 (reuse): identical to mobgap-gait-analysis.yaml except that
+# Use Case 2 (retargeting): identical to mobgap-gait-analysis.yaml except that
 # import-data selects the HA (healthy) cohort instead of the default MS cohort.
-# The seven downstream steps are byte-identical to Use Case 1. Adjust the
-# --test value to a valid HA (participant, test, trial) if Test5 is absent
-# (see list_lab_dataset.py).
+# Participant, test and trial stay at the defaults (001, Test11, Trial1), so the
+# same test protocol is analysed for a different population. The seven downstream
+# steps are byte-identical to Use Case 1 (see list_lab_dataset.py for recordings).
 schemaVersion: "1.0"
 metadata:
   id: "mobgap-gait-analysis"
@@ -52,8 +52,6 @@ steps:
         - "output.1"
         - "--cohort"
         - "HA"
-        - "--test"
-        - "Test5"
     outputs:
       - id: "imu-data-csv"
         descriptor:
