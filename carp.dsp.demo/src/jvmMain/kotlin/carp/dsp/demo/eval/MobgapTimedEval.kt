@@ -9,6 +9,7 @@ import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import carp.dsp.demo.io.DemoIo
+import carp.dsp.demo.io.MobgapScripts
 import dk.cachet.carp.common.application.UUID
 import java.io.File
 import java.security.MessageDigest
@@ -177,7 +178,9 @@ private fun executeTimedRun(runIndex: Int): RunResult {
     val definition = timed(phaseMs, "import") { WorkflowDescriptorImporter(EVAL_NAMESPACE).import(descriptor) }
     val plan = timed(phaseMs, "plan") { DefaultExecutionPlanner().plan(definition) }
     timed(phaseMs, "validate") { plan.validate() }
-    timed(phaseMs, "stage-workspace") { setupWorkspace(demoResultsDir) }
+    timed(phaseMs, "stage-workspace") {
+        MobgapScripts.stage(MobgapScripts.runRoot(demoResultsDir.toPath(), plan, runId))
+    }
 
     // Execute
     val artefactStore = FileSystemArtefactStore(demoResultsDir.toPath().resolve("artifacts"))
@@ -312,17 +315,5 @@ private inline fun <T> timed(sink: MutableMap<String, Long>, name: String, block
 private fun sha256(f: File): String =
     MessageDigest.getInstance("SHA-256").digest(f.readBytes())
         .joinToString("") { "%02x".format(it) }
-
-// --- Workspace setup (mirrors MobgapDemo) ---
-
-private fun setupWorkspace(demoResultsDir: File) {
-    val workflowsDir = demoResultsDir.resolve("resources/workflows").apply { mkdirs() }
-    DemoIo.copyResource("workflows/mobgap-gait-analysis.yaml", workflowsDir.resolve("mobgap-gait-analysis.yaml").toPath())
-    val scriptsDir = demoResultsDir.resolve("resources/scripts/mobgap").apply { mkdirs() }
-    listOf(
-        "import_data.py", "gsd.py", "icd.py", "per_sec_params.py",
-        "wba.py", "aggregate.py", "plot_wb_params.py", "plot_aggregated_dmos.py"
-    ).forEach { DemoIo.copyResource("scripts/mobgap/$it", scriptsDir.resolve(it).toPath()) }
-}
 
 private fun timedEvalDemoResultsDir(): File = DemoIo.demoResultsDir("mobgap_timed")
