@@ -96,12 +96,7 @@ class DependencyGraphBuilder
         val processedDependencies = mutableSetOf<UUID>()
 
         dependencies.forEach { dependency ->
-            val isValidDependency = validateDependency(
-                stepId,
-                dependency.producerStepId,
-                dependency.producerOutputId,
-                context
-            )
+            val isValidDependency = validateDependency( stepId, dependency, context )
 
             if ( isValidDependency )
             {
@@ -129,11 +124,13 @@ class DependencyGraphBuilder
      */
     private fun validateDependency(
         consumerStepId: UUID,
-        producerId: UUID?,
-        outputId: UUID?,
+        dependency: CrossStepDependency,
         context: DependencyResolutionContext
     ): Boolean
     {
+        val producerId = dependency.producerStepId
+        val outputId = dependency.producerOutputId
+        val consumerName = stepName( consumerStepId, context )
         var isValid = true
 
         if ( producerId == null )
@@ -142,7 +139,8 @@ class DependencyGraphBuilder
                 PlanIssue(
                     severity = PlanIssueSeverity.ERROR,
                     code = "DEPENDENCY_PRODUCER_NOT_FOUND",
-                    message = "Referenced producer step does not exist.",
+                    message = "Input '${dependency.outputName}' of step '$consumerName' reads from step " +
+                        "'${dependency.producerStepRef}', which does not exist.",
                     stepId = consumerStepId
                 )
             )
@@ -155,8 +153,8 @@ class DependencyGraphBuilder
                 PlanIssue(
                     severity = PlanIssueSeverity.ERROR,
                     code = "DEPENDENCY_OUTPUT_NOT_FOUND",
-                    message = "Producer step '${context.stepsById[producerId]?.metadata?.name ?: producerId}' " +
-                            "does not have a matching output for this input.",
+                    message = "Input '${dependency.outputName}' of step '$consumerName' reads an output that " +
+                        "step '${context.stepsById[producerId]?.metadata?.name ?: producerId}' does not declare.",
                     stepId = consumerStepId
                 )
             )
@@ -247,7 +245,8 @@ class DependencyGraphBuilder
                 PlanIssue(
                     severity = PlanIssueSeverity.ERROR,
                     code = "DEPENDENCY_TYPE_MISMATCH",
-                    message = "Input '${dependency.outputName}' declares type '$consumerFormat' " +
+                    message = "Input '${dependency.outputName}' of step '${stepName( consumerStepId, context )}' " +
+                        "declares type '$consumerFormat' " +
                         "but producer step '${dependency.producerStepRef}' provides type '$producerFormat' " +
                         "for this connection.",
                     stepId = consumerStepId
@@ -282,7 +281,8 @@ class DependencyGraphBuilder
             PlanIssue(
                 severity = PlanIssueSeverity.ERROR,
                 code = "DEPENDENCY_DATA_TYPE_MISMATCH",
-                message = "Input '${dependency.outputName}' expects data type(s) " +
+                message = "Input '${dependency.outputName}' of step '${stepName( consumerStepId, context )}' " +
+                    "expects data type(s) " +
                     "${missing.sortedBy { it.toString() }.joinToString()} " +
                     "but producer step '${dependency.producerStepRef}' provides " +
                     "${provided.sortedBy { it.toString() }.joinToString()}.",
@@ -312,6 +312,9 @@ class DependencyGraphBuilder
             )
         }
     }
+
+    private fun stepName( stepId: UUID, context: DependencyResolutionContext ): String =
+        context.stepsById[stepId]?.metadata?.name ?: stepId.toString()
 
     internal fun tryParseUuid( uuid: String ): UUID? =
         try { UUID.parse( uuid ) } catch ( _: Exception ) { null }

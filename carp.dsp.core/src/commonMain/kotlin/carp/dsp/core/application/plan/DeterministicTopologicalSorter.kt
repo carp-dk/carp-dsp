@@ -22,12 +22,14 @@ class DeterministicTopologicalSorter {
      * @param adjacency Map from step ID to set of dependent step IDs (producer -> consumers)
      * @param indegree Map from step ID to number of incoming dependencies
      * @param declarationOrder List of step IDs in workflow declaration order (for tie-breaking)
+     * @param stepNames Step names by ID, used to name the steps in a cycle report; IDs are used when absent
      * @return TopologicalSortResult containing the ordered list and any cycle detection issues
      */
     fun sort(
         adjacency: Map<UUID, Set<UUID>>,
         indegree: Map<UUID, Int>,
-        declarationOrder: List<UUID>
+        declarationOrder: List<UUID>,
+        stepNames: Map<UUID, String> = emptyMap()
     ): TopologicalSortResult {
         val issues = mutableListOf<PlanIssue>()
         val ordered = mutableListOf<UUID>()
@@ -46,7 +48,7 @@ class DeterministicTopologicalSorter {
         processAllReadyNodes(readyQueue, workingIndegree, adjacency, declarationRank, ordered)
 
         // Check for cycles
-        checkForCycles(ordered.size, totalNodeCount, workingIndegree, issues)
+        checkForCycles(ordered.size, totalNodeCount, workingIndegree, stepNames, issues)
 
         return TopologicalSortResult(
             ordered = ordered,
@@ -131,11 +133,12 @@ class DeterministicTopologicalSorter {
         processedCount: Int,
         totalNodeCount: Int,
         workingIndegree: Map<UUID, Int>,
+        stepNames: Map<UUID, String>,
         issues: MutableList<PlanIssue>
     ) {
         if (processedCount < totalNodeCount) {
             val remainingNodes = workingIndegree.keys.toSet()
-            issues.add(createCycleDetectionIssue(remainingNodes, processedCount, totalNodeCount))
+            issues.add(createCycleDetectionIssue(remainingNodes, processedCount, totalNodeCount, stepNames))
         }
     }
 
@@ -158,13 +161,15 @@ class DeterministicTopologicalSorter {
     private fun createCycleDetectionIssue(
         remainingNodes: Set<UUID>,
         emittedCount: Int,
-        totalCount: Int
+        totalCount: Int,
+        stepNames: Map<UUID, String>
     ): PlanIssue {
+        val names = remainingNodes.map { stepNames[it] ?: it.toString() }.sorted()
         return PlanIssue(
             severity = PlanIssueSeverity.ERROR,
             code = "WORKFLOW_CYCLE_DETECTED",
             message = "Circular dependency detected in workflow. Processed $emittedCount of $totalCount nodes. " +
-                    "Steps involved in cycle: ${remainingNodes.map { it.toString() }.sorted().joinToString(", ")}",
+                    "Steps in or depending on the cycle: ${names.joinToString(", ") { "'$it'" }}",
             stepId = null
         )
     }

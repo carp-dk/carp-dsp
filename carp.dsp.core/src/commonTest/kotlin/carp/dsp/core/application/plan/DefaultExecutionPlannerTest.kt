@@ -184,6 +184,8 @@ class DefaultExecutionPlannerTest
         assertNotNull( issue )
         assertEquals( PlanIssueSeverity.ERROR, issue.severity )
         assertTrue( issue.message.contains( missingEnvId.toString() ) )
+        assertEquals( step.metadata.id, issue.stepId )
+        assertTrue( issue.message.contains( step.metadata.name ) )
     }
 
     // ── Multiple Steps Tests ──────────────────────────────────────────────────

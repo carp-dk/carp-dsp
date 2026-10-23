@@ -217,6 +217,10 @@ private fun latexNumbers(inline: Strategy, library: Strategy): String = buildStr
     macro("StepReuseInlineLines", inline.authoredLines)
     macro("StepReuseLibraryLines", library.authoredLines)
     macro("StepReuseInlineDuplicatedLines", inline.duplicatedLines)
+    // Composition from the library: steps written out rather than referenced, and
+    // the YAML each reference takes (wiring only).
+    macro("StepReuseLibraryInlineSteps", library.totalInline)
+    macro("StepReuseWiringLinesPerUse", Math.round(library.authoredLines.toDouble() / library.total).toInt())
 }
 
 /**

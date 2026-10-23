@@ -27,14 +27,18 @@ class EnvironmentRefResolver {
         for (envId in uniqueEnvIds) {
             val definition = definitions[envId]
             if (definition == null) {
-                issues.add(
-                    PlanIssue(
-                        severity = PlanIssueSeverity.ERROR,
-                        code = "MISSING_ENVIRONMENT_DEFINITION",
-                        message = "Environment '$envId' referenced by step(s) but not defined.",
-                        stepId = null
+                // One issue per referencing step, so each names the step to fix.
+                steps.filter { it.environmentId == envId }.forEach { step ->
+                    issues.add(
+                        PlanIssue(
+                            severity = PlanIssueSeverity.ERROR,
+                            code = "MISSING_ENVIRONMENT_DEFINITION",
+                            message = "Step '${step.metadata.name}' uses environment '$envId', " +
+                                "which the workflow does not define.",
+                            stepId = step.metadata.id
+                        )
                     )
-                )
+                }
             } else {
                 val envRef = createEnvironmentRef(envId, definition)
                 if (envRef != null) {
