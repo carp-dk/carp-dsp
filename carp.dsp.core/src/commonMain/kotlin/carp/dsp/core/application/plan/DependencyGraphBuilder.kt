@@ -2,10 +2,12 @@ package carp.dsp.core.application.plan
 
 import dk.cachet.carp.analytics.application.plan.PlanIssue
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
+import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
+import dk.cachet.carp.common.application.data.DataType
 
 /**
  * Builds a directed dependency graph from workflow steps based on cross-step data dependencies.
@@ -104,6 +106,7 @@ class DependencyGraphBuilder
             if ( isValidDependency )
             {
                 validateTypeCompatibility( stepId, dependency, context )
+                validateDataTypeCompatibility( stepId, dependency, context )
             }
 
             if (
@@ -209,7 +212,9 @@ class DependencyGraphBuilder
                     producerOutputId = producerOutput?.id,
                     outputName = input.name,
                     consumerInputFormat = input.schema?.format,
-                    producerOutputFormat = producerOutput?.schema?.format
+                    producerOutputFormat = producerOutput?.schema?.format,
+                    consumerDataTypes = input.schema.dataTypes(),
+                    producerDataTypes = producerOutput?.schema.dataTypes()
                 )
             }
         }
@@ -252,6 +257,41 @@ class DependencyGraphBuilder
     }
 
     /**
+     * Adds an ERROR issue if a resolved data connection is missing a CARP data type
+     * the consuming input declares.
+     *
+     * A connection is flagged only when both ports declare data types and the producer
+     * does not provide every type the consumer expects. Types are compared by full
+     * namespaced id, so `dk.cachet.carp.heartrate` and `org.example.heartrate` differ.
+     * Ports that declare no data types are left unchecked.
+     */
+    private fun validateDataTypeCompatibility(
+        consumerStepId: UUID,
+        dependency: CrossStepDependency,
+        context: DependencyResolutionContext
+    )
+    {
+        val expected = dependency.consumerDataTypes
+        val provided = dependency.producerDataTypes
+        if ( expected.isEmpty() || provided.isEmpty() ) return
+
+        val missing = expected - provided
+        if ( missing.isEmpty() ) return
+
+        context.issues.add(
+            PlanIssue(
+                severity = PlanIssueSeverity.ERROR,
+                code = "DEPENDENCY_DATA_TYPE_MISMATCH",
+                message = "Input '${dependency.outputName}' expects data type(s) " +
+                    "${missing.sortedBy { it.toString() }.joinToString()} " +
+                    "but producer step '${dependency.producerStepRef}' provides " +
+                    "${provided.sortedBy { it.toString() }.joinToString()}.",
+                stepId = consumerStepId
+            )
+        )
+    }
+
+    /**
      * Adds ERROR issue if step depends on itself.
      */
     private fun validateNoSelfDependency(
@@ -286,8 +326,14 @@ data class CrossStepDependency(
     val producerOutputId: UUID?, // resolved producer output UUID
     val outputName: String, // output name — error messages
     val consumerInputFormat: FileFormat? = null, // declared type of the consuming input
-    val producerOutputFormat: FileFormat? = null // declared type of the producing output
+    val producerOutputFormat: FileFormat? = null, // declared type of the producing output
+    val consumerDataTypes: Set<DataType> = emptySet(), // CARP data types the consuming input expects
+    val producerDataTypes: Set<DataType> = emptySet() // CARP data types the producing output provides
 )
+
+/** The CARP data types declared by this schema's columns; empty when none are declared. */
+private fun DataSchema?.dataTypes(): Set<DataType> =
+    this?.columns.orEmpty().map { it.dataType }.toSet()
 
 /**
  * Immutable result containing graph structure and collected validation issues.

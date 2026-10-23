@@ -64,6 +64,9 @@ internal object PortExporter
             DataDescriptor(
                 fileFormat = it.format.extension,
                 encoding = it.encoding,
+                fields = it.columns.orEmpty().map { column ->
+                    DataField( name = column.name, dataType = column.dataType )
+                },
             )
         }
 }
