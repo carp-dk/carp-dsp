@@ -1,5 +1,6 @@
  package carp.dsp.core.application.authoring.mapper
 
+import carp.dsp.core.application.authoring.descriptor.DataField
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
@@ -8,6 +9,7 @@ import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
+import dk.cachet.carp.analytics.domain.data.ColumnSpec
 import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
@@ -221,6 +223,9 @@ internal object PortImporter
     /**
      * Maps a data descriptor to a data schema.
      *
+     * Fields that declare a CARP data type become schema columns; fields without one
+     * are not carried into the schema.
+     *
      * @param descriptor The data port descriptor
      * @return Domain DataSchema or null if type not specified
      */
@@ -229,9 +234,15 @@ internal object PortImporter
             if ( it.fileFormat == null ) null
             else DataSchema(
                 format = parseFileFormat( it.fileFormat ),
+                columns = importColumns( it.fields ),
                 encoding = it.encoding ?: "UTF-8",
             )
         }
+
+    private fun importColumns( fields: List<DataField> ): List<ColumnSpec>? =
+        fields.mapNotNull { field ->
+            field.dataType?.let { type -> ColumnSpec( name = field.name, dataType = type ) }
+        }.ifEmpty { null }
 
     /**
      * Parses a file format string to [FileFormat] enum.

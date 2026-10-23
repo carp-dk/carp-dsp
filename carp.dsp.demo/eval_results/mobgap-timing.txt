@@ -370,3 +370,66 @@ Output determinism across 2 runs (same machine):
   Identical: 0 / 0, differing: 0
 
 
+======================================================================
+Mobgap timed run 1 - 2026-10-23T12:31:53.938376400Z
+Status: FAILED
+Total wall clock: 13444 ms
+(run 1 includes env setup + dataset download - use later runs for steady state)
+
+Framework phases (ms):
+  decode-yaml             213
+  import                   71
+  plan                    302
+  validate                  0
+  stage-workspace          16
+  execute-total         12740
+  bundle                   56
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=    -1  compute=   n/a  overhead=  n/a
+
+Outputs (bytes, sha256):
+
+======================================================================
+Mobgap timed run 2 - 2026-10-23T12:31:53.940378700Z
+Status: FAILED
+Total wall clock: 372 ms
+
+Framework phases (ms):
+  decode-yaml              12
+  import                    4
+  plan                      1
+  validate                  0
+  stage-workspace          17
+  execute-total           311
+  bundle                    7
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=    -1  compute=   n/a  overhead=  n/a
+
+Outputs (bytes, sha256):
+
+======================================================================
+Mobgap timed run 3 - 2026-10-23T12:31:53.940378700Z
+Status: FAILED
+Total wall clock: 296 ms
+
+Framework phases (ms):
+  decode-yaml               9
+  import                    5
+  plan                      1
+  validate                  0
+  stage-workspace          17
+  execute-total           239
+  bundle                    4
+
+Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
+  Import IMU Data                          total=    -1  compute=   n/a  overhead=  n/a
+
+Outputs (bytes, sha256):
+
+======================================================================
+Output determinism across 3 runs (same machine):
+  Identical: 0 / 0, differing: 0
+
+

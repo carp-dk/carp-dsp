@@ -12,6 +12,8 @@
 #   pixi run fixtures    # regenerate the 5 injected workflow YAMLs (only if the base changed)
 #   pixi run plot-scaling  # Fig E figure       -> eval_results/fig-planner-scaling.pdf
 #                          (invoked automatically by the planner-scaling-eval Kotlin arm)
+#   pixi run plot-overhead # Fig D figure       -> eval_results/fig-orchestration-overhead.pdf
+#                          (invoked automatically by evalMobgapTiming)
 #
 # Override the figure output (e.g. straight into the paper repo):
 #   pixi run plot --out ../../../../../../../carp-dsp-sys-paper/images/fig-error-detection.pdf
@@ -39,4 +41,5 @@ fixtures = "python gen_injections.py"
 baseline = "python adhoc_baseline.py"
 plot = "python plot_error_detection.py"
 plot-scaling = "python plot_planner_scaling.py"
+plot-overhead = "python plot_orchestration_overhead.py"
 figure = { depends-on = ["baseline", "plot"] }

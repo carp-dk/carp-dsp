@@ -1,5 +1,6 @@
 package carp.dsp.core.application.plan
 
+import dk.cachet.carp.analytics.domain.data.ColumnSpec
 import dk.cachet.carp.analytics.domain.data.DataSchema
 import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
@@ -10,6 +11,7 @@ import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.analytics.domain.workflow.StepMetadata
 import dk.cachet.carp.analytics.domain.workflow.Version
 import dk.cachet.carp.common.application.UUID
+import dk.cachet.carp.common.application.data.DataType
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -191,6 +193,96 @@ class DependencyGraphBuilderTest
         val result = builder.build( listOf( producer, consumer ) )
 
         assertTrue( result.issues.isEmpty() )
+    }
+
+    @Test
+    fun `build detects a missing data type on a connection with matching formats`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+
+        val producer =
+            createTypedStep( producerId, "producer", output = FileFormat.CSV, dataTypes = listOf( HEART_RATE ) )
+        val consumer =
+            createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.CSV, dataTypes = listOf( STEP_COUNT ) )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertEquals( listOf( "DEPENDENCY_DATA_TYPE_MISMATCH" ), result.issues.map { it.code } )
+        assertTrue( result.issues[0].message.contains( STEP_COUNT.toString() ) )
+    }
+
+    @Test
+    fun `build accepts a producer that provides every expected data type`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+
+        val producer = createTypedStep(
+            producerId, "producer", output = FileFormat.CSV, dataTypes = listOf( HEART_RATE, STEP_COUNT )
+        )
+        val consumer =
+            createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.CSV, dataTypes = listOf( HEART_RATE ) )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertTrue( result.issues.isEmpty() )
+    }
+
+    @Test
+    fun `build treats the same data type name in another namespace as different`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+        val otherHeartRate = DataType( "org.example.data", "heartrate" )
+
+        val producer =
+            createTypedStep( producerId, "producer", output = FileFormat.CSV, dataTypes = listOf( otherHeartRate ) )
+        val consumer =
+            createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.CSV, dataTypes = listOf( HEART_RATE ) )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertEquals( listOf( "DEPENDENCY_DATA_TYPE_MISMATCH" ), result.issues.map { it.code } )
+    }
+
+    @Test
+    fun `build leaves data types unchecked when either port declares none`()
+    {
+        val builder = DependencyGraphBuilder()
+        val untypedProducerId = UUID.randomUUID()
+        val typedProducerId = UUID.randomUUID()
+
+        val untypedProducer = createTypedStep( untypedProducerId, "untyped-producer", output = FileFormat.CSV )
+        val typedConsumer = createTypedConsumer(
+            "typed-consumer", untypedProducerId, inputFormat = FileFormat.CSV, dataTypes = listOf( HEART_RATE )
+        )
+        val typedProducer =
+            createTypedStep( typedProducerId, "typed-producer", output = FileFormat.CSV, dataTypes = listOf( HEART_RATE ) )
+        val untypedConsumer = createTypedConsumer( "untyped-consumer", typedProducerId, inputFormat = FileFormat.CSV )
+
+        val result = builder.build( listOf( untypedProducer, typedConsumer, typedProducer, untypedConsumer ) )
+
+        assertTrue( result.issues.isEmpty() )
+    }
+
+    @Test
+    fun `build reports both a format and a data type mismatch on one connection`()
+    {
+        val builder = DependencyGraphBuilder()
+        val producerId = UUID.randomUUID()
+
+        val producer =
+            createTypedStep( producerId, "producer", output = FileFormat.CSV, dataTypes = listOf( HEART_RATE ) )
+        val consumer =
+            createTypedConsumer( "consumer", producerId, inputFormat = FileFormat.JSON, dataTypes = listOf( STEP_COUNT ) )
+
+        val result = builder.build( listOf( producer, consumer ) )
+
+        assertEquals(
+            setOf( "DEPENDENCY_TYPE_MISMATCH", "DEPENDENCY_DATA_TYPE_MISMATCH" ),
+            result.issues.map { it.code }.toSet()
+        )
     }
 
     @Test
@@ -441,7 +533,8 @@ class DependencyGraphBuilderTest
     private fun createTypedStep(
         id: UUID,
         name: String,
-        output: FileFormat
+        output: FileFormat,
+        dataTypes: List<DataType> = emptyList()
     ): Step = Step(
         metadata = StepMetadata(
             id = id,
@@ -454,7 +547,7 @@ class DependencyGraphBuilderTest
             OutputDataSpec(
                 id = UUID.randomUUID(),
                 name = "Output shared",
-                schema = DataSchema( format = output, encoding = "UTF-8" ),
+                schema = DataSchema( format = output, columns = columnsOf( dataTypes ), encoding = "UTF-8" ),
                 location = FileLocation( path = "", format = output )
             )
         ),
@@ -466,7 +559,8 @@ class DependencyGraphBuilderTest
     private fun createTypedConsumer(
         name: String,
         producerId: UUID,
-        inputFormat: FileFormat
+        inputFormat: FileFormat,
+        dataTypes: List<DataType> = emptyList()
     ): Step = Step(
         metadata = StepMetadata(
             id = UUID.randomUUID(),
@@ -478,7 +572,7 @@ class DependencyGraphBuilderTest
             InputDataSpec(
                 id = UUID.randomUUID(),
                 name = "Output shared",
-                schema = DataSchema( format = inputFormat, encoding = "UTF-8" ),
+                schema = DataSchema( format = inputFormat, columns = columnsOf( dataTypes ), encoding = "UTF-8" ),
                 location = FileLocation( path = "", format = inputFormat ),
                 stepRef = producerId.toString(),
                 required = true
@@ -488,4 +582,13 @@ class DependencyGraphBuilderTest
         task = TestTask( name = "task-$name" ),
         environmentId = UUID.randomUUID()
     )
+
+    private fun columnsOf( dataTypes: List<DataType> ): List<ColumnSpec>? =
+        dataTypes.map { ColumnSpec( name = it.name, dataType = it ) }.ifEmpty { null }
+
+    private companion object
+    {
+        val HEART_RATE = DataType( "dk.cachet.carp", "heartrate" )
+        val STEP_COUNT = DataType( "dk.cachet.carp", "stepcount" )
+    }
 }

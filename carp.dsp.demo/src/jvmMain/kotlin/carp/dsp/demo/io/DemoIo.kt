@@ -76,4 +76,40 @@ object DemoIo
      */
     fun demoResultsDir( name: String ): File =
         projectRoot().resolve( "demo_results" ).resolve( name )
+
+    /**
+     * The paper repository to publish evaluation artefacts into, or null when none is set.
+     *
+     * Set with `-PpaperDir=<path>` on an eval task, which passes it as the
+     * [PAPER_DIR_PROPERTY] system property.
+     *
+     * @throws IllegalStateException when the property is set but the directory does not exist.
+     */
+    fun paperDir(): File?
+    {
+        val path = System.getProperty( PAPER_DIR_PROPERTY )?.takeIf { it.isNotBlank() } ?: return null
+        val dir = File( path )
+        check( dir.isDirectory ) { "Paper directory not found: ${dir.absolutePath}" }
+        return dir
+    }
+
+    /**
+     * Copies [source] to [relativePath] inside the paper repository, when one is set.
+     *
+     * Figures go under `images/` and tables or macros under `generated/`, matching the
+     * paths the paper already includes. Does nothing when no paper directory is set.
+     *
+     * @return The written file, or null when no paper directory is set.
+     */
+    fun publishToPaper( source: File, relativePath: String ): File?
+    {
+        val target = paperDir()?.resolve( relativePath ) ?: return null
+        target.parentFile.mkdirs()
+        source.copyTo( target, overwrite = true )
+        println( "Published to paper: ${target.absolutePath}" )
+        return target
+    }
+
+    /** System property naming the paper repository; see [paperDir]. */
+    const val PAPER_DIR_PROPERTY: String = "carp.paperDir"
 }

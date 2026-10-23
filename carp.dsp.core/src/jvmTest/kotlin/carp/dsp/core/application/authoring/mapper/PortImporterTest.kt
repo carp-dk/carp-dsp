@@ -1,12 +1,14 @@
 package carp.dsp.core.application.authoring.mapper
 
 import carp.dsp.core.application.authoring.descriptor.DataDescriptor
+import carp.dsp.core.application.authoring.descriptor.DataField
 import carp.dsp.core.application.authoring.descriptor.DataPortDescriptor
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableInputSource
 import carp.dsp.core.application.authoring.descriptor.EnvironmentVariableOutputDestination
 import carp.dsp.core.application.authoring.descriptor.ExternalInputSource
 import carp.dsp.core.application.authoring.descriptor.FileInputSource
 import carp.dsp.core.application.authoring.descriptor.FileOutputDestination
+import carp.dsp.core.application.authoring.descriptor.OntologyRef
 import carp.dsp.core.application.authoring.descriptor.ProtocolInputSource
 import carp.dsp.core.application.authoring.descriptor.ProtocolRefDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
@@ -14,6 +16,7 @@ import dk.cachet.carp.analytics.domain.data.FileFormat
 import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.data.InMemoryLocation
 import dk.cachet.carp.common.application.UUID
+import dk.cachet.carp.common.application.data.DataType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -241,6 +244,43 @@ class PortImporterTest
 
         val fileLocation = result.location as FileLocation
         assertEquals( FileFormat.JSON, fileLocation.format )
+    }
+
+    @Test
+    fun `importInputPort carries declared CARP data types into schema columns`()
+    {
+        val heartRate = DataType( "dk.cachet.carp", "heartrate" )
+        val descriptor = DataPortDescriptor(
+            id = "port-hr",
+            source = FileInputSource( path = "/data/hr.csv" ),
+            descriptor = DataDescriptor(
+                fileFormat = "csv",
+                fields = listOf(
+                    DataField( name = "bpm", dataType = heartRate ),
+                    DataField( name = "note", ontologyRef = OntologyRef( "http://example.org/note" ) )
+                )
+            )
+        )
+
+        val result = PortImporter.importInputPort( descriptor, workflowNamespace = workflowNamespace )
+
+        val columns = result.schema?.columns.orEmpty()
+        assertEquals( listOf( "bpm" ), columns.map { it.name } )
+        assertEquals( heartRate, columns.single().dataType )
+    }
+
+    @Test
+    fun `importInputPort leaves schema columns null when no field declares a data type`()
+    {
+        val descriptor = DataPortDescriptor(
+            id = "port-generic",
+            source = FileInputSource( path = "/data/table.csv" ),
+            descriptor = DataDescriptor( fileFormat = "csv", fields = listOf( DataField( name = "value" ) ) )
+        )
+
+        val result = PortImporter.importInputPort( descriptor, workflowNamespace = workflowNamespace )
+
+        assertNull( result.schema?.columns )
     }
 
     // ── Output Port Tests ─────────────────────────────────────────────────────
