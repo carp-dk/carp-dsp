@@ -4,10 +4,13 @@ import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.resolve.StepLibrary
 import carp.dsp.core.application.authoring.resolve.WorkflowResolution
+import carp.dsp.core.application.authoring.validation.LinterConfiguration
+import carp.dsp.core.application.authoring.validation.WorkflowLinter
 import carp.dsp.core.application.execution.ExecutionLogger
 import carp.dsp.core.application.execution.NoOpExecutionLogger
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.application.plan.ProtocolDataTypeProvider
+import carp.dsp.core.application.plan.withLintIssues
 import carp.dsp.core.infrastructure.execution.DefaultPlanExecutor
 import carp.dsp.core.infrastructure.execution.FileSystemArtefactStore
 import carp.dsp.core.infrastructure.execution.workspace.DefaultWorkspaceManager
@@ -94,6 +97,7 @@ class WorkflowExecutor(
         val runPolicy: RunPolicy = DefaultRunPolicy(),
         val workflowNamespace: UUID? = null,
         val executorOptions: DefaultPlanExecutor.Options = DefaultPlanExecutor.Options(),
+        val linterConfiguration: LinterConfiguration = LinterConfiguration(),
     )
 
     private val codec = WorkflowYamlCodec()
@@ -138,11 +142,14 @@ class WorkflowExecutor(
     ): PreparedWorkflow
     {
         val resolved = WorkflowResolution.resolve( source.file, descriptor, stepLibrary )
+        // Lint the resolved workflow, where step and environment keys are still as written;
+        // its errors join the plan's, so the executor refuses the run.
+        val lint = WorkflowLinter.lint( resolved.workflow, options.linterConfiguration )
         val importer = options.workflowNamespace
             ?.let { WorkflowDescriptorImporter( it ) }
             ?: WorkflowDescriptorImporter()
         val definition = importer.import( resolved.workflow )
-        val plan = DefaultExecutionPlanner( options.protocolDataTypeProvider ).plan( definition )
+        val plan = DefaultExecutionPlanner( options.protocolDataTypeProvider ).plan( definition ).withLintIssues( lint )
 
         return PreparedWorkflow(
             descriptor = resolved.workflow,

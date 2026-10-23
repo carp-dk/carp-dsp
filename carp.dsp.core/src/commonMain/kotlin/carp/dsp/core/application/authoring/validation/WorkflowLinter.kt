@@ -18,7 +18,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
  * - Environment references (exist, valid kind)
  * - Step dependency cycles
  * - Upstream step references (exist)
- * - UUID format validation (when present)
+ * - Malformed UUIDs (IDs shaped like a UUID that are not valid ones)
  *
  * Returns a list of [ValidationIssue] with ERROR or WARNING severity levels.
  *
@@ -35,7 +35,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 object WorkflowLinter
 {
     private val logger = KotlinLogging.logger {}
-    private val SUPPORTED_ENV_KINDS = setOf("conda", "pixi", "python", "system")
+    // Must match the kinds EnvironmentImporter accepts.
+    private val SUPPORTED_ENV_KINDS = setOf("conda", "pixi", "r", "docker", "system")
 
     /**
      * Validates a workflow descriptor and returns all linting issues.
@@ -245,14 +246,14 @@ object WorkflowLinter
         descriptor.steps.forEach { step ->
             // Check step ID format
             val stepId = step.id
-            if (stepId != null && !isValidUuid(stepId))
+            if (stepId != null && looksLikeMalformedUuid(stepId))
             {
                 issues.add(
                     ValidationIssue(
                         severity = ValidationSeverity.WARNING,
                         code = ValidationErrorCode.INVALID_UUID_FORMAT,
-                        message = "Step ID '${step.id}' is not a valid UUID. " +
-                            "Use semantic IDs (e.g., 'step-1') or valid UUIDs.",
+                        message = "Step ID '${step.id}' looks like a UUID but is not a valid one. " +
+                            "Use a semantic ID (e.g., 'step-1') or a valid UUID.",
                         path = "steps[${step.id}].id",
                         subjectId = step.id
                     )
@@ -261,13 +262,13 @@ object WorkflowLinter
 
             // Check task ID format (a referenced step has no inline task).
             val taskId = (step as? DefinedStepDescriptor)?.task?.id
-            if (taskId != null && !isValidUuid(taskId))
+            if (taskId != null && looksLikeMalformedUuid(taskId))
             {
                 issues.add(
                     ValidationIssue(
                         severity = ValidationSeverity.WARNING,
                         code = ValidationErrorCode.INVALID_UUID_FORMAT,
-                        message = "Task ID '$taskId' is not a valid UUID. " +
+                        message = "Task ID '$taskId' looks like a UUID but is not a valid one. " +
                             "Task IDs can be semantic strings or UUIDs.",
                         path = "steps[${step.id}].task.id",
                         subjectId = step.id
@@ -566,6 +567,18 @@ object WorkflowLinter
      * - Non-hex characters
      * - Semantic strings like "step-001" (intentionally invalid)
      */
+    /**
+     * True for an ID shaped like a UUID (hex groups and dashes, about UUID length) that is
+     * not a valid one, i.e. a mistyped UUID. Semantic IDs such as 'gsd' are not flagged.
+     */
+    private fun looksLikeMalformedUuid(s: String): Boolean =
+        s.count { it == '-' } == UUID_DASHES && s.length in UUID_LIKE_MIN_LENGTH..UUID_LIKE_MAX_LENGTH &&
+            s.all { it.isLetterOrDigit() || it == '-' } && !isValidUuid(s)
+
+    private const val UUID_DASHES = 4
+    private const val UUID_LIKE_MIN_LENGTH = 32
+    private const val UUID_LIKE_MAX_LENGTH = 40
+
     private fun isValidUuid(s: String): Boolean
     {
         // Standard UUID pattern: 8-4-4-4-12 hex digits
