@@ -14,7 +14,6 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.FileTime
 import java.security.MessageDigest
 import java.time.Instant
-import java.util.UUID as JavaUUID
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
@@ -22,6 +21,7 @@ import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+import java.util.UUID as JavaUUID
 
 // A script's own folder is part of what it runs: it may import its neighbours.
 private val SCRIPT_EXTENSIONS = setOf("py", "r", "jl", "sh", "js", "ts", "kts")
@@ -31,6 +31,7 @@ private const val ENTRY = "entry.properties"
 private const val BYTES_PER_GIGABYTE = 1L shl 30
 private const val HEX_RADIX = 16
 private const val BYTE_MASK = 0xff
+private const val READ_BUFFER_BYTES = 1 shl 16
 
 /**
  * Outputs of earlier steps, kept so a step that would compute the same thing again
@@ -144,6 +145,7 @@ class StepCache(
      *
      * Never throws: a cache that cannot be written only means the next run computes again.
      */
+    @Suppress("TooGenericExceptionCaught")
     fun store(key: String, step: PlannedStep, workspace: ExecutionWorkspace, runId: String, stdout: String?)
     {
         val entry = directory.resolve(key)
@@ -174,6 +176,7 @@ class StepCache(
         }
         catch (e: Exception)
         {
+            // The cache is an optimisation: any failure to store must leave the run unaffected.
             logger.warn(e) { "Could not cache the outputs of '${step.metadata.name}'" }
         }
         finally
@@ -260,7 +263,7 @@ class StepCache(
         return fileHashes.getOrPut(key) {
             val digest = MessageDigest.getInstance("SHA-256")
             Files.newInputStream(file).use { stream ->
-                val buffer = ByteArray(1 shl 16)
+                val buffer = ByteArray(READ_BUFFER_BYTES)
                 while (true)
                 {
                     val read = stream.read(buffer)

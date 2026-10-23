@@ -328,17 +328,20 @@ class DefaultPlanExecutor(
 
     // Step cache: a step that would compute what an earlier run already did reuses its outputs.
 
+    @Suppress("TooGenericExceptionCaught")
     private fun fingerprintOf(step: PlannedStep, context: KnownStepExecutionContext): String? {
         val cache = options.stepCache ?: return null
         if (!context.reusable(step)) return null
         return try {
             cache.fingerprint(step, context.workspace, step.environmentRef?.let { context.environments[it] })
         } catch (e: Exception) {
+            // The cache is an optimisation: any failure falls back to running the step.
             logger.warn(e) { "Could not fingerprint step '${step.metadata.name}'; it runs" }
             null
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun reuse(step: PlannedStep, key: String?, context: KnownStepExecutionContext): StepRunResult? {
         val cache = options.stepCache ?: return null
         if (key == null) return null
@@ -364,6 +367,7 @@ class DefaultPlanExecutor(
                 )
             )
         } catch (e: Exception) {
+            // The cache is an optimisation: any failure falls back to running the step.
             logger.warn(e) { "Could not reuse the outputs of step '${step.metadata.name}'; it runs" }
             null
         }
