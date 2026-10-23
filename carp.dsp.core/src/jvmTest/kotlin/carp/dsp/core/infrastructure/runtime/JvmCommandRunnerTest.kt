@@ -311,4 +311,20 @@ class JvmCommandRunnerTest {
             runner.resolveUnderRoot(tempDir, rel)
         }
     }
+
+    @Test
+    fun extra_environment_reaches_the_process_over_the_inherited_one() {
+        val withExtra = JvmCommandRunner(environment = mapOf("CARP_DSP_RUNNER_TEST_VAR" to "from-runner"))
+
+        val result = withExtra.run(helperCommand("env", "CARP_DSP_RUNNER_TEST_VAR"), defaultPolicy())
+
+        assertEquals("from-runner", result.stdout.trim())
+    }
+
+    @Test
+    fun without_extra_environment_the_process_sees_only_the_inherited_one() {
+        val result = runner.run(helperCommand("env", "CARP_DSP_RUNNER_TEST_VAR"), defaultPolicy())
+
+        assertEquals("", result.stdout.trim())
+    }
 }

@@ -1,7 +1,8 @@
-@file:Suppress("PackageDirectoryMismatch")
+@file:Suppress("PackageDirectoryMismatch", "FunctionName")
 
 package carp.dsp.steps.sql
 
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -97,5 +98,27 @@ class QuerySqlArgsTest {
         listOf("--url", "--user", "--password").forEach { flag ->
             assertTrue(refused(*required.toTypedArray(), flag, "x").contains(flag), flag)
         }
+    }
+
+    @Test
+    fun `from and to read a date-time with an offset`() {
+        val config = parseQuerySqlArgs(
+            required + listOf("--from", "2026-10-12T12:00:00+02:00", "--to", "2026-10-12T10:15:00Z"),
+        )
+
+        assertEquals(Instant.parse("2026-10-12T10:00:00Z"), config.from)
+        assertEquals(Instant.parse("2026-10-12T10:15:00Z"), config.to)
+    }
+
+    @Test
+    fun `a date alone is its start in UTC`() {
+        val config = parseQuerySqlArgs(required + listOf("--from", "2026-10-12"))
+
+        assertEquals(Instant.parse("2026-10-12T00:00:00Z"), config.from)
+    }
+
+    @Test
+    fun `a date-time without an offset is refused, since its zone would be a guess`() {
+        assertTrue(refused(*required.toTypedArray(), "--from", "2026-10-12T10:00").contains("--from"))
     }
 }

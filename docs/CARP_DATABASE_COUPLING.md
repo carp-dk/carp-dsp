@@ -82,13 +82,38 @@ FROM data_stream_sequence s
               ON g.group_id = i.study_deployment_id
                   AND g.is_deployed
 WHERE g.study_id = :studyId
+  AND (CAST(:from AS timestamp) IS NULL OR s.created_at >= :from)
+  AND (CAST(:to AS timestamp) IS NULL OR s.created_at < :to)
+  AND NOT EXISTS (
+      -- A re-upload covered by another sequence of the same stream. Of two
+      -- identical ranges, the first stored is kept.
+      SELECT 1
+      FROM data_stream_sequence o
+      WHERE o.data_stream_id = s.data_stream_id
+        AND o.id <> s.id
+        AND o.first_sequence_id <= s.first_sequence_id
+        AND o.last_sequence_id >= s.last_sequence_id
+        AND (o.first_sequence_id < s.first_sequence_id
+            OR o.last_sequence_id > s.last_sequence_id
+            OR o.id < s.id))
 ORDER BY i.id, s.first_sequence_id;
 ```
 
-The time window is not here, deliberately: `sensorStartTime` is the *sensor's*
-clock and only means UTC once the sequence's `syncPoint` is applied, so a `WHERE`
-on it filters the wrong axis for any device whose clock drifted. The decoder
-synchronises first, then filters.
+`:from` and `:to` come from the step's `--from` and `--to`, and select by when a
+sequence *arrived* (`created_at`, written in UTC). Left unset, the window is
+open and every sequence is read. Arrival time is what a scheduled run needs: a
+phone that uploads a day late still lands in the next window.
+
+The `NOT EXISTS` drops a sequence whose range another sequence of the same
+stream already covers. Phones re-upload after a failed send, and the web service
+stores the repeat; the decoder refuses overlapping sequences, so the query
+leaves them out. A partial overlap is not dropped and still fails the decode,
+since which copy is right cannot be told from here.
+
+A window on *measurement* time is not here, deliberately: `sensorStartTime` is
+the sensor's clock and only means UTC once the sequence's `syncPoint` is
+applied, so a `WHERE` on it filters the wrong axis for any device whose clock
+drifted. The decoder synchronises first, then filters.
 
 ## The snapshot is kotlinx JSON
 
@@ -117,6 +142,7 @@ path, and that is worth finding out rather than working around.
 **The web service registers `Data` subclasses carp-dsp does not have** - consent,
 diagnosis, phone number, date of birth and others. carp-core wraps an
 unresolvable `__type` as `CustomData` instead of failing and recovers the type
-from `data.className`, so those rows survive and land in the generic column.
+from `data.className`, so those rows survive, with a column per top-level
+field of their original JSON.
 They are also mostly participant details: the statement is the only thing
 scoping what comes out.

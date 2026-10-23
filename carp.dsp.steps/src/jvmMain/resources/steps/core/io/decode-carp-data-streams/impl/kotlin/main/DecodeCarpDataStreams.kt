@@ -21,7 +21,7 @@ Usage: decode-carp-data-streams --input <path> --measurements <path> [options]
   --to <epoch ms>         window end, exclusive
 
 The input must select study_deployment_id, device_role_name, data_type,
-first_sequence_id and snapshot, ordered by stream and first sequence id.
+first_sequence_id and snapshot, in any order.
 """
 
 /**

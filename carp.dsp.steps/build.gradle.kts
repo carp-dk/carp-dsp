@@ -51,6 +51,14 @@ kotlin {
             dependencies {
                 implementation("org.postgresql:postgresql:42.7.4")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+                // For the IDE only. It does not apply the excludes above, so it files
+                // each step's impl/kotlin/test under main as well, where the test
+                // libraries are missing and every import is flagged. compileOnly keeps
+                // them out of the runtime classpath, and so out of the task runtime jar.
+                compileOnly(kotlin("test-junit"))
+                compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
+                compileOnly("dk.cachet.carp:carp-core-protocols")
             }
         }
 

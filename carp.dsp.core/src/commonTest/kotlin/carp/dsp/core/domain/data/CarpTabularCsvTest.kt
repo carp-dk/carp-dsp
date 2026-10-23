@@ -5,11 +5,16 @@ import dk.cachet.carp.common.application.data.Acceleration
 import dk.cachet.carp.common.application.data.DataType
 import dk.cachet.carp.common.application.data.HeartRate
 import dk.cachet.carp.common.application.data.StepCount
+import dk.cachet.carp.common.application.data.TriggeredTask
+import dk.cachet.carp.common.application.triggers.TaskControl
+import dk.cachet.carp.common.infrastructure.serialization.DataSerializer
+import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
 import dk.cachet.carp.data.application.DataStreamId
 import dk.cachet.carp.data.application.MutableDataStreamBatch
 import dk.cachet.carp.data.application.SyncPoint
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -144,5 +149,66 @@ class CarpTabularCsvTest {
         val csv = lines(CarpTabularCsv.provenance(tabular(awkward)))
 
         assertTrue(csv[1].contains("\"phone, \"\"left\"\" pocket\""), csv[1])
+    }
+
+    // ── Types without a row of their own ──────────────────────────────────────
+
+    private fun unknown(type: String, source: String, namespace: String = "dk.cachet.carp") = GenericMeasurementRow(
+        1000L, null, DataType(namespace, type),
+        metadata(0, 0, "phone", type),
+        createDefaultJSON().decodeFromString(DataSerializer, source),
+    )
+
+    @Test
+    fun `a type carp-core does not know gets a column per field`() {
+        val row = unknown("stepevent", """{"__type":"dk.cachet.carp.stepevent","steps":50423}""")
+
+        val csv = lines(CarpTabularCsv.measurements(tabular(row)))
+
+        assertTrue(csv[0].endsWith(",stepevent.steps"), csv[0])
+        assertTrue(csv[1].endsWith(",50423"), csv[1])
+        assertFalse(csv.joinToString().contains("CustomData"))
+    }
+
+    @Test
+    fun `a nested field is written as json and a null as an empty cell`() {
+        val source = """{"__type":"dk.cachet.carp.survey","status":"submitted","result":{"identifier":"who5.task"},"taskData":null}"""
+
+        val csv = lines(CarpTabularCsv.measurements(tabular(unknown("survey", source))))
+
+        assertEquals(
+            "row_id,data_type,sensor_start_time,sensor_end_time,duration_ms," +
+                "survey.result,survey.status,survey.taskData",
+            csv[0],
+        )
+        assertTrue(csv[1].endsWith(""","{""identifier"":""who5.task""}",submitted,"""), csv[1])
+    }
+
+    @Test
+    fun `a type in a namespace below carp's keeps it in its columns`() {
+        val wrapper = unknown(
+            "survey",
+            """{"__type":"dk.cachet.carp.completedapptask.survey","taskName":"WHO-5"}""",
+            namespace = "dk.cachet.carp.completedapptask",
+        )
+        val survey = unknown("survey", """{"__type":"dk.cachet.carp.survey","status":"submitted"}""")
+
+        val header = lines(CarpTabularCsv.measurements(tabular(wrapper, survey)))[0]
+
+        assertTrue(header.endsWith(",completedapptask.survey.taskName,survey.status"), header)
+    }
+
+    @Test
+    fun `a type carp-core knows but has no row for gets a column per field`() {
+        val row = GenericMeasurementRow(
+            1000L, null, DataType("dk.cachet.carp", "triggeredtask"),
+            metadata(0, 0, "phone", "triggeredtask"),
+            TriggeredTask(5, "Background Sensing Task", "phone", TaskControl.Control.Start),
+        )
+
+        val csv = lines(CarpTabularCsv.measurements(tabular(row)))
+
+        assertTrue(csv[0].contains(",triggeredtask.taskName,"), csv[0])
+        assertTrue(csv[1].contains(",Background Sensing Task,"), csv[1])
     }
 }

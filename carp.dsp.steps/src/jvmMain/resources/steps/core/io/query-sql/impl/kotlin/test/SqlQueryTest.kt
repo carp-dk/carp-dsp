@@ -1,8 +1,9 @@
-@file:Suppress("PackageDirectoryMismatch")
+@file:Suppress("PackageDirectoryMismatch", "FunctionName")
 
 package carp.dsp.steps.sql
 
 import java.io.File
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -45,7 +46,7 @@ class SqlQueryTest {
         val query = sqlQueryFrom(file, mapOf("first" to "1", "second" to "2"))
 
         assertEquals("SELECT * FROM t WHERE a = ? AND b = ?", query.sql)
-        assertEquals(listOf("2", "1"), query.params)
+        assertEquals(listOf(SqlValue.Text("2"), SqlValue.Text("1")), query.params)
     }
 
     @Test
@@ -82,5 +83,58 @@ class SqlQueryTest {
         val file = statementFile("DELETE FROM t")
 
         assertFailsWith<IllegalArgumentException> { sqlQueryFrom(file) }
+    }
+
+    // ── The time window ──────────────────────────────────────────────────────
+
+    private val from = Instant.parse("2026-10-12T10:00:00Z")
+    private val to = Instant.parse("2026-10-12T10:15:00Z")
+
+    @Test
+    fun `from and to bind to their placeholders as timestamps`() {
+        val file = statementFile("SELECT * FROM t WHERE s = :studyId AND c >= :from AND c < :to")
+
+        val query = sqlQueryFrom(file, mapOf("studyId" to "1"), from = from, to = to)
+
+        assertEquals(
+            listOf(SqlValue.Text("1"), SqlValue.Timestamp(from), SqlValue.Timestamp(to)),
+            query.params,
+        )
+    }
+
+    @Test
+    fun `an unset bound binds null, so a statement can leave its window open`() {
+        val file = statementFile("SELECT * FROM t WHERE (:from IS NULL OR c >= :from)")
+
+        val query = sqlQueryFrom(file)
+
+        assertEquals(listOf(SqlValue.Timestamp(null), SqlValue.Timestamp(null)), query.params)
+    }
+
+    @Test
+    fun `a bound with no placeholder is refused, so a window is not silently ignored`() {
+        val file = statementFile("SELECT * FROM t")
+
+        val failure = assertFailsWith<IllegalArgumentException> { sqlQueryFrom(file, from = from) }
+
+        assertTrue(failure.message.orEmpty().contains("--from"), failure.message.orEmpty())
+    }
+
+    @Test
+    fun `from and to cannot be given as parameters`() {
+        val file = statementFile("SELECT * FROM t WHERE c >= :from")
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            sqlQueryFrom(file, mapOf("from" to "2026-10-12"))
+        }
+
+        assertTrue(failure.message.orEmpty().contains("--from and --to"), failure.message.orEmpty())
+    }
+
+    @Test
+    fun `from must be before to`() {
+        val file = statementFile("SELECT * FROM t WHERE c >= :from AND c < :to")
+
+        assertFailsWith<IllegalArgumentException> { sqlQueryFrom(file, from = to, to = from) }
     }
 }

@@ -17,14 +17,21 @@ Usage: query-sql --query-file <path> --output <path> [options]
   --query-file <path>        one SELECT or WITH statement (required)
   --output <path>            CSV file to write (required)
   --param <name>=<value>     repeatable; bound to a :name in the statement
+  --from <date-time>         window start, bound to :from (ISO-8601, UTC)
+  --to <date-time>           window end, bound to :to; unset bounds bind NULL
   --connection-file <path>   properties file: url, user, password
   --max-rows <n>             fail rather than return more than n rows
   --fetch-size <n>           rows the driver reads at a time
   --allow-empty              treat a result with no rows as a result
+  --incremental              keep what earlier runs fetched and fetch only rows
+                             that arrived since the last --to; needs --to
 
 The database is named by --connection-file or by CARP_DSP_SQL_URL,
 CARP_DSP_SQL_USER and CARP_DSP_SQL_PASSWORD, never by an argument: a
 process listing shows arguments to every user on the host.
+
+With --incremental, stores are kept in CARP_DSP_QUERY_STORE, or in
+~/.carp-dsp/query-store when it is unset.
 """
 
 /**
@@ -41,10 +48,23 @@ fun querySql(args: List<String>, environment: Map<String, String> = System.geten
     val config = parseQuerySqlArgs(args)
 
     val target = sqlConnectionFrom(config.connectionFile, environment)
-    val query = sqlQueryFrom(config.queryFile, config.params, config.fetchSize, config.maxRows)
-        .copy(requireRows = config.requireRows)
+    val query = { from: java.time.Instant? ->
+        sqlQueryFrom(
+            file = config.queryFile,
+            values = config.params,
+            fetchSize = config.fetchSize,
+            maxRows = config.maxRows,
+            from = from,
+            to = config.to,
+        )
+            .copy(requireRows = config.requireRows)
+    }
 
-    return QuerySqlStep().run(target, query, config.output)
+    if (!config.incremental) return QuerySqlStep().run(target, query(config.from), config.output)
+
+    val result = QueryStore.from(environment).run(QuerySqlStep(), target, config, query)
+    System.err.println("Fetched ${result.fetched} new row(s); ${result.rows} in all.")
+    return result.rows
 }
 
 /**

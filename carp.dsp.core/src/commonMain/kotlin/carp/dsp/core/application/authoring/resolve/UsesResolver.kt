@@ -131,6 +131,8 @@ class UsesResolver( private val library: StepLibrary )
             id = reference.id ?: libraryStep.id,
             metadata = reference.metadata ?: libraryStep.metadata,
             dependsOn = reference.dependsOn,
+            // The consumer knows whether its source is fixed; the library sets the default.
+            cache = reference.cache ?: libraryStep.cache,
             task = task,
             inputs = bindInputs( libraryStep.inputs, reference ),
         )
