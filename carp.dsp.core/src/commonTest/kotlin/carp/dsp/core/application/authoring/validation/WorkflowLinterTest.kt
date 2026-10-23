@@ -227,7 +227,7 @@ class WorkflowLinterTest
         val workflow = minimalWorkflow(
             steps = listOf(minimalStep()),
             environments = mapOf(
-                "env-1" to EnvironmentDescriptor(name = "Test", kind = "docker", spec = emptyMap())
+                "env-1" to EnvironmentDescriptor(name = "Test", kind = "singularity", spec = emptyMap())
             )
         )
         val result = WorkflowLinter.lint(workflow)
@@ -235,14 +235,14 @@ class WorkflowLinterTest
             it.severity == ValidationSeverity.WARNING && it.message.contains("not recognized")
         }
         assertEquals(1, warnings.size)
-        assertTrue(warnings[0].message.contains("docker"))
+        assertTrue(warnings[0].message.contains("singularity"))
         assertEquals(ValidationErrorCode.WORKFLOW_UNKNOWN_ENV_KIND, warnings[0].code)
     }
 
     @Test
     fun `lint accepts supported environment kinds`()
     {
-        val supportedKinds = listOf("conda", "pixi", "python", "system")
+        val supportedKinds = listOf("conda", "pixi", "r", "docker", "system")
         supportedKinds.forEach { kind ->
             val workflow = minimalWorkflow(
                 steps = listOf(minimalStep(environmentId = "env-1")),
@@ -277,23 +277,34 @@ class WorkflowLinterTest
     // ── Check 6: UUID Format Validation ───────────────────────────────────────
 
     @Test
-    fun `lint warns on non-UUID step ID`()
+    fun `lint warns on a malformed UUID step ID`()
     {
         val workflow = minimalWorkflow(
             steps = listOf(
-                minimalStep(id = "step-1") // Not a UUID
+                minimalStep(id = "550e8400-e29b-41d4-a716-44665544000z") // UUID-shaped, 'z' is not hex
             ),
             environments = mapOf("env-1" to minimalEnvironment())
         )
         val result = WorkflowLinter.lint(workflow)
-        val warnings = result.issues.filter { it.severity == ValidationSeverity.WARNING && it.path?.contains("id") == true }
+        val warnings = result.issues.filter { it.code == ValidationErrorCode.INVALID_UUID_FORMAT }
         assertEquals(1, warnings.size)
-        assertTrue(warnings[0].message.contains("not a valid UUID"))
-        assertEquals(ValidationErrorCode.INVALID_UUID_FORMAT, warnings[0].code)
+        assertTrue(warnings[0].message.contains("not a valid one"))
+        assertEquals(ValidationSeverity.WARNING, warnings[0].severity)
     }
 
     @Test
-    fun `lint warns on non-UUID task ID`()
+    fun `lint does not flag a semantic step ID`()
+    {
+        val workflow = minimalWorkflow(
+            steps = listOf(minimalStep(id = "step-1")),
+            environments = mapOf("env-1" to minimalEnvironment())
+        )
+        val result = WorkflowLinter.lint(workflow)
+        assertTrue(result.issues.none { it.code == ValidationErrorCode.INVALID_UUID_FORMAT })
+    }
+
+    @Test
+    fun `lint warns on a malformed UUID task ID`()
     {
         val workflow = minimalWorkflow(
             steps = listOf(
@@ -301,7 +312,7 @@ class WorkflowLinterTest
                     id = "550e8400-e29b-41d4-a716-446655440000",
                     environmentId = "env-1",
                     task = CommandTaskDescriptor(
-                        id = "task-001", // Not a UUID
+                        id = "550e8400-e29b-41d4-a716-4466554400zz", // UUID-shaped, not valid
                         name = "task",
                         executable = "echo"
                     )
@@ -314,7 +325,7 @@ class WorkflowLinterTest
             it.severity == ValidationSeverity.WARNING && it.path?.contains("task.id") == true
         }
         assertEquals(1, warnings.size)
-        assertTrue(warnings[0].message.contains("not a valid UUID"))
+        assertTrue(warnings[0].message.contains("not a valid one"))
         assertEquals(ValidationErrorCode.INVALID_UUID_FORMAT, warnings[0].code)
     }
 
