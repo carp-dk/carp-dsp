@@ -270,6 +270,51 @@ tasks.register("evalBundleRerunAll") {
     dependsOn("evalBundleMake", "evalBundleRerunLinux", "evalBundleReport")
 }
 tasks.named("evalBundleReport") { mustRunAfter("evalBundleRerunLinux") }
+
+// Export the locked gait workflow to CWL and run it in cwltool, in a Linux container
+// (cwltool does not run on Windows), then compare its outputs with CARP-DSP's and write
+// the macros here. cwltool comes from the locked baselines environment (as for PL1).
+//   ./gradlew :carp.dsp.demo:evalCwlRunAll -PpaperDir=../carp-dsp-sys-paper
+tasks.register<Exec>("evalCwlRunLinux") {
+    group = "evaluation"
+    description = "SH2 CWL eval: export the gait workflow and run it in cwltool in a Linux container (Docker)"
+    dependsOn(determinismClasspath, "jvmMainClasses", "jvmProcessResources")
+    val demo = layout.projectDirectory.asFile.absolutePath.replace("\\", "/")
+    // Same mount points as evalStaticBaselines, so both share one baselines environment.
+    val baselines = "/baselines"
+    val cp = listOf(
+        "/demo/build/classes/kotlin/jvm/main",
+        "/demo/build/processedResources/jvm/main",
+        "/demo/build/determinism-classpath/*"
+    ).joinToString(":")
+    val script = "cd $baselines && pixi install --locked && cd /demo && " +
+        "pixi exec --spec openjdk=17 -- java -cp '$cp' carp.dsp.demo.eval.CwlRunEvalKt " +
+        "run $baselines/.pixi/envs/default/bin/cwltool"
+    commandLine(
+        "docker", "run", "--rm",
+        "-v", "$demo:/demo", "-w", "/demo",
+        "-v", "carp-dsp-gait-envs:/root/.carp-dsp",
+        "-v", "carp-dsp-gait-cache:/root/.cache",
+        "-v", "$demo/src/jvmMain/resources/scripts/eval/baselines:$baselines",
+        "-v", "carp-dsp-static-baselines-pixi:$baselines/.pixi",
+        "ghcr.io/prefix-dev/pixi:0.83.0",
+        "sh", "-c", script
+    )
+}
+registerEvalTask(
+    "evalCwlReport",
+    "carp.dsp.demo.eval.CwlRunEvalKt",
+    "SH2 CWL eval: write the macros from eval_results/cwl-run.csv"
+)
+tasks.named<JavaExec>("evalCwlReport") {
+    args = listOf("report")
+    mustRunAfter("evalCwlRunLinux")
+}
+tasks.register("evalCwlRunAll") {
+    group = "evaluation"
+    description = "SH2: run the CWL export of the gait workflow in cwltool (Linux container), write the macros"
+    dependsOn("evalCwlRunLinux", "evalCwlReport")
+}
 registerEvalTask(
     "evalMobgapTiming",
     "carp.dsp.demo.eval.MobgapTimedEvalKt",

@@ -13,6 +13,7 @@ import carp.dsp.core.application.authoring.descriptor.RScriptEntryPointDescripto
 import carp.dsp.core.application.authoring.descriptor.RTaskDescriptor
 import carp.dsp.core.application.authoring.descriptor.ScriptEntryPointDescriptor
 import carp.dsp.core.application.authoring.descriptor.StepDescriptor
+import carp.dsp.core.application.authoring.descriptor.StepOutputInputSource
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.descriptor.WorkflowMetadataDescriptor
 import carp.dsp.core.application.translation.cwl.DspToCwlExporter
@@ -219,8 +220,8 @@ class DspToCwlExporterTest {
         val wf = workflowWith(pythonStep(), environments = mapOf("conda-env" to condaEnv))
         val cwl = DspToCwlExporter.export(wf).first().content
 
-        assertTrue("type: File" in cwl)
-        assertTrue("inputBinding:" in cwl)
+        assertTrue("input_csv: File" in cwl)
+        assertTrue("$(inputs.input_csv.path)" in cwl, "input.0 should become a CWL path reference")
     }
 
     @Test
@@ -230,7 +231,7 @@ class DspToCwlExporterTest {
 
         assertTrue("outputBinding:" in cwl)
         assertTrue("glob:" in cwl)
-        assertTrue("data/output.csv" in cwl)
+        assertTrue("glob: output.csv" in cwl)
     }
 
     // -- Multi-step workflow ---------------------------------------------------
@@ -320,5 +321,26 @@ class DspToCwlExporterTest {
 
         assertTrue("SoftwareRequirement" in cwl)
         assertFalse("DockerRequirement" in cwl)
+    }
+
+    // -- Workflow document -----------------------------------------------------
+
+    @Test
+    fun `workflow document wires a step input to the upstream output`() {
+        val a = pythonStep(id = "step-a")
+        val b = pythonStep(
+            id = "step-b",
+            inputs = listOf(
+                DataPortDescriptor(id = "in-csv", source = StepOutputInputSource("step-a", "output-csv")),
+            ),
+        )
+        val wf = workflowWith(a, b, environments = mapOf("conda-env" to condaEnv))
+        val cwl = DspToCwlExporter.exportWorkflow(wf)!!.content
+
+        assertTrue("class: Workflow" in cwl)
+        assertTrue("in_csv: step_a/output_csv" in cwl)
+        assertTrue("step_a__input_csv:" in cwl, "A file input becomes a workflow input")
+        assertTrue("location: data/input.csv" in cwl)
+        assertTrue("outputSource: step_b/output_csv" in cwl)
     }
 }

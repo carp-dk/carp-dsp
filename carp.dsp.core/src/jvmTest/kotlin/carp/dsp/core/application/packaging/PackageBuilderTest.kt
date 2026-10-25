@@ -175,7 +175,7 @@ class PackageBuilderTest {
         val pkg = PackageBuilder.build(withSteps)
 
         assertNotNull(pkg.cwl)
-        assertTrue("---" in pkg.cwl!!.content, "Multi-step CWL should contain document separator")
+        assertTrue("class: Workflow" in pkg.cwl!!.content, "Multi-step CWL should be one Workflow document")
         assertTrue("scripts/a.py" in pkg.cwl!!.content)
         assertTrue("scripts/b.py" in pkg.cwl!!.content)
     }
