@@ -1,5 +1,6 @@
 package carp.dsp.core.application.run
 
+import carp.dsp.core.infrastructure.execution.RunBundleWriter
 import java.io.File
 import java.nio.file.Path
 
@@ -71,6 +72,20 @@ data class WorkflowPackage(
                 .toMap()
 
             return WorkflowPackage( WorkflowSource( root, workflowFileName ), files )
+        }
+
+        /**
+         * The run bundle in [directory] (a finished run folder), as a package to run again.
+         *
+         * Everything the run wrote - step outputs, logs, environment records, the plan, the
+         * report and the RO-Crate metadata - is left out, so the new run computes its outputs
+         * rather than finding the old ones in place.
+         */
+        fun ofBundle( directory: Path, workflowFileName: String = "workflow.yaml" ): WorkflowPackage
+        {
+            val all = of( directory, workflowFileName )
+            val files = all.files.filterKeys { it.substringBefore( '/' ) !in RunBundleWriter.RUN_OUTPUTS }
+            return all.copy( files = files )
         }
     }
 }

@@ -99,13 +99,17 @@ class DefaultPlanExecutor(
             environmentCoordinator.teardownAll(context.runIssues)
         }
 
-        return buildExecutionReport(
+        val report = buildExecutionReport(
             plan = plan,
             runId = runId,
             stepResults = context.stepResults,
             runIssues = context.runIssues,
             environmentLogs = environmentCoordinator.environmentLogs()
         )
+        // The run folder becomes the bundle; a failure to write it never fails the run.
+        runCatching { RunBundleWriter.write(java.io.File(context.workspace.executionRoot), plan, report) }
+            .onFailure { logger.warn(it) { "Could not write the run bundle for run $runId" } }
+        return report
     }
 
     private fun initializeExecutionContext(

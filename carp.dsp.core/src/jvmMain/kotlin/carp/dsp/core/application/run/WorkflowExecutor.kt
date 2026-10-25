@@ -153,11 +153,16 @@ class WorkflowExecutor(
         val definition = importer.import( resolved.workflow )
         val plan = DefaultExecutionPlanner( options.protocolDataTypeProvider ).plan( definition ).withLintIssues( lint )
 
+        // The resolved workflow goes into the run folder as `workflow.yaml`, so the folder
+        // is a bundle that runs again without the step library.
+        val provisioning = provisioningFor( source.directory, definition, plan, resolved.impl, packageFiles )
+            .withWorkflowFile( plan, codec.encode( resolved.workflow ) )
+
         return PreparedWorkflow(
             descriptor = resolved.workflow,
             definition = definition,
             plan = plan,
-            provisioning = provisioningFor( source.directory, definition, plan, resolved.impl, packageFiles ),
+            provisioning = provisioning,
         )
     }
 
@@ -264,6 +269,18 @@ class WorkflowExecutor(
             )
         }
     }
+}
+
+/** Where the resolved workflow is staged in the run folder. */
+private const val BUNDLE_WORKFLOW = "workflow.yaml"
+
+/** [this] with the resolved workflow staged at [BUNDLE_WORKFLOW], unless another file claims that path. */
+private fun WorkspaceProvisioning.withWorkflowFile( plan: ExecutionPlan, yaml: String ): WorkspaceProvisioning
+{
+    val first = plan.steps.firstOrNull()?.metadata?.id ?: return this
+    if ( byStep.values.any { BUNDLE_WORKFLOW in it } ) return this
+    val files = byStep[ first ].orEmpty() + ( BUNDLE_WORKFLOW to FileSource.Content( yaml ) )
+    return copy( byStep = byStep + ( first to files ) )
 }
 
 /** Relative lock files the workflow's environments install from (pixi.lock, renv.lock). */

@@ -228,6 +228,48 @@ tasks.register("evalGaitPortabilityAll") {
     dependsOn("evalGaitPortabilityLinux", "evalGaitPortability")
 }
 tasks.named("evalGaitPortability") { mustRunAfter("evalGaitPortabilityLinux") }
+
+// Make a gait run bundle here, re-run it from the bundle alone in a Linux container,
+// then write the macros here (so -PpaperDir works).
+//   ./gradlew :carp.dsp.demo:evalBundleRerunAll -PpaperDir=../carp-dsp-sys-paper
+fun registerBundleTask(name: String, phase: String) = tasks.register<JavaExec>(name) {
+    group = "evaluation"
+    description = "SH1 bundle re-run eval: $phase"
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+        kotlin.jvm().compilations.getByName("main").output.allOutputs
+    mainClass.set("carp.dsp.demo.eval.BundleRerunEvalKt")
+    args = listOf(phase)
+    paperDir?.let { systemProperty("carp.paperDir", it.absolutePath) }
+}
+registerBundleTask("evalBundleMake", "make")
+registerBundleTask("evalBundleReport", "report")
+tasks.register<Exec>("evalBundleRerunLinux") {
+    group = "evaluation"
+    description = "SH1 bundle re-run eval: re-run the bundle in a Linux container (Docker)"
+    dependsOn(determinismClasspath, "jvmMainClasses", "jvmProcessResources")
+    mustRunAfter("evalBundleMake")
+    val demo = layout.projectDirectory.asFile.absolutePath.replace("\\", "/")
+    val cp = listOf(
+        "/demo/build/classes/kotlin/jvm/main",
+        "/demo/build/processedResources/jvm/main",
+        "/demo/build/determinism-classpath/*"
+    ).joinToString(":")
+    commandLine(
+        "docker", "run", "--rm",
+        "-v", "$demo:/demo", "-w", "/demo",
+        "-v", "carp-dsp-gait-envs:/root/.carp-dsp",
+        "-v", "carp-dsp-gait-cache:/root/.cache",
+        "ghcr.io/prefix-dev/pixi:0.83.0",
+        "pixi", "exec", "--spec", "openjdk=17", "--",
+        "java", "-cp", cp, "carp.dsp.demo.eval.BundleRerunEvalKt", "rerun", "/demo/build/bundle-rerun/bundle"
+    )
+}
+tasks.register("evalBundleRerunAll") {
+    group = "evaluation"
+    description = "SH1: make a gait bundle here, re-run it in a Linux container, write the macros"
+    dependsOn("evalBundleMake", "evalBundleRerunLinux", "evalBundleReport")
+}
+tasks.named("evalBundleReport") { mustRunAfter("evalBundleRerunLinux") }
 registerEvalTask(
     "evalMobgapTiming",
     "carp.dsp.demo.eval.MobgapTimedEvalKt",
