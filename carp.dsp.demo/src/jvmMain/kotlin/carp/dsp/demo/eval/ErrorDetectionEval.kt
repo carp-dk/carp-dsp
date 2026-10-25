@@ -152,7 +152,7 @@ fun main() {
     println("Plan-time gate cost (median decode+resolve+lint+import+plan, warm): $planMs ms")
 
     val dir = DemoIo.evalResultsDir()
-    dir.resolve("error-detection.txt").appendText(report + "\nPlan-time gate cost: $planMs ms\n")
+    dir.resolve("error-detection.txt").writeText(report + "\nPlan-time gate cost: $planMs ms\n")
 
     // Machine-readable CSV for the plot (CARP arm). plan_ms is this machine's measured
     // cost of catching the fault; steps_executed is 0 because nothing runs.

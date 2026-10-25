@@ -113,7 +113,7 @@ fun main(args: Array<String>) {
     val dir = DemoIo.evalResultsDir()
     val csvFile = dir.resolve("planner-scaling.csv")
     csvFile.writeText(csv.toString())
-    dir.resolve("planner-scaling.txt").appendText(report + "\n")
+    dir.resolve("planner-scaling.txt").writeText(report + "\n")
     println("Wrote planner-scaling.csv and planner-scaling.txt to: ${dir.absolutePath}")
 
     val figFile = dir.resolve("fig-planner-scaling.pdf")

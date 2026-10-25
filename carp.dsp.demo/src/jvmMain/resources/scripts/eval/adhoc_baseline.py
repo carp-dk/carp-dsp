@@ -24,8 +24,8 @@ Usage:
     python adhoc_baseline.py --python "pixi run python"
     python adhoc_baseline.py --dry-run           # emit the CSV from documented values only
 
-Writes eval_results/error-detection-adhoc.csv (schema matches the CARP-DSP eval) and appends a
-report to eval_results/error-detection.txt.
+Writes eval_results/error-detection-adhoc.csv (schema matches the CARP-DSP eval) and a
+report, eval_results/error-detection-adhoc.txt (overwritten each run).
 """
 from __future__ import annotations
 import argparse
@@ -204,7 +204,7 @@ def main() -> int:
     summary += ["Static detection by ad-hoc pipeline: 0 / 5 (all faults surface only at runtime).", "=" * 70]
     text = "\n".join(summary) + "\n"
     print(text)
-    (RESULTS / "error-detection.txt").open("a").write(text)
+    (RESULTS / "error-detection-adhoc.txt").write_text(text)
     print(f"Wrote {out}")
     if measured_flag:
         write_numbers(rows, pipeline_s)

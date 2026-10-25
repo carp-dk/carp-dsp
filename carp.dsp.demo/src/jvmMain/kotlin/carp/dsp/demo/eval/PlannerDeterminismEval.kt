@@ -56,7 +56,7 @@ fun main( args: Array<String> )
     val comparison = compare( dir )
     val report = report( platform, invocations, rows, comparison )
     println( report )
-    DemoIo.evalResultsDir().resolve( "planner-determinism.txt" ).appendText( report + "\n" )
+    DemoIo.evalResultsDir().resolve( "planner-determinism.txt" ).writeText( report + "\n" )
 
     val numbers = DemoIo.evalResultsDir().resolve( "planner-determinism-numbers.tex" )
     numbers.writeText(

@@ -47,7 +47,7 @@ import java.util.Locale
  * Run:
  *   ./gradlew :carp.dsp.demo:evalReuse [-Pargs=static] [-PpaperDir=<paper repo>]
  *
- * Writes eval_results/reuse-report.txt (appended), reuse.csv and, after an executed
+ * Writes eval_results/reuse-report.txt, reuse.csv and, after an executed
  * run, reuse-numbers.tex (LaTeX macros, published to the paper's generated/ with
  * -PpaperDir).
  */
@@ -166,7 +166,7 @@ fun main(args: Array<String>) {
     println(report)
 
     val dir = DemoIo.evalResultsDir()
-    dir.resolve("reuse-report.txt").appendText(report + "\n")
+    dir.resolve("reuse-report.txt").writeText(report + "\n")
     dir.resolve("reuse.csv").writeText(csv(statics, executed))
     println("Wrote reuse-report.txt and reuse.csv to: ${dir.absolutePath}")
 

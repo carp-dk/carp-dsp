@@ -1,56 +1,5 @@
 ======================================================================
-Reuse eval - 2026-07-14T09:30:30.389256200Z
-UC1: mobgap-gait-analysis.yaml (MS cohort)
-UC2: mobgap-gait-analysis-ha.yaml (HA cohort)
-
-Authoring change:
-  Steps changed:            [import-data]
-  Downstream steps modified: 0 of 7 (expected 0)
-  YAML lines added:          4
-  YAML lines removed:        0
-
-Planner:
-  UC2 accepted (0 ERROR issues):     true
-  Resolved plan identical to UC1:    true  (same step UUIDs + topological order)
-  -> no manual DAG re-specification; downstream type compatibility re-verified automatically
-
-Reuse claim holds (only import-data changed, planner accepts, DAG unchanged): true
-======================================================================
-
-======================================================================
-Retargeting eval - 2026-10-23T13:38:26.928488500Z
-
-Case 'cohort': Gait pipeline, MS -> HA cohort (mobgap LabExampleDataset)
-  workflows/mobgap-gait-analysis.yaml -> workflows/mobgap-gait-analysis-ha.yaml
-  Steps changed:          [import-data]
-  Unexpected changes:     0 of 8 steps (expected 0)
-  YAML lines added/removed: 4 / 0
-  Planner accepts variant: true
-  Plan identical to base:  true  (same step UUIDs + topological order)
-  Static claim holds:      true
-  Executed:
-    base:    SUCCEEDED, 8 / 8 steps succeeded
-    variant: SUCCEEDED, 8 / 8 steps succeeded
-    Steps whose outputs changed: 8 of 8
-    Walking bouts:          5 -> 1
-    Walking duration (min): 1.5841666666666665 -> 0.1055
-
-Case 'period': Activity workflow, Apr-May -> Mar-Apr 2016 (Zenodo 53894)
-  workflows/wf-activity-summary-v2.yaml -> workflows/wf-activity-summary-v2-2016-03.yaml
-  Steps changed:          [fetch-steps, fetch-hr]
-  Unexpected changes:     0 of 13 steps (expected 0)
-  YAML lines added/removed: 8 / 1
-  Planner accepts variant: true
-  Plan identical to base:  true  (same step UUIDs + topological order)
-  Static claim holds:      true
-  Executed:
-    base:    SUCCEEDED, 13 / 13 steps succeeded
-    variant: SUCCEEDED, 13 / 13 steps succeeded
-    Steps whose outputs changed: 13 of 13
-======================================================================
-
-======================================================================
-Retargeting eval - 2026-10-23T13:49:44.851375Z
+Retargeting eval - 2026-10-25T13:29:22.807887400Z
 
 Case 'cohort': Gait pipeline, MS -> HA cohort (mobgap LabExampleDataset)
   workflows/mobgap-gait-analysis.yaml -> workflows/mobgap-gait-analysis-ha.yaml
@@ -65,7 +14,7 @@ Case 'cohort': Gait pipeline, MS -> HA cohort (mobgap LabExampleDataset)
     variant: SUCCEEDED, 8 / 8 steps succeeded
     Steps whose outputs changed: 8 of 8
     Walking bouts:          5 -> 6
-    Walking duration (min): 1.5841666666666665 -> 0.7041666666666666
+    Walking duration (min): 1.0611666666666666 -> 0.6443333333333333
 
 Case 'period': Activity workflow, Apr-May -> Mar-Apr 2016 (Zenodo 53894)
   workflows/wf-activity-summary-v2.yaml -> workflows/wf-activity-summary-v2-2016-03.yaml
@@ -78,6 +27,8 @@ Case 'period': Activity workflow, Apr-May -> Mar-Apr 2016 (Zenodo 53894)
   Executed:
     base:    SUCCEEDED, 13 / 13 steps succeeded
     variant: SUCCEEDED, 13 / 13 steps succeeded
+      - base: Step 'Fetch a dataset file' wrote outside its own folder: .cache/download-89a7ac9777dd9048.bin
+      - variant: Step 'Fetch a dataset file' wrote outside its own folder: .cache/download-bfc0d53a63992744.bin
     Steps whose outputs changed: 13 of 13
 ======================================================================
 
