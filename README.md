@@ -45,7 +45,7 @@ A Kotlin Multiplatform framework for CARP (Copenhagen Research Platform) data sc
 
 ```bash
 # Clone and build
-git clone https://github.com/ngreve/carp-dsp.git
+git clone https://github.com/carp-dk/carp-dsp.git
 cd carp-dsp
 ./gradlew build
 
@@ -58,6 +58,25 @@ See [Demos and Examples](docs/DSP_DOCUMENTATION.md#demos-and-examples) for more 
 ### Building
 ```bash
 ./gradlew build
+```
+
+### Building v1.0.0
+carp-dsp builds CARP Core and health-workflow-interfaces from source, as sibling
+checkouts. v1.0.0 was built and evaluated against these commits:
+
+| Repository | Commit |
+| --- | --- |
+| [carp.core-kotlin](https://github.com/carp-dk/carp.core-kotlin) (`feature/core-analytics`) | `278d2a57` |
+| [health-workflow-interfaces](https://github.com/carp-dk/health-workflow-interfaces) (`main`) | `c332d00a` |
+
+```bash
+git clone https://github.com/carp-dk/carp-dsp.git
+git -C carp-dsp checkout v1.0.0
+git clone https://github.com/carp-dk/carp.core-kotlin.git
+git -C carp.core-kotlin checkout 278d2a575acc074e3678d4e1ab5fdd3ba220949a
+git clone https://github.com/carp-dk/health-workflow-interfaces.git
+git -C health-workflow-interfaces checkout c332d00aac0a5b925e88a90104129e1ccbe4a598
+cd carp-dsp && ./gradlew build -PskipIntegration
 ```
 
 ### Running Tests
