@@ -17,7 +17,7 @@ object MobgapScripts
 {
     /** The eight scripts the gait workflows call. */
     val SCRIPTS: List<String> = listOf(
-        "import_data.py", "gsd.py", "icd.py", "per_sec_params.py",
+        "_mobilised.py", "import_data.py", "gsd.py", "icd.py", "per_sec_params.py",
         "wba.py", "aggregate.py", "plot_wb_params.py", "plot_aggregated_dmos.py"
     )
 

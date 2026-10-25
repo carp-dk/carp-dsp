@@ -33,7 +33,7 @@ import java.security.MessageDigest
  *   ./gradlew :carp.dsp.demo:jvmRun -PmainClass=carp.dsp.demo.eval.MobgapTimedEvalKt
  * Optional first arg: number of runs (default 2).
  *
- * Results are printed and appended to `<project>/eval_results/mobgap-timing.txt`. Each
+ * Results are printed and written to `<project>/eval_results/mobgap-timing.txt`. Each
  * invocation also writes `mobgap-timing.csv` (per run and step) and rebuilds Fig D,
  * `fig-orchestration-overhead.pdf`, from it with `scripts/eval/plot_orchestration_overhead.py`.
  * It also writes `orchestration-overhead-numbers.tex`, the steady-state figures the text
@@ -79,8 +79,8 @@ fun main(args: Array<String>) {
         appendLine(formatHashComparison(results))
     }
     println(report)
-    outFile.appendText(report + "\n")
-    println("Appended results to: ${outFile.absolutePath}")
+    outFile.writeText(report + "\n")
+    println("Wrote results to: ${outFile.absolutePath}")
 
     val csvFile = DemoIo.evalResultsDir().resolve("mobgap-timing.csv").apply { writeText(timingCsv(results)) }
     val figFile = DemoIo.evalResultsDir().resolve("fig-orchestration-overhead.pdf")

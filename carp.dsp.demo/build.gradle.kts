@@ -316,6 +316,11 @@ tasks.register("evalCwlRunAll") {
     dependsOn("evalCwlRunLinux", "evalCwlReport")
 }
 registerEvalTask(
+    "evalMobilisedEquivalence",
+    "carp.dsp.demo.eval.MobilisedEquivalenceEvalKt",
+    "Run UC1 and UC2 and compare 5 stages with mobgap's MobilisedPipelineUniversal (AU3, UC1)"
+)
+registerEvalTask(
     "evalMobgapTiming",
     "carp.dsp.demo.eval.MobgapTimedEvalKt",
     "Instrumented UC1 run: phase + per-step timings, output hashes"
@@ -429,7 +434,33 @@ tasks.register("evalPaperTimings") {
 tasks.named("evalErrorDetectionFull") { mustRunAfter("evalMobgapTiming") }
 // Three timing runs by default when run through evalPaperTimings (run 1 installs the
 // environment, so the figure needs at least two more); -Pargs still overrides.
-if (!project.hasProperty("args") && gradle.startParameter.taskNames.any { it.endsWith("evalPaperTimings") }) {
+if (!project.hasProperty("args") &&
+    gradle.startParameter.taskNames.any { it.endsWith("evalPaperTimings") || it.endsWith("evalAll") }
+) {
     tasks.named<JavaExec>("evalMobgapTiming") { args = listOf("3") }
 }
 
+// Every eval the paper uses, one after another, timings first (they need a quiet machine).
+// Docker must be running. Cross-OS results come from the `cross-os evals` GitHub workflow:
+// unzip them into eval_results first, so the portability and determinism macros include them.
+//   ./gradlew :carp.dsp.demo:evalAll -PpaperDir=../carp-dsp-sys-paper
+val paperEvals = listOf(
+    "evalPaperTimings",
+    "evalPlannerScaling",
+    "evalStaticBaselines",
+    "evalStepReuse",
+    "evalReuse",
+    "evalEnvironmentKinds",
+    "evalProtocolCoupling",
+    "evalMobilisedEquivalence",
+    "evalPlannerDeterminismAll",
+    "evalGaitPortabilityAll",
+    "evalBundleRerunAll",
+    "evalCwlRunAll",
+)
+tasks.register("evalAll") {
+    group = "evaluation"
+    description = "Run every paper eval in order (Docker running); see the comment for cross-OS results"
+    dependsOn(paperEvals)
+}
+paperEvals.zipWithNext().forEach { (before, after) -> tasks.named(after) { mustRunAfter(before) } }

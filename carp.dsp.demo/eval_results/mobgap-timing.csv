@@ -1,25 +1,25 @@
 run,succeeded,step_id,step_name,total_ms,compute_ms,overhead_ms
-1,true,import-data,"Import IMU Data",3631,2984,647
-1,true,gsd,"Gait Sequence Detection",5542,4977,565
-1,true,icd,"Initial Contact Detection",6581,5987,594
-1,true,per-sec-params,"Per-Second Parameter Estimation",4193,3651,542
-1,true,wba,"Walking Bout Assembly",2575,2128,447
-1,true,aggregate,"DMO Aggregation",2010,1623,387
-1,true,plot-wb-params,"Plot Walking Bout Parameters",3379,2948,431
-1,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2632,2201,431
-2,true,import-data,"Import IMU Data",2592,2131,461
-2,true,gsd,"Gait Sequence Detection",4724,4194,530
-2,true,icd,"Initial Contact Detection",5932,5377,555
-2,true,per-sec-params,"Per-Second Parameter Estimation",3790,3258,532
-2,true,wba,"Walking Bout Assembly",2660,2153,507
-2,true,aggregate,"DMO Aggregation",2420,1949,471
-2,true,plot-wb-params,"Plot Walking Bout Parameters",3181,2651,530
-2,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2837,2360,477
-3,true,import-data,"Import IMU Data",2597,2177,420
-3,true,gsd,"Gait Sequence Detection",4492,3987,505
-3,true,icd,"Initial Contact Detection",5834,5276,558
-3,true,per-sec-params,"Per-Second Parameter Estimation",3827,3329,498
-3,true,wba,"Walking Bout Assembly",2636,2184,452
-3,true,aggregate,"DMO Aggregation",2096,1699,397
-3,true,plot-wb-params,"Plot Walking Bout Parameters",3059,2590,469
-3,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2709,2242,467
+1,true,import-data,"Import IMU Data",2702,,
+1,true,gsd,"Gait Sequence Detection",5315,,
+1,true,icd,"Initial Contact Detection",5431,,
+1,true,per-sec-params,"Per-Second Parameter Estimation",3999,,
+1,true,wba,"Walking Bout Assembly",3678,,
+1,true,aggregate,"DMO Aggregation",3638,,
+1,true,plot-wb-params,"Plot Walking Bout Parameters",2803,2396,407
+1,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2540,2123,417
+2,true,import-data,"Import IMU Data",2708,,
+2,true,gsd,"Gait Sequence Detection",4478,,
+2,true,icd,"Initial Contact Detection",5321,,
+2,true,per-sec-params,"Per-Second Parameter Estimation",3813,,
+2,true,wba,"Walking Bout Assembly",3728,,
+2,true,aggregate,"DMO Aggregation",3545,,
+2,true,plot-wb-params,"Plot Walking Bout Parameters",2727,2335,392
+2,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2429,2031,398
+3,true,import-data,"Import IMU Data",2465,,
+3,true,gsd,"Gait Sequence Detection",4572,,
+3,true,icd,"Initial Contact Detection",5170,,
+3,true,per-sec-params,"Per-Second Parameter Estimation",3688,,
+3,true,wba,"Walking Bout Assembly",3785,,
+3,true,aggregate,"DMO Aggregation",3660,,
+3,true,plot-wb-params,"Plot Walking Bout Parameters",2780,2330,450
+3,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2457,2049,408

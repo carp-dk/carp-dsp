@@ -9,8 +9,8 @@ cohort,plan_identical_to_base,true
 cohort,base_succeeded,true
 cohort,variant_succeeded,true
 cohort,steps_with_new_outputs,8
-cohort,base_walking_minutes,1.5841666666666665
-cohort,variant_walking_minutes,0.7041666666666666
+cohort,base_walking_minutes,1.0611666666666666
+cohort,variant_walking_minutes,0.6443333333333333
 cohort,base_walking_bouts,5
 cohort,variant_walking_bouts,6
 period,steps_total,13

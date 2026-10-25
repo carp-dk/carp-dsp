@@ -1,0 +1,11 @@
+
+======================================================================
+Error-detection eval (ad-hoc arm) - 2026-10-25 14:26:53
+fault             steps     wasted %  wasted s  outcome
+type-mismatch     7/8       87.5      24.6      runtime_crash
+missing-producer  1/8       12.5      2.1       runtime_crash
+missing-output    2/8       25.0      6.5       runtime_crash
+cycle             0/8       0.0       0.0       unschedulable
+missing-env       0/8       0.0       0.0       runtime_env_error
+Static detection by ad-hoc pipeline: 0 / 5 (all faults surface only at runtime).
+======================================================================

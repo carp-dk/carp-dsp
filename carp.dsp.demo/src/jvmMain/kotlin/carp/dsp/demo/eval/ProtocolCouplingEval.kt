@@ -72,7 +72,7 @@ fun main()
     val report = report( rows )
     println( report )
     val evalDir = DemoIo.evalResultsDir()
-    evalDir.resolve( "protocol-coupling.txt" ).appendText( report + "\n" )
+    evalDir.resolve( "protocol-coupling.txt" ).writeText( report + "\n" )
     evalDir.resolve( "protocol-coupling.csv" ).writeText( csv( rows ) )
 
     val numbers = evalDir.resolve( "protocol-coupling-numbers.tex" )
