@@ -123,7 +123,8 @@ class DefaultPlanExecutor(
             orchestrator = options.orchestrator,
             config = options.environmentConfig,
             runId = runId,
-            executionLogger = options.executionLogger
+            executionLogger = options.executionLogger,
+            executionRoot = java.nio.file.Path.of(workspace.executionRoot)
         )
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
@@ -536,8 +537,11 @@ class DefaultPlanExecutor(
         private val orchestrator: EnvironmentOrchestrator,
         private val config: EnvironmentConfig,
         private val runId: UUID,
-        private val executionLogger: ExecutionLogger
+        private val executionLogger: ExecutionLogger,
+        private val executionRoot: java.nio.file.Path
     ) {
+        private val recorder = EnvironmentRecorder()
+        private val log = io.github.oshai.kotlinlogging.KotlinLogging.logger {}
         private val setupEnvironments = mutableSetOf<String>()
         private val requiredRefs = plan.requiredEnvironmentRefs.values.distinctBy { it.id }
 
@@ -634,6 +638,9 @@ class DefaultPlanExecutor(
             }
 
             resolution?.let { runCatching { EnvironmentStore.markUsed(it.directory) } }
+            // What the environment contained goes into the run; a failed record never fails the run.
+            runCatching { recorder.write(executionRoot, recorder.record(ref)) }
+                .onFailure { log.warn(it) { "Could not record environment '${ref.id}'" } }
 
             executionLogger.onEnvironmentReady(
                 runId,

@@ -472,9 +472,50 @@ class CommandStepRunnerTest {
         val workspace = createExecutionWorkspace( listOf( step ) )
         val result = runner().run( step, workspace )
 
-        // Working directory in the result detail should be the step's logical dir,
-        // and execution should use executionRoot as the cwd (verified by artefact resolution)
-        assertEquals( workspace.stepDir( step.metadata.id ), result.detail?.workingDirectory )
+        // The process runs in the run root, so the record says so (relative to the run root).
+        assertEquals( ".", result.detail?.workingDirectory )
+    }
+
+    /** A command that writes [relative] under the run root, as a step's process would. */
+    private class WritingCommandRunner( private val root: Path, private val relative: String ) : CommandRunner {
+        override fun run( command: CommandSpec, policy: RunPolicy ): CommandResult {
+            val file = root.resolve( relative )
+            Files.createDirectories( file.parent )
+            file.writeText( "written by the step" )
+            return CommandResult( exitCode = 0, stdout = "", stderr = "", durationMs = 1L, timedOut = false )
+        }
+    }
+
+    private fun issuesAfterWriting( relative: ( ExecutionWorkspace, PlannedStep ) -> String ): List<String> {
+        val step = commandStep()
+        val workspace = createExecutionWorkspace( listOf( step ) )
+        val runner = CommandStepRunner(
+            CapturingWorkspaceManager( testWorkspaceRoot.toString() ),
+            WritingCommandRunner( testWorkspaceRoot, relative( workspace, step ) ),
+            MockArtefactStore()
+        )
+        runner.run( step, workspace )
+        return runner.drainIssues( step.metadata.id )
+            .filter { it.kind == dk.cachet.carp.analytics.application.execution.ExecutionIssueKind.UNEXPECTED_OUTPUT }
+            .map { it.message }
+    }
+
+    @Test
+    fun `a write outside the step's own folder is reported`() {
+        val messages = issuesAfterWriting { _, _ -> "other-step/leak.csv" }
+        assertEquals( 1, messages.size )
+        assertTrue( messages.single().contains( "other-step/leak.csv" ) )
+    }
+
+    @Test
+    fun `a write inside the step's own folder is not reported`() {
+        val messages = issuesAfterWriting { ws, step -> "${ws.stepDir( step.metadata.id )}/outputs/out.csv" }
+        assertTrue( messages.none { it.contains( "wrote outside" ) } )
+    }
+
+    @Test
+    fun `python bytecode next to a staged script is not reported`() {
+        assertTrue( issuesAfterWriting { _, _ -> "scripts/__pycache__/clean.cpython-312.pyc" }.isEmpty() )
     }
     // -------------------------------------------------------------------------
     // CommandRunner invocation — executable, args, cwd
@@ -499,16 +540,6 @@ class CommandStepRunnerTest {
             listOf("run.py", "--verbose", "--output", "out.csv").map { ExpandedArg.Literal(it) },
             recording.lastCommand?.args as List<ExpandedArg>
         )
-    }
-
-    @Test
-    fun `detail workingDirectory is set to the step dir path from the workspace`() {
-        val step = commandStep()
-        val workspace = createExecutionWorkspace(listOf(step))
-        val result = runner().run(step, workspace)
-
-        // workingDirectory in detail must match the logical workspace-relative step dir
-        assertEquals(workspace.stepDir(step.metadata.id), result.detail?.workingDirectory)
     }
 
     // Status mapping

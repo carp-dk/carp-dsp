@@ -1,0 +1,6 @@
+case,kind,succeeded,seconds,recorded_from,record_lines,outside_write_flagged,failure
+pixi,pixi,true,2.7,pixi.lock,207,false,
+conda,conda,true,62.2,conda list --explicit,25,false,
+r,R,true,0.6,R.version and packageVersion() (no renv.lock),1,false,
+system,system,true,0.2,none (nothing pinned),1,false,
+system-leak,system,true,0.2,none (nothing pinned),1,true,

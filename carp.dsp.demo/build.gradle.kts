@@ -202,6 +202,11 @@ registerEvalTask(
     "Plan 6 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
 )
 registerEvalTask(
+    "evalEnvironmentKinds",
+    "carp.dsp.demo.eval.EnvironmentKindsEvalKt",
+    "One run per environment kind (pixi, conda, R, system) plus an outside-write run (EX1)"
+)
+registerEvalTask(
     "evalStaticBaselines",
     "carp.dsp.demo.eval.StaticBaselineEvalKt",
     "Check the 6 injected faults with snakemake -n and cwltool --validate (PL1 baseline)"
