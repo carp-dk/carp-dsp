@@ -73,7 +73,8 @@ object DemoRun
     /**
      * Reads the workflow at [resourcePath] and writes it into [resultsDir], which is
      * where its `steps.lock` will be written and what its relative inputs resolve
-     * against.
+     * against. Any environment lock file it declares is copied beside it from the same
+     * resource folder.
      */
     fun loadWorkflow( resourcePath: String, resultsDir: Path ): LoadedWorkflow
     {
@@ -84,6 +85,10 @@ object DemoRun
         val fileName = resourcePath.substringAfterLast( '/' )
         val file = resultsDir.resolve( fileName )
         file.writeText( yaml )
+        val folder = resourcePath.substringBeforeLast( '/', "" ).let { if ( it.isEmpty() ) "" else "$it/" }
+        descriptor.environments.values.mapNotNull { it.spec["lockFile"]?.firstOrNull() }.distinct().forEach { lock ->
+            DemoIo.copyResource( "$folder$lock", resultsDir.resolve( lock ) )
+        }
 
         return LoadedWorkflow( WorkflowSource( resultsDir, fileName ), descriptor, yaml )
     }

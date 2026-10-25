@@ -82,6 +82,7 @@ class EnvironmentRefResolver {
                     dependencies = definition.dependencies,
                     pythonVersion = definition.pythonVersion,
                     channels = definition.channels,
+                    lockFile = definition.lockFile,
                 )
             }
             is REnvironmentDefinition -> {

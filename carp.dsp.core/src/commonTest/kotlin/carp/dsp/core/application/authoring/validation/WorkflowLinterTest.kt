@@ -239,6 +239,41 @@ class WorkflowLinterTest
         assertEquals(ValidationErrorCode.WORKFLOW_UNKNOWN_ENV_KIND, warnings[0].code)
     }
 
+    // ── Check 10: Unpinned Environment ────────────────────────────────────────
+
+    private fun pinningWarnings( spec: Map<String, List<String>>, kind: String = "pixi" ) =
+        WorkflowLinter.lint(
+            minimalWorkflow(
+                steps = listOf(minimalStep()),
+                environments = mapOf("env-1" to EnvironmentDescriptor(name = "Test", kind = kind, spec = spec))
+            )
+        ).issues.filter { it.code == ValidationErrorCode.WORKFLOW_ENVIRONMENT_NOT_PINNED }
+
+    @Test
+    fun `lint warns on an unpinned dependency and names it`()
+    {
+        val warnings = pinningWarnings(mapOf("dependencies" to listOf("pandas=2.2", "pypi:mobgap")))
+        assertEquals(1, warnings.size)
+        assertTrue(warnings[0].message.contains("pypi:mobgap"))
+        assertTrue(!warnings[0].message.contains("pandas"))
+    }
+
+    @Test
+    fun `lint accepts exact versions but not ranges`()
+    {
+        assertTrue(pinningWarnings(mapOf("dependencies" to listOf("pandas=2.2", "pypi:mobgap==1.2.0"))).isEmpty())
+        assertEquals(1, pinningWarnings(mapOf("dependencies" to listOf("pandas>=2.2")), kind = "conda").size)
+    }
+
+    @Test
+    fun `lint accepts a pixi environment with a lock file`()
+    {
+        assertTrue(
+            pinningWarnings(mapOf("dependencies" to listOf("pypi:mobgap"), "lockFile" to listOf("mobgap.pixi.lock")))
+                .isEmpty()
+        )
+    }
+
     @Test
     fun `lint accepts supported environment kinds`()
     {

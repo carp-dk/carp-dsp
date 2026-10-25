@@ -6,6 +6,8 @@ import carp.dsp.core.application.authoring.resolve.StepLibrary
 import carp.dsp.core.application.authoring.resolve.WorkflowResolution
 import carp.dsp.core.application.authoring.validation.LinterConfiguration
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import carp.dsp.core.application.environment.REnvironmentDefinition
 import carp.dsp.core.application.execution.ExecutionLogger
 import carp.dsp.core.application.execution.NoOpExecutionLogger
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
@@ -226,10 +228,13 @@ class WorkflowExecutor(
 
         // Package files belong to the run rather than to any one step - commands
         // share the execution root - so they are attributed to the first step and
-        // staged once.
+        // staged once. So are environment lock files, which setup reads from the run root.
         plan.steps.firstOrNull()?.let { first ->
             val into = byStep.getOrPut( first.metadata.id ) { mutableMapOf() }
             packageFiles.forEach { ( relative, file ) -> into[relative] = FileSource.Copy( file ) }
+            lockFilesOf( definition ).forEach { relative ->
+                into.getOrPut( relative ) { FileSource.Copy( workflowDir.resolve( relative ) ) }
+            }
         }
 
         return WorkspaceProvisioning( byStep.mapValues { it.value.toMap() } )
@@ -260,6 +265,17 @@ class WorkflowExecutor(
         }
     }
 }
+
+/** Relative lock files the workflow's environments install from (pixi.lock, renv.lock). */
+private fun lockFilesOf( definition: WorkflowDefinition ): List<String> =
+    definition.environments.values.mapNotNull { env ->
+        when ( env )
+        {
+            is PixiEnvironmentDefinition -> env.lockFile
+            is REnvironmentDefinition -> env.renvLockFile
+            else -> null
+        }
+    }.filterNot { File( it ).isAbsolute }.map { it.removePrefix( "./" ) }.distinct()
 
 /** Input sources whose data is not a file beside the workflow. */
 private val NOT_STAGED_SOURCES = setOf( "external", "protocol" )

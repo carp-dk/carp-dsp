@@ -86,6 +86,7 @@ internal object EnvironmentImporter
                 environmentVariables = envVars,
                 pythonVersion = version,
                 channels = channels,
+                lockFile = environmentDescriptor.spec["lockFile"]?.firstOrNull(),
             )
             "r" -> REnvironmentDefinition(
                 id = id,

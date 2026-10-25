@@ -117,14 +117,16 @@ class DefaultPlanExecutor(
     ): Pair<KnownStepExecutionContext, EnvironmentExecutionCoordinator> {
         val workspace = workspaceManager.create(plan, runId)
         WorkspaceProvisioner().provision(workspace, provisioning)
+        val executionRoot = java.nio.file.Path.of(workspace.executionRoot)
+        val runPlan = withLocksUnder(plan, executionRoot)
         val stepRunner = createStepRunner()
         val environmentCoordinator = EnvironmentExecutionCoordinator(
-            plan = plan,
+            plan = runPlan,
             orchestrator = options.orchestrator,
             config = options.environmentConfig,
             runId = runId,
             executionLogger = options.executionLogger,
-            executionRoot = java.nio.file.Path.of(workspace.executionRoot)
+            executionRoot = executionRoot
         )
         val stepResults = mutableListOf<StepRunResult>()
         val runIssues = mutableListOf<ExecutionIssue>()
@@ -136,7 +138,7 @@ class DefaultPlanExecutor(
             environmentCoordinator = environmentCoordinator,
             stepResults = stepResults,
             runIssues = runIssues,
-            environments = plan.requiredEnvironmentRefs,
+            environments = runPlan.requiredEnvironmentRefs,
             reusable = reusable
         )
         return Pair(context, environmentCoordinator)
@@ -521,6 +523,24 @@ class DefaultPlanExecutor(
     }
 
 
+    /**
+     * [plan] with each relative environment lock file resolved against [root], where the
+     * run staged it. The plan itself keeps relative paths, so it is the same on every machine.
+     */
+    private fun withLocksUnder(plan: ExecutionPlan, root: java.nio.file.Path): ExecutionPlan {
+        fun under(path: String?): String? =
+            path?.let { if (java.nio.file.Path.of(it).isAbsolute) it else root.resolve(it).toString() }
+        return plan.copy(
+            requiredEnvironmentRefs = plan.requiredEnvironmentRefs.mapValues { (_, ref) ->
+                when (ref) {
+                    is PixiEnvironmentRef -> ref.copy(lockFile = under(ref.lockFile))
+                    is REnvironmentRef -> ref.copy(renvLockFile = under(ref.renvLockFile))
+                    else -> ref
+                }
+            }
+        )
+    }
+
     private fun deriveOverallStatus(results: List<StepRunResult>): ExecutionStatus =
         when {
             results.any { it.status == ExecutionStatus.FAILED } -> ExecutionStatus.FAILED
@@ -639,8 +659,12 @@ class DefaultPlanExecutor(
 
             resolution?.let { runCatching { EnvironmentStore.markUsed(it.directory) } }
             // What the environment contained goes into the run; a failed record never fails the run.
-            runCatching { recorder.write(executionRoot, recorder.record(ref)) }
-                .onFailure { log.warn(it) { "Could not record environment '${ref.id}'" } }
+            // Only into a run root that exists: a workspace manager that creates none (a test
+            // double) must not leave files in the working directory.
+            if (java.nio.file.Files.isDirectory(executionRoot)) {
+                runCatching { recorder.write(executionRoot, recorder.record(ref)) }
+                    .onFailure { log.warn(it) { "Could not record environment '${ref.id}'" } }
+            }
 
             executionLogger.onEnvironmentReady(
                 runId,

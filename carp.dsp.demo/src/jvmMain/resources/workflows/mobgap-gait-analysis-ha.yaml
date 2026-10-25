@@ -29,6 +29,9 @@ environments:
         - "pypi:matplotlib"
       pythonVersion:
         - "3.12"
+      # Install exactly these versions on every machine (win-64, linux-64, osx-64, osx-arm64).
+      lockFile:
+        - "mobgap.pixi.lock"
 
 steps:
   # Step 1: Import — fetch LabExampleDataset and write flat files

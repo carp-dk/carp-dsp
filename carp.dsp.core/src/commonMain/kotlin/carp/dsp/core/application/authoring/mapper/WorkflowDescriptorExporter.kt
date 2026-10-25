@@ -222,6 +222,7 @@ internal object EnvironmentExporter
                 ( env as? carp.dsp.core.application.environment.PixiEnvironmentDefinition )?.let {
                     baseSpec["pythonVersion"] = listOf( it.pythonVersion )
                     baseSpec["channels"] = it.channels
+                    it.lockFile?.let { lock -> baseSpec["lockFile"] = listOf( lock ) }
                 }
                 "pixi" to baseSpec
             }

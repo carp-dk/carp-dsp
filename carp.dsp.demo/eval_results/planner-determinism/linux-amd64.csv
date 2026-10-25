@@ -1,12 +1,12 @@
 platform,java,workflow,steps,issues,invocations,distinct_plans,plan_sha256
-Linux amd64,17.0.20.1,mobgap-gait-analysis,8,0,100,1,71f6278a8c42efb6c0fb786794364e72060eaf7d1127430e405e7d318d7550df
-Linux amd64,17.0.20.1,mobgap-gait-analysis-ha,8,0,100,1,098bb660e0535b5f12dc9fd8bcdeb893b03b13f7b1a800df48cf1a3f7049ba29
-Linux amd64,17.0.20.1,wf-activity-summary,5,0,100,1,0de5ca14cc45f658fca3b02ba8d434ed382d22621d09aa34f8401fde5b6167b7
-Linux amd64,17.0.20.1,wf-activity-summary-offline,10,4,100,1,cd37dd086b2cbb9db1c5c99e3bf09e75c73c0d63c32614d6ce8d4ebf3c0544b0
-Linux amd64,17.0.20.1,wf-activity-summary-v2,13,5,100,1,ea8090543ab4a2cce4f5ec20f775781fd9facec1077064260161ebdeb2c647b9
-Linux amd64,17.0.20.1,wf-activity-summary-v2-2016-03,13,5,100,1,248b923212b73940f673f52dfa4edac58920f9bef017d9dcf09b903b838aaa3a
-Linux amd64,17.0.20.1,wf-anomaly-report,5,0,100,1,5c54df265a66965887fa14a51d21e0d6b31f8e80ad1eae7bb822a4b195bfb707
-Linux amd64,17.0.20.1,wf-anomaly-report-v2,11,6,100,1,52380f68b45e5e8d567303660762197382f015f291761c35bf0e42844a7d4048
-Linux amd64,17.0.20.1,wf-minimal-summary,3,0,100,1,28357076c480b752e679064aff3e095d1d7a9bfb991b2c09885280058ae6fda7
-Linux amd64,17.0.20.1,wf-minimal-summary-v2,4,2,100,1,18b517152d19e4ed89d9a157caa26af9eecba6a410e1954dadd8cf916dc4240f
-Linux amd64,17.0.20.1,protocol-coupling-mixed,2,1,100,1,8efc07a271eb90d5ba930f2973037c7b64a4bfe47692faaf6bc85c822553ebea
+Linux amd64,17.0.20.1,mobgap-gait-analysis,8,0,100,1,ada12a9e7fdc87d3a19593ca10e52d32b2df55546db7b301e178ad3946fe567d
+Linux amd64,17.0.20.1,mobgap-gait-analysis-ha,8,0,100,1,abf97d27fdf68277c883022427279b6d840fb466bcc70871a9fe53ee722bdb19
+Linux amd64,17.0.20.1,wf-activity-summary,5,1,100,1,8cba2146d6126842949554ff477076a1d99653071e8427c44a63056d73489219
+Linux amd64,17.0.20.1,wf-activity-summary-offline,10,6,100,1,68b3857f5b093288404d6373aa193dcaf37d3ac3368384303f6d004ef2bf143d
+Linux amd64,17.0.20.1,wf-activity-summary-v2,13,7,100,1,d9bb5b47934b11198cdbc88d46ebd9deae7bae8ed16032d076d1749c3bfd3588
+Linux amd64,17.0.20.1,wf-activity-summary-v2-2016-03,13,7,100,1,dd78f3483d2e39a97be578f8ba446a816079ffd370913a3dc3c6dc76143ab204
+Linux amd64,17.0.20.1,wf-anomaly-report,5,1,100,1,210e127c88d75d224ef6e97c732c18b5410d43c2a170cef2c19b8e663783c544
+Linux amd64,17.0.20.1,wf-anomaly-report-v2,11,8,100,1,a39341da93cf97752bc70bbef31b50a9f82a06d7eff1c1d6e09e9452e399b1f9
+Linux amd64,17.0.20.1,wf-minimal-summary,3,1,100,1,1e3f1e8a71144be7cefef462f713bb20d1672d174312270e4bf3a9dcf5d3484d
+Linux amd64,17.0.20.1,wf-minimal-summary-v2,4,3,100,1,ac1f18e24a6c52d55ade446f89c5394f92773da5328577022bf08c6ca43ded59
+Linux amd64,17.0.20.1,protocol-coupling-mixed,2,2,100,1,81c86e97ab807b88d4450299aac72e12e69a97beb557d430f6ab1a57cd3d3c74

@@ -191,6 +191,43 @@ tasks.register("evalPlannerDeterminismAll") {
     dependsOn("evalPlannerDeterminismLinux", "evalPlannerDeterminism")
 }
 tasks.named("evalPlannerDeterminism") { mustRunAfter("evalPlannerDeterminismLinux") }
+
+// The locked gait workflow, run through CARP-DSP, on this machine and in a Linux
+// container, then compared. The container is the pinned pixi image (pixi is what the
+// workflow's environment needs) with a JVM from `pixi exec`; named volumes keep its
+// environment and package caches between runs.
+//   ./gradlew :carp.dsp.demo:evalGaitPortabilityAll -PpaperDir=../carp-dsp-sys-paper
+registerEvalTask(
+    "evalGaitPortability",
+    "carp.dsp.demo.eval.GaitPortabilityEvalKt",
+    "Run the locked gait workflow here and compare output hashes across platforms (EX2)"
+)
+tasks.register<Exec>("evalGaitPortabilityLinux") {
+    group = "evaluation"
+    description = "Run the EX2 gait portability eval in a Linux container (Docker)"
+    dependsOn(determinismClasspath, "jvmMainClasses", "jvmProcessResources")
+    val demo = layout.projectDirectory.asFile.absolutePath.replace("\\", "/")
+    val cp = listOf(
+        "/demo/build/classes/kotlin/jvm/main",
+        "/demo/build/processedResources/jvm/main",
+        "/demo/build/determinism-classpath/*"
+    ).joinToString(":")
+    commandLine(
+        "docker", "run", "--rm",
+        "-v", "$demo:/demo", "-w", "/demo",
+        "-v", "carp-dsp-gait-envs:/root/.carp-dsp",
+        "-v", "carp-dsp-gait-cache:/root/.cache",
+        "ghcr.io/prefix-dev/pixi:0.83.0",
+        "pixi", "exec", "--spec", "openjdk=17", "--",
+        "java", "-cp", cp, "carp.dsp.demo.eval.GaitPortabilityEvalKt"
+    )
+}
+tasks.register("evalGaitPortabilityAll") {
+    group = "evaluation"
+    description = "EX2: gait portability in a Linux container, then on this machine"
+    dependsOn("evalGaitPortabilityLinux", "evalGaitPortability")
+}
+tasks.named("evalGaitPortability") { mustRunAfter("evalGaitPortabilityLinux") }
 registerEvalTask(
     "evalMobgapTiming",
     "carp.dsp.demo.eval.MobgapTimedEvalKt",

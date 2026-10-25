@@ -27,10 +27,17 @@ object MobgapScripts
             .resolve( WorkspacePathFormatter.formatWorkflowName( plan.workflowName ) )
             .resolve( "run_$runId" )
 
-    /** Copies [SCRIPTS] to `scripts/mobgap` under [runRoot], creating directories as needed. */
+    /** The lock file the gait workflows' environment installs from, beside the workflow. */
+    const val LOCK_FILE: String = "mobgap.pixi.lock"
+
+    /**
+     * Copies [SCRIPTS] to `scripts/mobgap` and [LOCK_FILE] to the top of [runRoot], creating
+     * directories as needed; for runs that execute a plan without `WorkflowExecutor.prepare`.
+     */
     fun stage( runRoot: Path )
     {
         val scriptsDir = runRoot.resolve( "scripts/mobgap" ).createDirectories()
         SCRIPTS.forEach { DemoIo.copyResource( "scripts/mobgap/$it", scriptsDir.resolve( it ) ) }
+        DemoIo.copyResource( "workflows/$LOCK_FILE", runRoot.resolve( LOCK_FILE ) )
     }
 }

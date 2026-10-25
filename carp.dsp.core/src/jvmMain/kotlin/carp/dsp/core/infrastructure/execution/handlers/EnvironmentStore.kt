@@ -238,8 +238,12 @@ object EnvironmentStore {
         is PixiEnvironmentRef -> EnvironmentSignature(
             kind = "pixi",
             name = ref.name,
-            // A different interpreter is a different environment, whatever else matches.
-            pinned = mapOf("python" to ref.pythonVersion),
+            // A different interpreter is a different environment, whatever else matches,
+            // and so is a different lock: its content, not its path, is the identity.
+            pinned = buildMap {
+                put("python", ref.pythonVersion)
+                ref.lockFile?.let { put("lock", lockIdentity(it)) }
+            },
             required = mapOf("channel" to ref.channels, "dep" to ref.dependencies),
         )
 
@@ -256,13 +260,24 @@ object EnvironmentStore {
             // The R version and a pinned lock file are both identity, not preference.
             pinned = buildMap {
                 put("r", ref.rVersion)
-                ref.renvLockFile?.let { put("lock", it) }
+                ref.renvLockFile?.let { put("lock", lockIdentity(it)) }
             },
             required = mapOf("pkg" to ref.rPackages, "dep" to ref.dependencies),
         )
 
         else -> null
     }
+
+    /**
+     * The SHA-256 of a lock file's content, so the same lock found at another path (each
+     * run stages its own copy) is the same environment. A lock that cannot be read keeps
+     * its path, which still separates it from an unlocked environment.
+     */
+    internal fun lockIdentity(path: String): String =
+        runCatching {
+            MessageDigest.getInstance("SHA-256").digest(Path.of(path).toFile().readBytes())
+                .joinToString("") { "%02x".format(it) }
+        }.getOrDefault(path)
 
     private fun directoryFor(identity: EnvironmentSignature): Path =
         root.resolve(identity.kind).resolve("${slug(identity.name)}-${digest(identity)}")
