@@ -241,3 +241,25 @@ Platforms compared: Linux amd64, Windows 11 amd64
 Workflows whose plan differs between platforms: none
 ==============================================================================
 
+==============================================================================
+Planner determinism eval (PL3) - 2026-10-25T09:41:39.122348200Z
+Platform: Windows 11 amd64, Java 17.0.14; 100 invocations per workflow
+
+  workflow                         steps issues distinct  plan sha256
+  mobgap-gait-analysis                 8      0        1  ada12a9e7fdc87d3
+  mobgap-gait-analysis-ha              8      0        1  abf97d27fdf68277
+  wf-activity-summary                  5      1        1  8cba2146d6126842
+  wf-activity-summary-offline         10      6        1  68b3857f5b093288
+  wf-activity-summary-v2              13      7        1  d9bb5b47934b1119
+  wf-activity-summary-v2-2016-03      13      7        1  dd78f3483d2e39a9
+  wf-anomaly-report                    5      1        1  210e127c88d75d22
+  wf-anomaly-report-v2                11      8        1  a39341da93cf9775
+  wf-minimal-summary                   3      1        1  1e3f1e8a71144be7
+  wf-minimal-summary-v2                4      3        1  ac1f18e24a6c52d5
+  protocol-coupling-mixed              2      2        1  81c86e97ab807b88
+
+One plan per workflow on this machine: true
+Platforms compared: Linux amd64, Mac OS X aarch64, Windows 11 amd64, Windows Server 2025 amd64
+Workflows whose plan differs between platforms: none
+==============================================================================
+

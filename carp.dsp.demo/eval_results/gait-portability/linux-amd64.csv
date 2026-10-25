@@ -1,9 +1,9 @@
 platform,java,file,sha256
-Linux amd64,17.0.18-internal,01_import_imu_data/outputs/imu-data-csv.csv,33e6685dbbec2744ae1559ef7f2276a68ac83e8f9332f06a21d7ee9fa63d59ba
-Linux amd64,17.0.18-internal,02_gait_sequence_detection/outputs/gs-list-csv.csv,759b4269bc95ba35e7e585d47a8a683885ec54d6902d88c43b12baba2d27be52
-Linux amd64,17.0.18-internal,03_initial_contact_detection/outputs/ic-list-csv.csv,de84a90dbaf7ad4e56a46725e93a56e22ae1ee78967f7f1faa496e6032352deb
-Linux amd64,17.0.18-internal,03_initial_contact_detection/outputs/turn-list-csv.csv,f49e091755a3d223288b4daf301e19a0fbcb330cc8dcb3fba392b2b9d1f2732c
-Linux amd64,17.0.18-internal,04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv,5d746e9515786a6ddaaa2d547a1833b95feb2ebd3307674ef7eb8fb362575aac
-Linux amd64,17.0.18-internal,05_walking_bout_assembly/outputs/stride-list-csv.csv,83c48171f8800ab3db76d402cb3bdd64696dd4572de9cafa3373532f3c2d2776
-Linux amd64,17.0.18-internal,05_walking_bout_assembly/outputs/wb-params-csv.csv,1118136dc8c431d29de000df7a147750eb844bcf7b72758f981f965819f04eed
-Linux amd64,17.0.18-internal,06_dmo_aggregation/outputs/aggregated-dmos-csv.csv,cd4d2be54249ef402b5704a5886afbe84103727f814b214f999dda9345a1b292
+Linux amd64,17.0.20.1,01_import_imu_data/outputs/imu-data-csv.csv,33e6685dbbec2744ae1559ef7f2276a68ac83e8f9332f06a21d7ee9fa63d59ba
+Linux amd64,17.0.20.1,02_gait_sequence_detection/outputs/gs-list-csv.csv,759b4269bc95ba35e7e585d47a8a683885ec54d6902d88c43b12baba2d27be52
+Linux amd64,17.0.20.1,03_initial_contact_detection/outputs/ic-list-csv.csv,de84a90dbaf7ad4e56a46725e93a56e22ae1ee78967f7f1faa496e6032352deb
+Linux amd64,17.0.20.1,03_initial_contact_detection/outputs/turn-list-csv.csv,f49e091755a3d223288b4daf301e19a0fbcb330cc8dcb3fba392b2b9d1f2732c
+Linux amd64,17.0.20.1,04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv,5d746e9515786a6ddaaa2d547a1833b95feb2ebd3307674ef7eb8fb362575aac
+Linux amd64,17.0.20.1,05_walking_bout_assembly/outputs/stride-list-csv.csv,83c48171f8800ab3db76d402cb3bdd64696dd4572de9cafa3373532f3c2d2776
+Linux amd64,17.0.20.1,05_walking_bout_assembly/outputs/wb-params-csv.csv,1118136dc8c431d29de000df7a147750eb844bcf7b72758f981f965819f04eed
+Linux amd64,17.0.20.1,06_dmo_aggregation/outputs/aggregated-dmos-csv.csv,cd4d2be54249ef402b5704a5886afbe84103727f814b214f999dda9345a1b292
