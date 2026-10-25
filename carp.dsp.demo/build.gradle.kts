@@ -170,6 +170,11 @@ registerEvalTask(
     "Plan 6 fault-injected workflows and record plan-time error detection (Fig A, CARP arm)"
 )
 registerEvalTask(
+    "evalStaticBaselines",
+    "carp.dsp.demo.eval.StaticBaselineEvalKt",
+    "Check the 6 injected faults with snakemake -n and cwltool --validate (PL1 baseline)"
+)
+registerEvalTask(
     "evalReuse",
     "carp.dsp.demo.eval.ReuseEvalKt",
     "Retarget two workflows to new data (cohort, collection period): diff, plan and execute (AU3)"
@@ -238,13 +243,32 @@ tasks.register("evalErrorDetectionFull") {
         }
         // ad-hoc arm (runs the eight mobgap steps in the provisioned env)
         pixi("adhoc_baseline.py")
-        // rebuild Fig A into eval_results; with -PpaperDir also write it into the paper
+        // rebuild Fig A into eval_results; with -PpaperDir also write it and the ad-hoc
+        // numbers into the paper
         pixi("plot_error_detection.py")
         paperDir?.let { dir ->
             val paperFig = dir.resolve("images/fig-error-detection.pdf")
             if (!paperFig.parentFile.isDirectory) throw GradleException("Paper images/ not found: ${paperFig.parentFile}")
             pixi("plot_error_detection.py", "--out", paperFig.absolutePath)
+            val numbers = layout.projectDirectory.file("eval_results/error-detection-adhoc-numbers.tex").asFile
+            if (numbers.exists()) numbers.copyTo(dir.resolve("generated/error-detection-adhoc-numbers.tex"), overwrite = true)
         }
     }
+}
+
+// Fig D (CARP, per-step overhead) and Fig A (ad-hoc baseline) both report wall time of
+// the same gait pipeline, so they must come from one session on one machine, or the two
+// figures disagree. This runs both, in that order.
+//   ./gradlew :carp.dsp.demo:evalPaperTimings -PpaperDir=../carp-dsp-sys-paper
+tasks.register("evalPaperTimings") {
+    group = "evaluation"
+    description = "Run Fig D (evalMobgapTiming, 3 runs) and Fig A (evalErrorDetectionFull) in one session"
+    dependsOn("evalMobgapTiming", "evalErrorDetectionFull")
+}
+tasks.named("evalErrorDetectionFull") { mustRunAfter("evalMobgapTiming") }
+// Three timing runs by default when run through evalPaperTimings (run 1 installs the
+// environment, so the figure needs at least two more); -Pargs still overrides.
+if (!project.hasProperty("args") && gradle.startParameter.taskNames.any { it.endsWith("evalPaperTimings") }) {
+    tasks.named<JavaExec>("evalMobgapTiming") { args = listOf("3") }
 }
 

@@ -1,0 +1,25 @@
+# Environment for the PL1 static-check baseline (Snakemake and CWL).
+#
+# Kept apart from ../pixi.toml so the lock file the other evals use does not change.
+# `conda` is here because `snakemake --sdm conda` needs it to read a rule's env file.
+# No win-64: cwltool does not run on Windows. The Kotlin side runs this in Docker
+# (pixi image, Linux), so Windows needs only Docker Desktop.
+#
+# Usually run by the Kotlin side, which writes the wiring first:
+#   ./gradlew :carp.dsp.demo:evalStaticBaselines -PpaperDir=../carp-dsp-sys-paper
+
+[workspace]
+name = "carp-dsp-static-baselines"
+version = "0.1.0"
+description = "Snakemake dry run and cwltool --validate over the six injected faults"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = "3.12.*"
+conda = "*"
+snakemake-minimal = "9.*"
+cwltool = "3.*"
+
+[tasks]
+static-baselines = "python static_baselines.py"

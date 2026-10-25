@@ -23,9 +23,10 @@ import matplotlib.pyplot as plt
 HERE = pathlib.Path(__file__).resolve().parent
 RESULTS = HERE.parents[4] / "eval_results"  # matches the Kotlin arm
 
-PHASES = ["decode_ms", "import_ms", "plan_ms", "validate_ms"]
+PHASES = ["decode_ms", "lint_ms", "import_ms", "plan_ms", "validate_ms"]
 PHASE_LABELS = {
     "decode_ms": "Decode (YAML)",
+    "lint_ms": "Lint",
     "import_ms": "Import",
     "plan_ms": "Plan",
     "validate_ms": "Validate",
@@ -35,7 +36,11 @@ PHASE_LABELS = {
 def load(path: pathlib.Path) -> dict[int, dict[str, list[float]]]:
     by_size: dict[int, dict[str, list[float]]] = {}
     with open(path, newline="") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        # CSVs written before the lint phase was timed have no lint_ms column.
+        if "lint_ms" not in (reader.fieldnames or []):
+            PHASES.remove("lint_ms")
+        for row in reader:
             size = int(row["size"])
             d = by_size.setdefault(size, {p: [] for p in PHASES + ["total_ms"]})
             for p in PHASES + ["total_ms"]:

@@ -1,6 +1,7 @@
 package carp.dsp.demo.eval
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
+import carp.dsp.core.application.authoring.validation.WorkflowLinter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.application.plan.DependencyGraphBuilder
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
@@ -16,9 +17,10 @@ import java.io.File
  * Times the plan-time gate as workflow size grows. Synthetic linear-chain workflows of
  * N steps are generated in memory (each step consumes the previous step's typed CSV
  * output, mirroring the shape of the real gait and HR pipelines) and pushed through the
- * same decode -> import -> plan -> validate path the real workflows use.
+ * same decode -> lint -> import -> plan -> validate path a real run takes
+ * (WorkflowExecutor.prepare; the synthetic chains have no `uses:` to resolve).
  *
- * For each size the four phases are timed separately over R repeats (after JIT warm-up),
+ * For each size the five phases are timed separately over R repeats (after JIT warm-up),
  * so the figure can show both the total author-facing latency and where it goes.
  * Every synthetic workflow must plan clean; the run aborts if any ERROR issue appears.
  *
@@ -32,7 +34,9 @@ import java.io.File
  * Writes eval_results/planner-scaling.csv (one row per repeat), appends a summary to
  * eval_results/planner-scaling.txt, then rebuilds eval_results/fig-planner-scaling.pdf by
  * running scripts/eval/plot_planner_scaling.py in the eval pixi env (has matplotlib),
- * falling back to the system Python if pixi is not on PATH.
+ * falling back to the system Python if pixi is not on PATH. Also writes
+ * planner-scaling-numbers.tex (LaTeX macros). With -PpaperDir the figure goes to the
+ * paper's images/ and the macros to its generated/.
  */
 
 /** Same fixed namespace as the other evals (UUID v5 determinism). */
@@ -44,11 +48,12 @@ private const val WARMUP_ITERATIONS = 25
 
 private data class PhaseSample(
     val decodeMs: Double,
+    val lintMs: Double,
     val importMs: Double,
     val planMs: Double,
     val validateMs: Double
 ) {
-    val totalMs: Double get() = decodeMs + importMs + planMs + validateMs
+    val totalMs: Double get() = decodeMs + lintMs + importMs + planMs + validateMs
 }
 
 fun main(args: Array<String>) {
@@ -65,8 +70,9 @@ fun main(args: Array<String>) {
     val warmupYaml = syntheticChainYaml(20)
     repeat(WARMUP_ITERATIONS) { timedPlan(codec, warmupYaml) }
 
-    val csv = StringBuilder("size,edges,repeat,decode_ms,import_ms,plan_ms,validate_ms,total_ms\n")
+    val csv = StringBuilder("size,edges,repeat,decode_ms,lint_ms,import_ms,plan_ms,validate_ms,total_ms\n")
     val summary = mutableListOf<String>()
+    val medianTotals = LinkedHashMap<Int, Double>()
 
     for (size in sizes) {
         val yaml = syntheticChainYaml(size)
@@ -79,13 +85,15 @@ fun main(args: Array<String>) {
         val samples = (1..repeats).map { r ->
             val s = timedPlan(codec, yaml)
             csv.append(
-                "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f\n".format(
-                    size, edges, r, s.decodeMs, s.importMs, s.planMs, s.validateMs, s.totalMs
+                String.format(
+                    java.util.Locale.ROOT, "%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+                    size, edges, r, s.decodeMs, s.lintMs, s.importMs, s.planMs, s.validateMs, s.totalMs
                 )
             )
             s
         }
         val medTotal = median(samples.map { it.totalMs })
+        medianTotals[size] = medTotal
         val medPlan = median(samples.map { it.planMs + it.validateMs })
         summary += "  %4d steps: total median %8.2f ms  (plan+validate %6.2f ms)".format(size, medTotal, medPlan)
     }
@@ -94,7 +102,7 @@ fun main(args: Array<String>) {
         appendLine("=".repeat(70))
         appendLine("Planner-scaling eval - ${java.time.Instant.now()}")
         appendLine("Synthetic linear chains, sizes $sizes, $repeats repeats each,")
-        appendLine("$WARMUP_ITERATIONS warm-up iterations. Phases: decode | import | plan | validate.")
+        appendLine("$WARMUP_ITERATIONS warm-up iterations. Phases: decode | lint | import | plan | validate.")
         appendLine("All workflows planned with zero ERROR issues.")
         appendLine()
         summary.forEach { appendLine(it) }
@@ -108,8 +116,31 @@ fun main(args: Array<String>) {
     dir.resolve("planner-scaling.txt").appendText(report + "\n")
     println("Wrote planner-scaling.csv and planner-scaling.txt to: ${dir.absolutePath}")
 
-    plotFigure(csvFile, dir.resolve("fig-planner-scaling.pdf"))
+    val figFile = dir.resolve("fig-planner-scaling.pdf")
+    plotFigure(csvFile, figFile)
+    if (figFile.exists()) DemoIo.publishToPaper(figFile, "images/fig-planner-scaling.pdf")
+
+    val numbers = dir.resolve("planner-scaling-numbers.tex").apply { writeText(scalingNumbers(medianTotals)) }
+    DemoIo.publishToPaper(numbers, "generated/planner-scaling-numbers.tex")
 }
+
+/**
+ * The gate cost at the smallest, ten-step (when measured) and largest sizes, as LaTeX
+ * macros: median total of decode, lint, import, plan and validate, in ms.
+ */
+private fun scalingNumbers(medianTotals: Map<Int, Double>): String = buildString {
+    appendLine("% GENERATED by PlannerScalingEval - do not edit; run :carp.dsp.demo:evalPlannerScaling")
+    fun macro(name: String, value: String) = appendLine("\\newcommand{\\$name}{$value}")
+    fun ms(value: Double) = String.format(java.util.Locale.ROOT, "%.1f", value)
+    val sizes = medianTotals.keys.sorted()
+    macro("ScalingMinSteps", sizes.first().toString())
+    macro("ScalingMinMs", ms(medianTotals.getValue(sizes.first())))
+    medianTotals[TEN_STEPS]?.let { macro("ScalingTenStepsMs", ms(it)) }
+    macro("ScalingMaxSteps", sizes.last().toString())
+    macro("ScalingMaxMs", ms(medianTotals.getValue(sizes.last())))
+}
+
+private const val TEN_STEPS = 10
 
 /**
  * Rebuilds the figure from the CSV, like the other evals: prefer the eval pixi env
@@ -187,6 +218,8 @@ private fun timedPlan(codec: WorkflowYamlCodec, yaml: String): PhaseSample {
     val t0 = System.nanoTime()
     val descriptor = codec.decodeOrThrow(yaml)
     val t1 = System.nanoTime()
+    val lint = WorkflowLinter.lint(descriptor)
+    val tLint = System.nanoTime()
     val definition = WorkflowDescriptorImporter(PS_FIXED_NAMESPACE).import(descriptor)
     val t2 = System.nanoTime()
     val plan = DefaultExecutionPlanner().plan(definition)
@@ -194,12 +227,14 @@ private fun timedPlan(codec: WorkflowYamlCodec, yaml: String): PhaseSample {
     plan.validate()
     val t4 = System.nanoTime()
 
+    check(lint.isValid) { "Synthetic workflow linted with ERROR issues: ${lint.issues.map { it.code }}" }
     val errors = plan.issues.filter { it.severity == PlanIssueSeverity.ERROR }
     check(errors.isEmpty()) { "Synthetic workflow planned with ERROR issues: ${errors.map { it.code }}" }
 
     return PhaseSample(
         decodeMs = (t1 - t0) / 1e6,
-        importMs = (t2 - t1) / 1e6,
+        lintMs = (tLint - t1) / 1e6,
+        importMs = (t2 - tLint) / 1e6,
         planMs = (t3 - t2) / 1e6,
         validateMs = (t4 - t3) / 1e6
     )
