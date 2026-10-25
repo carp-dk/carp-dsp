@@ -153,3 +153,47 @@ Reference plan (first invocation):
   issues=0
 ======================================================================
 
+==============================================================================
+Planner determinism eval (PL3) - 2026-10-25T06:59:18.914366189Z
+Platform: Linux amd64, Java 17.0.20.1; 100 invocations per workflow
+
+  workflow                         steps issues distinct  plan sha256
+  mobgap-gait-analysis                 8      0        1  71f6278a8c42efb6
+  mobgap-gait-analysis-ha              8      0        1  098bb660e0535b5f
+  wf-activity-summary                  5      0        1  0de5ca14cc45f658
+  wf-activity-summary-offline         10      4        1  cd37dd086b2cbb9d
+  wf-activity-summary-v2              13      5        1  ea8090543ab4a2cc
+  wf-activity-summary-v2-2016-03      13      5        1  248b923212b73940
+  wf-anomaly-report                    5      0        1  5c54df265a669658
+  wf-anomaly-report-v2                11      6        1  52380f68b45e5e8d
+  wf-minimal-summary                   3      0        1  28357076c480b752
+  wf-minimal-summary-v2                4      2        1  18b517152d19e4ed
+  protocol-coupling-mixed              2      1        1  8efc07a271eb90d5
+
+One plan per workflow on this machine: true
+Platforms compared: Linux amd64
+Workflows whose plan differs between platforms: none
+==============================================================================
+
+==============================================================================
+Planner determinism eval (PL3) - 2026-10-25T06:59:27.647271700Z
+Platform: Windows 11 amd64, Java 17.0.14; 100 invocations per workflow
+
+  workflow                         steps issues distinct  plan sha256
+  mobgap-gait-analysis                 8      0        1  71f6278a8c42efb6
+  mobgap-gait-analysis-ha              8      0        1  098bb660e0535b5f
+  wf-activity-summary                  5      0        1  0de5ca14cc45f658
+  wf-activity-summary-offline         10      4        1  cd37dd086b2cbb9d
+  wf-activity-summary-v2              13      5        1  ea8090543ab4a2cc
+  wf-activity-summary-v2-2016-03      13      5        1  248b923212b73940
+  wf-anomaly-report                    5      0        1  5c54df265a669658
+  wf-anomaly-report-v2                11      6        1  52380f68b45e5e8d
+  wf-minimal-summary                   3      0        1  28357076c480b752
+  wf-minimal-summary-v2                4      2        1  18b517152d19e4ed
+  protocol-coupling-mixed              2      1        1  8efc07a271eb90d5
+
+One plan per workflow on this machine: true
+Platforms compared: Linux amd64, Windows 11 amd64
+Workflows whose plan differs between platforms: none
+==============================================================================
+

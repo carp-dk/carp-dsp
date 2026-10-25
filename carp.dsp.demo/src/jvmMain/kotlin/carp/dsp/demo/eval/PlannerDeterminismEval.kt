@@ -1,102 +1,165 @@
 package carp.dsp.demo.eval
 
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
-import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.core.application.run.WorkflowSource
 import carp.dsp.demo.io.DemoIo
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
-import dk.cachet.carp.common.application.UUID
+import java.io.File
+import java.security.MessageDigest
 
 /**
- * Planner determinism eval (paper: Evaluation / Reproducibility, plan determinism).
+ * PL3 eval: the same workflow plans to the same plan, on every invocation and every machine.
  *
- * Plans the mobgap gait analysis workflow N times (default 100) and verifies that
- * every plan is identical at the claim level: same step UUIDs, same topological
- * order, same environment refs.
+ * Prepares each demo workflow [invocations] times (default 100) the way a run does
+ * (resolve, lint, import, plan), with the importer's default namespace, which is
+ * derived from the workflow's id and version. Every plan is fingerprinted (step order,
+ * step, port and environment ids, wiring, issue codes; not the random plan id) and
+ * hashed.
  *
- * Two known caveats this eval documents explicitly:
- * 1. `ExecutionPlan.planId` is `UUID.randomUUID()` by design - it is excluded from
- *    the fingerprint and reported separately.
- * 2. `WorkflowDescriptorImporter` defaults to a RANDOM workflow namespace, so step
- *    UUIDs are only deterministic when a fixed namespace is passed (as recommended
- *    by def). This is by importing with the default namespace in part 2: default constructor.
+ * Each machine writes its hashes to `eval_results/planner-determinism/<platform>.csv`.
+ * Every run then compares all platform files present and writes
+ * `planner-determinism-numbers.tex` (to the paper with -PpaperDir). Run it on each
+ * platform, then on the host last:
  *
- * Run:
- *   ./gradlew :carp.dsp.demo:jvmRun -PmainClass=carp.dsp.demo.eval.PlannerDeterminismEvalKt
- * Optional first arg: iteration count (default 100).
+ *   ./gradlew :carp.dsp.demo:evalPlannerDeterminismAll -PpaperDir=../carp-dsp-sys-paper
  *
- * Results are printed and appended to `<project>/eval_results/planner-determinism.txt`.
+ * which runs it in a Linux container (Docker) and then on this machine.
  */
+fun main( args: Array<String> )
+{
+    val invocations = args.firstOrNull()?.toIntOrNull() ?: DEFAULT_INVOCATIONS
+    val work = DemoIo.evalResultsDir().resolve( "planner-determinism/work" ).apply { mkdirs() }
+    val executor = WorkflowExecutor.filesystem( ClasspathStepLibrary(), work.resolve( "workspace" ).toPath() )
 
-/** Fixed namespace for reproducible step-UUID generation (UUID v5). */
-private val FIXED_NAMESPACE: UUID = UUID.parse("d3b7f2a0-0000-5000-8000-6d6f62676170")
-
-fun main(args: Array<String>) {
-    val iterations = args.firstOrNull()?.toIntOrNull() ?: 100
-    val yaml = DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml")
-    val codec = WorkflowYamlCodec()
-
-    // Part 1: fixed namespace (the reproducible path)
-    val fingerprints = mutableSetOf<String>()
-    val planIds = mutableSetOf<String>()
-    var firstFingerprint: String? = null
-    repeat(iterations) {
-        val descriptor = codec.decodeOrThrow(yaml)
-        val definition = WorkflowDescriptorImporter(FIXED_NAMESPACE).import(descriptor)
-        val plan = DefaultExecutionPlanner().plan(definition)
-        plan.validate()
-        val fp = fingerprint(plan)
-        if (firstFingerprint == null) firstFingerprint = fp
-        fingerprints += fp
-        planIds += plan.planId
+    val rows = WORKFLOWS.map { name ->
+        // One folder per workflow: the steps.lock beside a workflow is written for that
+        // workflow alone, so workflows sharing a folder would overwrite each other's lock.
+        val dir = work.resolve( name ).apply { deleteRecursively(); mkdirs() }
+        val file = dir.resolve( "$name.yaml" ).apply { writeText( DemoIo.loadResource( "workflows/$name.yaml" ) ) }
+        val plans = (1..invocations).map { executor.prepare( WorkflowSource( dir.toPath(), file.name ) ).plan }
+        val fingerprints = plans.map( ::fingerprint ).toSet()
+        PlanRow( name, plans.first().steps.size, plans.first().issues.size, fingerprints.size, sha256( fingerprints.first() ) )
     }
 
-    // Part 2: default constructor (random namespace) - documents the caveat
-    val defaultNamespaceFingerprints = (1..5).map {
-        val descriptor = codec.decodeOrThrow(yaml)
-        val definition = WorkflowDescriptorImporter().import(descriptor)
-        fingerprint(DefaultExecutionPlanner().plan(definition))
-    }.toSet()
+    val platform = EvalPlatform.current()
+    val dir = DemoIo.evalResultsDir().resolve( "planner-determinism" )
+    dir.resolve( "${platform.slug}.csv" ).writeText(
+        buildString {
+            appendLine( "platform,java,workflow,steps,issues,invocations,distinct_plans,plan_sha256" )
+            rows.forEach {
+                appendLine( "${platform.name},${platform.java},${it.workflow},${it.steps},${it.issues},$invocations,${it.distinctPlans},${it.sha256}" )
+            }
+        }
+    )
 
-    val report = buildString {
-        appendLine("=".repeat(70))
-        appendLine("Planner determinism eval - ${java.time.Instant.now()}")
-        appendLine("Workflow: mobgap-gait-analysis.yaml")
-        appendLine()
-        appendLine("Part 1: fixed workflow namespace ($FIXED_NAMESPACE)")
-        appendLine("  Invocations:            $iterations")
-        appendLine("  Distinct fingerprints:  ${fingerprints.size} (expected: 1)")
-        appendLine("  Distinct planIds:       ${planIds.size} (random by design, expected: $iterations)")
-        appendLine("  Claim holds:            ${fingerprints.size == 1}")
-        appendLine()
-        appendLine("Part 2: default importer (random namespace), 5 invocations")
-        appendLine("  Distinct fingerprints:  ${defaultNamespaceFingerprints.size}")
-        appendLine("  -> step UUIDs are only stable with a fixed namespace;")
-        appendLine("     scope the paper claim accordingly or fix the demo default.")
-        appendLine()
-        appendLine("Fingerprint fields: execution index | step UUID | step name | environmentRef,")
-        appendLine("plus sorted requiredEnvironmentRefs and issue count. planId excluded.")
-        appendLine()
-        appendLine("Reference plan (first invocation):")
-        appendLine(firstFingerprint ?: "<none>")
-        appendLine("=".repeat(70))
+    val comparison = compare( dir )
+    val report = report( platform, invocations, rows, comparison )
+    println( report )
+    DemoIo.evalResultsDir().resolve( "planner-determinism.txt" ).appendText( report + "\n" )
+
+    val numbers = DemoIo.evalResultsDir().resolve( "planner-determinism-numbers.tex" )
+    numbers.writeText(
+        buildString {
+            appendLine( "% GENERATED by PlannerDeterminismEval - do not edit; run :carp.dsp.demo:evalPlannerDeterminismAll" )
+            fun macro( name: String, value: Any ) = appendLine( "\\newcommand{\\$name}{$value}" )
+            macro( "DeterminismWorkflows", rows.size )
+            macro( "DeterminismInvocations", invocations )
+            macro( "DeterminismDistinctPlans", rows.maxOf { it.distinctPlans } )
+            macro( "DeterminismPlatforms", comparison.platforms.size )
+            macro( "DeterminismPlatformNames", comparison.platforms.joinToString( ", " ) )
+            macro( "DeterminismMismatches", comparison.mismatches.size )
+        }
+    )
+    DemoIo.publishToPaper( numbers, "generated/planner-determinism-numbers.tex" )
+}
+
+private const val DEFAULT_INVOCATIONS = 100
+
+/** Demo workflows, inline and library-based (`uses:`). */
+private val WORKFLOWS = listOf(
+    "mobgap-gait-analysis",
+    "mobgap-gait-analysis-ha",
+    "wf-activity-summary",
+    "wf-activity-summary-offline",
+    "wf-activity-summary-v2",
+    "wf-activity-summary-v2-2016-03",
+    "wf-anomaly-report",
+    "wf-anomaly-report-v2",
+    "wf-minimal-summary",
+    "wf-minimal-summary-v2",
+    "protocol-coupling-mixed"
+)
+
+private data class PlanRow(
+    val workflow: String,
+    val steps: Int,
+    val issues: Int,
+    val distinctPlans: Int,
+    val sha256: String
+)
+
+private data class EvalPlatform( val name: String, val java: String )
+{
+    val slug: String get() = name.lowercase().replace( Regex( "[^a-z0-9]+" ), "-" ).trim( '-' )
+
+    companion object
+    {
+        fun current() = EvalPlatform(
+            name = "${System.getProperty( "os.name" )} ${System.getProperty( "os.arch" )}",
+            java = System.getProperty( "java.version" )
+        )
     }
+}
 
-    println(report)
-    val outFile = DemoIo.evalResultsDir().resolve("planner-determinism.txt")
-    outFile.appendText(report + "\n")
-    println("Appended results to: ${outFile.absolutePath}")
+private data class PlatformComparison( val platforms: List<String>, val mismatches: List<String> )
+
+/** Compares the plan hashes of every platform file in [dir], workflow by workflow. */
+private fun compare( dir: File ): PlatformComparison
+{
+    val byPlatform = dir.listFiles { f -> f.extension == "csv" }.orEmpty().sortedBy { it.name }.associate { f ->
+        val rows = f.readLines().drop( 1 ).filter { it.isNotBlank() }.map { it.split( "," ) }
+        rows.first()[0] to rows.associate { it[2] to it[7] }
+    }
+    val workflows = byPlatform.values.flatMap { it.keys }.toSortedSet()
+    val mismatches = workflows.filter { wf -> byPlatform.values.map { it[wf] }.toSet().size > 1 }
+    return PlatformComparison( byPlatform.keys.toList(), mismatches )
 }
 
 /**
- * Claim-level fingerprint: step order, step UUIDs, names, environment refs.
- * Excludes planId (random by design).
+ * Claim-level fingerprint: step order, step and environment ids, the expanded command,
+ * every resolved input and output binding (port ids, wiring, locations), and the issue
+ * codes. The plan id is random by design and left out.
  */
-private fun fingerprint(plan: ExecutionPlan): String {
-    val steps = plan.steps.withIndex().joinToString("\n") { (i, s) ->
-        "  $i | ${s.metadata.id} | ${s.metadata.name} | env=${s.environmentRef}"
+private fun fingerprint( plan: ExecutionPlan ): String = buildString {
+    plan.steps.forEachIndexed { i, s ->
+        appendLine( "$i | ${s.metadata.id} | ${s.metadata.name} | env=${s.environmentRef}" )
+        appendLine( "  run ${s.process}" )
+        s.bindings.inputs.toSortedMap( compareBy { it.toString() } ).forEach { ( id, b ) -> appendLine( "  in  $id $b" ) }
+        s.bindings.outputs.toSortedMap( compareBy { it.toString() } ).forEach { ( id, b ) -> appendLine( "  out $id $b" ) }
     }
-    val envRefs = plan.requiredEnvironmentRefs.map { it.toString() }.sorted()
-    return steps + "\n  envRefs=$envRefs\n  issues=${plan.issues.size}"
+    appendLine( "envRefs=${plan.requiredEnvironmentRefs.map { it.toString() }.sorted()}" )
+    appendLine( "issues=${plan.issues.map { it.code }.sorted()}" )
 }
 
+private fun sha256( text: String ): String =
+    MessageDigest.getInstance( "SHA-256" ).digest( text.toByteArray() ).joinToString( "" ) { "%02x".format( it ) }
+
+private fun report( platform: EvalPlatform, invocations: Int, rows: List<PlanRow>, comparison: PlatformComparison ): String = buildString {
+    appendLine( "=".repeat( 78 ) )
+    appendLine( "Planner determinism eval (PL3) - ${java.time.Instant.now()}" )
+    appendLine( "Platform: ${platform.name}, Java ${platform.java}; $invocations invocations per workflow" )
+    appendLine()
+    appendLine( "  %-32s %5s %6s %8s  %s".format( "workflow", "steps", "issues", "distinct", "plan sha256" ) )
+    rows.forEach {
+        appendLine( "  %-32s %5d %6d %8d  %s".format( it.workflow, it.steps, it.issues, it.distinctPlans, it.sha256.take( 16 ) ) )
+    }
+    appendLine()
+    appendLine( "One plan per workflow on this machine: ${rows.all { it.distinctPlans == 1 }}" )
+    appendLine( "Platforms compared: ${comparison.platforms.joinToString( ", " )}" )
+    appendLine(
+        "Workflows whose plan differs between platforms: " +
+            comparison.mismatches.ifEmpty { listOf( "none" ) }.joinToString( ", " )
+    )
+    appendLine( "=".repeat( 78 ) )
+}

@@ -83,8 +83,8 @@ class WorkflowExecutor(
      *   data types, so protocol-bound inputs are checked at plan time.
      * @property runPolicy Stop-on-failure, timeouts and retries.
      * @property workflowNamespace Fixes the UUID namespace the importer derives
-     *   step ids from. Set it when plan ids must be reproducible across runs;
-     *   left null, each import gets a fresh namespace.
+     *   step ids from. Left null, it is derived from the workflow's id and version,
+     *   so the same workflow version plans with the same ids on every run.
      * @property executorOptions Passed to [DefaultPlanExecutor]. Override it to
      *   supply a command runner, an output validation policy, or - for a service
      *   running more than one workflow - an environment orchestrator that is not

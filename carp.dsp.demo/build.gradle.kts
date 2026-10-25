@@ -157,8 +157,40 @@ fun registerEvalTask(name: String, main: String, description: String) {
 registerEvalTask(
     "evalPlannerDeterminism",
     "carp.dsp.demo.eval.PlannerDeterminismEvalKt",
-    "Plan the mobgap workflow N times and verify plan determinism"
+    "Plan 11 demo workflows N times on this machine and compare plan hashes across platforms (PL3)"
 )
+
+// PL3 on Linux, in a container: the same compiled classes and jars, run by a Linux JVM.
+// Writes eval_results/planner-determinism/linux-amd64.csv next to this machine's file.
+//   ./gradlew :carp.dsp.demo:evalPlannerDeterminismAll -PpaperDir=../carp-dsp-sys-paper
+// runs Linux first, then this machine, which compares both and writes the macros.
+val determinismJre = "eclipse-temurin:17-jre"
+val determinismClasspath = tasks.register<Sync>("determinismClasspath") {
+    from(kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles)
+    into(layout.buildDirectory.dir("determinism-classpath"))
+}
+tasks.register<Exec>("evalPlannerDeterminismLinux") {
+    group = "evaluation"
+    description = "Run the PL3 determinism eval in a Linux container (Docker)"
+    dependsOn(determinismClasspath, "jvmMainClasses", "jvmProcessResources")
+    // Forward slashes: Docker accepts them for Windows paths too.
+    val demo = layout.projectDirectory.asFile.absolutePath.replace("\\", "/")
+    val cp = listOf(
+        "/demo/build/classes/kotlin/jvm/main",
+        "/demo/build/processedResources/jvm/main",
+        "/demo/build/determinism-classpath/*"
+    ).joinToString(":")
+    commandLine(
+        "docker", "run", "--rm", "-v", "$demo:/demo", "-w", "/demo", determinismJre,
+        "java", "-cp", cp, "carp.dsp.demo.eval.PlannerDeterminismEvalKt"
+    )
+}
+tasks.register("evalPlannerDeterminismAll") {
+    group = "evaluation"
+    description = "PL3: determinism eval in a Linux container, then on this machine"
+    dependsOn("evalPlannerDeterminismLinux", "evalPlannerDeterminism")
+}
+tasks.named("evalPlannerDeterminism") { mustRunAfter("evalPlannerDeterminismLinux") }
 registerEvalTask(
     "evalMobgapTiming",
     "carp.dsp.demo.eval.MobgapTimedEvalKt",

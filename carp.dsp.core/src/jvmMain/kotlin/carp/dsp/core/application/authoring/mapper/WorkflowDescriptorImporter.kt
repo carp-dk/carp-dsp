@@ -17,9 +17,11 @@ import dk.cachet.carp.common.application.UUID
  * - Missing `schemaVersion` / `version` strings default to `"1.0"`
  * - Unknown environment kinds throw [dk.cachet.carp.analytics.application.exceptions.UnsupportedEnvironmentKindException]
  *
- * @param workflowNamespace Optional namespace UUID for deterministic ID generation.
- *   If not provided, a random UUID is generated (default behaviour for new workflows).
- *   For reproducibility, pass a fixed UUID derived from the workflow ID.
+ * @param workflowNamespace Namespace UUID the step, port and environment ids are
+ *   derived from. Left null, it is derived from the workflow's own id (or name, when
+ *   it has no id) and version, so the same workflow version gets the same ids on every
+ *   import and every machine, and a new version gets new ones. Two workflows that
+ *   share an id and version share ids too.
  *
  * ### Sub-importers
  *
@@ -37,7 +39,7 @@ import dk.cachet.carp.common.application.UUID
  * This is a limitation; full InputSource will be added.
  */
 class WorkflowDescriptorImporter(
-    private val workflowNamespace: UUID = UUID.randomUUID()
+    private val fixedNamespace: UUID? = null
 )
 {
     /**
@@ -48,6 +50,8 @@ class WorkflowDescriptorImporter(
      */
     fun import(workflowDescriptor: WorkflowDescriptor ): WorkflowDefinition
     {
+        val workflowNamespace = fixedNamespace ?: namespaceOf( workflowDescriptor )
+
         // Import environments first (builds UUID lookup for environment references)
         val ( environments, environmentKeyToUuid ) =
             EnvironmentImporter.importEnvironments( workflowDescriptor.environments, workflowNamespace )
@@ -63,7 +67,7 @@ class WorkflowDescriptorImporter(
         // data to the planned step without a separate id map.
         val workflow = Workflow(metadata = workflowMetadata)
         workflowDescriptor.steps.forEach { stepDesc ->
-            workflow.addComponent( importStepInternal( stepDesc, environmentKeyToUuid ) )
+            workflow.addComponent( importStepInternal( stepDesc, environmentKeyToUuid, workflowNamespace ) )
         }
 
         return WorkflowDefinition( workflow = workflow, environments = environments )
@@ -76,11 +80,13 @@ class WorkflowDescriptorImporter(
      *
      * @param stepDescriptor The step descriptor
      * @param environmentKeyToUuid Lookup: environment key → UUID (from EnvironmentImporter)
+     * @param workflowNamespace The namespace this import derives ids from
      * @return Domain Step
      */
     private fun importStepInternal(
         stepDescriptor: StepDescriptor,
         environmentKeyToUuid: Map<String, UUID>,
+        workflowNamespace: UUID,
     ): Step
     {
         // A referenced step (`uses:`) must be resolved into a defined step before import.
@@ -90,15 +96,16 @@ class WorkflowDescriptorImporter(
                     "resolve it before import."
             )
 
-        // Step ID: explicit UUID, deterministic v5, or fallback random (precomputed for consistency)
-        val stepId = resolveStepId(step)
+        // Step ID: explicit UUID, else deterministic v5
+        val stepId = resolveStepId( step, workflowNamespace )
 
         // Environment ID: lookup table first (human-readable keys),
         // then direct UUID parse (canonical UUID keys from exporter),
-        // then fallback (error case, but don't fail here)
+        // then an id for the missing environment (the planner reports it), derived
+        // rather than random so a faulty workflow still plans the same every time
         val envUuid = environmentKeyToUuid[step.environmentId]
             ?: tryParseUuid( step.environmentId )
-            ?: UUID.randomUUID()
+            ?: DeterministicUUID.v5( workflowNamespace, "missing-environment:${step.environmentId}" )
 
         val inputs = step.inputs.map { PortImporter.importInputPort( it, workflowNamespace ) }
         val outputs = step.outputs.map { PortImporter.importOutputPort( it, workflowNamespace ) }
@@ -112,7 +119,23 @@ class WorkflowDescriptorImporter(
         )
     }
 
-    private fun resolveStepId(stepDescriptor: StepDescriptor): UUID =
+    private fun resolveStepId( stepDescriptor: StepDescriptor, workflowNamespace: UUID ): UUID =
         stepDescriptor.id?.let { tryParseUuid( it ) }
             ?: DeterministicUUID.v5(workflowNamespace, "step:${stepDescriptor.id ?: "unnamed"}")
+
+    companion object
+    {
+        /**
+         * Root of every namespace derived from a workflow. Changing it changes every
+         * derived id, so it is fixed for good.
+         */
+        val ROOT_NAMESPACE: UUID = UUID.parse( "6c1f2b9e-4a7d-5e3c-8b21-0f9d4e6a7c35" )
+
+        /** Returns the namespace derived from [workflow]'s id (or name) and version. */
+        fun namespaceOf( workflow: WorkflowDescriptor ): UUID =
+            DeterministicUUID.v5(
+                ROOT_NAMESPACE,
+                "workflow:${workflow.metadata.id ?: workflow.metadata.name}@${workflow.metadata.version}"
+            )
+    }
 }

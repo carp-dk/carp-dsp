@@ -666,4 +666,54 @@ class WorkflowDescriptorImporterTest
             assertEquals(listOf(results[0].workflow.getComponents()[0].metadata.id, results[0].workflow.getComponents()[1].metadata.id), stepUUIDs)
         }
     }
+
+    // ── Default namespace (derived from the workflow)
+
+    private fun stepIds( desc: WorkflowDescriptor ) =
+        WorkflowDescriptorImporter().import( desc ).workflow.getComponents().map { it.metadata.id }
+
+    private fun versioned( version: String, wfId: String? = "wf-a" ) = WorkflowDescriptor(
+        schemaVersion = "1.0",
+        metadata = WorkflowMetadataDescriptor( id = wfId, name = "Test WF", version = version ),
+        steps = listOf( cmdStep( id = "s1", envId = "env" ), cmdStep( id = "s2", envId = "env" ) ),
+        environments = mapOf( "env" to condaEnvDesc() ),
+    )
+
+    @Test
+    fun `default importer gives the same ids on every import of a workflow version`()
+    {
+        assertEquals( stepIds( versioned( "1.0" ) ), stepIds( versioned( "1.0" ) ) )
+    }
+
+    @Test
+    fun `default importer gives new ids for a new workflow version`()
+    {
+        assertNotEquals( stepIds( versioned( "1.0" ) ), stepIds( versioned( "1.1" ) ) )
+    }
+
+    @Test
+    fun `default importer gives different ids to different workflows`()
+    {
+        assertNotEquals( stepIds( versioned( "1.0", wfId = "wf-a" ) ), stepIds( versioned( "1.0", wfId = "wf-b" ) ) )
+    }
+
+    @Test
+    fun `a fixed namespace still decides the ids`()
+    {
+        val desc = versioned( "1.0" )
+        assertNotEquals(
+            WorkflowDescriptorImporter( namespace ).import( desc ).workflow.getComponents().map { it.metadata.id },
+            stepIds( desc )
+        )
+    }
+
+    @Test
+    fun `a missing environment gets the same id on every import`()
+    {
+        val desc = minimalDesc( steps = listOf( cmdStep( id = "s1", envId = "env-does-not-exist" ) ) )
+        val envIds = (1..2).map {
+            WorkflowDescriptorImporter().import( desc ).workflow.getComponents().filterIsInstance<Step>().single().environmentId
+        }
+        assertEquals( envIds[0], envIds[1] )
+    }
 }
