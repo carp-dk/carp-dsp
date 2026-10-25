@@ -1,4 +1,7 @@
-scenario,protocol,expected_code,codes,steps_planned,plan_errors,runnable,as_expected
-protocol collects heart rate,protocols/hr-study-protocol.json,,,2,0,true,true
-protocol collects step count only,protocols/steps-only-protocol.json,PROTOCOL_DATA_NOT_COLLECTED,PROTOCOL_DATA_NOT_COLLECTED,2,1,false,true
-no protocol supplied,none,PROTOCOL_NOT_VALIDATED,PROTOCOL_NOT_VALIDATED,2,0,true,true
+scenario,protocol,expected_code,codes,runnable,carp_deployment_issues,as_expected
+protocol starts a heart-rate task,hr-and-steps-v1,,,true,,true
+protocol has no heart-rate task,steps-only-v2,PROTOCOL_DATA_NOT_COLLECTED,PROTOCOL_DATA_NOT_COLLECTED,false,,true
+heart-rate task defined but never started,hr-never-started-v3,PROTOCOL_DATA_NOT_COLLECTED,PROTOCOL_DATA_NOT_COLLECTED,false,UnstartedTasksWarning|UnusedDevicesWarning,true
+bound protocol not supplied,other-protocol-v1,PROTOCOL_NOT_FOUND,PROTOCOL_NOT_FOUND,false,,true
+binding with an empty data type,hr-and-steps-v1,PROTOCOL_BINDING_INCOMPLETE,PROTOCOL_BINDING_INCOMPLETE,false,,true
+no protocol source,none,PROTOCOL_NOT_VALIDATED,PROTOCOL_NOT_VALIDATED,true,,true

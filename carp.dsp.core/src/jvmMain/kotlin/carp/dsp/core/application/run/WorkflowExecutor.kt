@@ -235,20 +235,6 @@ class WorkflowExecutor(
         return WorkspaceProvisioning( byStep.mapValues { it.value.toMap() } )
     }
 
-    /**
-     * Returns the input path when it is relative to the workflow file; otherwise,
-     * null for step outputs, non-file locations, and absolute paths that need no
-     * staging.
-     */
-    private fun relativeInputPath( input: InputDataSpec ): String?
-    {
-        if ( input.stepRef != null ) return null
-        val location = input.location as? FileLocation ?: return null
-        val path = location.path.trim()
-        if ( path.isEmpty() || File( path ).isAbsolute ) return null
-        return path.removePrefix( "./" )
-    }
-
     companion object
     {
         /**
@@ -273,4 +259,27 @@ class WorkflowExecutor(
             )
         }
     }
+}
+
+/** Input sources whose data is not a file beside the workflow. */
+private val NOT_STAGED_SOURCES = setOf( "external", "protocol" )
+
+/** A URI such as `https://...` or `s3://...`; a Windows drive (`C:\`) has no `//`. */
+private val URI_SCHEME = Regex( "^[A-Za-z][A-Za-z0-9+.-]*://" )
+
+/**
+ * Returns the input path when it is relative to the workflow file; otherwise null
+ * for step outputs, non-file locations, absolute paths, external and protocol-bound
+ * inputs, and URIs, none of which are staged from the workflow directory.
+ */
+internal fun relativeInputPath( input: InputDataSpec ): String?
+{
+    if ( input.stepRef != null ) return null
+    val location = input.location as? FileLocation ?: return null
+    // External data is referenced by its URI (the importer puts it in the path), and a
+    // protocol input has no file yet; neither lives beside the workflow.
+    if ( location.metadata["source"] in NOT_STAGED_SOURCES ) return null
+    val path = location.path.trim()
+    if ( path.isEmpty() || URI_SCHEME.containsMatchIn( path ) || File( path ).isAbsolute ) return null
+    return path.removePrefix( "./" )
 }

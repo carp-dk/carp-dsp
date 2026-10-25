@@ -63,7 +63,7 @@ Paper evaluation harnesses (Section 8 of the system paper) also register in the 
 - `step-reuse-eval`: measures step reuse across the 3 HR/step workflows built from the shared 6-step library.
 - `mobgap-timed-eval`: instrumented Use Case 1 run - phase and per-step timings, output hashes (Fig D). Optional arg: run count.
 - `dependency-drift-eval`: runs the walking-speed pipeline under 7 mobgap versions to measure output drift (Fig B). Slow on first run (pixi solves one env per version); requires pixi on PATH.
-- `protocol-coupling-eval`: plans `protocol-coupling-mixed.yaml` - one input collected by a study protocol, one open dataset - against two protocol snapshots and with no protocol at all, showing plan-time `PROTOCOL_DATA_NOT_COLLECTED` rejection, a clean pass, and the `PROTOCOL_NOT_VALIDATED` warning (F5). Fixtures: `resources/workflows/protocol-coupling-mixed.yaml`, `resources/protocols/*.json`. No live study or protocol service needed.
+- `protocol-coupling-eval`: plans `protocol-coupling-mixed.yaml` - one input collected by a study protocol, one open dataset - against CARP protocols built with the CARP Core API, in six scenarios that cover every protocol issue code, including a heart-rate task that is defined but never started (F5, PL2). Fixture: `resources/workflows/protocol-coupling-mixed.yaml`. No live study or protocol service needed.
 - `run-all-evals`: runs all of the above in sequence.
 
 Gradle-only (not in the menu): `evalPortability` - cross-distro output determinism via Docker; requires Docker running.

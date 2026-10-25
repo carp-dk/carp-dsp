@@ -131,22 +131,31 @@ protocol *definition* (an authored artifact - no live study or deployment needed
 ## Running the acceptance case
 
 ```
-./gradlew :carp.dsp.demo:run --args "run protocol-coupling-eval"
+./gradlew :carp.dsp.demo:evalProtocolCoupling -PpaperDir=../carp-dsp-sys-paper
 ```
 
-Fixtures (`carp.dsp.demo/src/jvmMain/resources/`):
+The workflow is `resources/workflows/protocol-coupling-mixed.yaml`: a boundary
+step with one `protocol` input (heart rate) and one `external` input (open
+Fitbit data, Zenodo 53894), and a normal `step-output` input downstream.
 
-- `workflows/protocol-coupling-mixed.yaml` - two-step workflow whose boundary
-  step takes one `protocol` input (heart rate) and one `external` input (open
-  Fitbit data, Zenodo 53894), with a normal `step-output` input downstream.
-- `protocols/hr-study-protocol.json` - snapshot v1, collects heart rate and step
-  count -> the workflow plans clean.
-- `protocols/steps-only-protocol.json` - same protocol id, snapshot v2, collects
-  step count only -> `PROTOCOL_DATA_NOT_COLLECTED`, no step planned.
+The protocols are built in the eval with the CARP Core protocol API: a phone
+counting steps, plus (where the scenario needs it) a BLE heart-rate strap with a
+heart-rate task. The eval prepares the workflow the way a run does (resolve,
+lint, import, plan) in six scenarios:
 
-The eval also plans with no protocol supplied, showing the
-`PROTOCOL_NOT_VALIDATED` warning. Results go to
-`eval_results/protocol-coupling.{txt,csv}`.
+| Scenario | Result |
+|---|---|
+| a trigger starts the heart-rate task | plans clean |
+| no heart-rate task | `PROTOCOL_DATA_NOT_COLLECTED` |
+| heart-rate task defined, never started | `PROTOCOL_DATA_NOT_COLLECTED` (CARP Core only warns: `UnstartedTasksWarning`) |
+| bound protocol not in the source | `PROTOCOL_NOT_FOUND` |
+| binding with an empty data type | `PROTOCOL_BINDING_INCOMPLETE` |
+| no protocol source | `PROTOCOL_NOT_VALIDATED` warning |
+
+A binding with no `dataType` key at all is rejected by the YAML parser.
+Results go to `eval_results/protocol-coupling.{txt,csv}`, the snapshots to
+`eval_results/protocol-coupling/`, and the macros to
+`protocol-coupling-numbers.tex`.
 
 ## Acceptance criteria
 
@@ -222,11 +231,17 @@ artifact independent of any deployment.
 There is no single `getExpectedDataStreams()` on `StudyProtocol`; the collected
 types are derived from the protocol's tasks and measures. A `Measure` is a sealed
 class, and only `Measure.DataStream` carries a type (`Measure.TriggerData` does
-not). So the set the protocol collects is:
+not). A task only runs when a task control starts it, so a task that is defined
+but never started collects nothing. The set the protocol collects is:
 
 ```kotlin
+val started = snapshot.taskControls
+    .filter { it.control == TaskControl.Control.Start }
+    .map { it.taskName }
+    .toSet()
 val collected: Set<DataType> =
-    protocol.tasks
+    snapshot.tasks
+        .filter { it.name in started }
         .flatMap { it.measures }
         .filterIsInstance<Measure.DataStream>()
         .map { it.type }
@@ -234,8 +249,10 @@ val collected: Set<DataType> =
 ```
 
 This yields exactly what F5.4 checks against - a set of `DataType`s, device-
-agnostic, which matches decision (2): we validate that the type is collected
-*somewhere* in the protocol, not on a specific device. A `protocol`-bound input
+agnostic, which matches decision (2): we validate that a started task collects
+the type *somewhere* in the protocol, not on a specific device. (Until
+2026-10-25 the started-task filter was missing, so a defined-but-unstarted task
+passed the check.) A `protocol`-bound input
 declares its expected type as a CARP `DataType` name (e.g.
 `dk.cachet.carp.heartrate`), and the check is simple set membership in
 `collected`.

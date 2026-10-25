@@ -1,6 +1,7 @@
 package carp.dsp.core.application.plan
 
 import dk.cachet.carp.common.application.tasks.Measure
+import dk.cachet.carp.common.application.triggers.TaskControl
 import dk.cachet.carp.protocols.application.StudyProtocolSnapshot
 
 /**
@@ -10,10 +11,9 @@ import dk.cachet.carp.protocols.application.StudyProtocolSnapshot
  * deployment, so this provider makes protocol coupling checkable without a live
  * study or a protocol service: load the snapshot(s), hand them to the planner.
  *
- * The collected data types of a protocol are derived from its tasks' measures:
- * every [Measure.DataStream] contributes its [dk.cachet.carp.common.application.data.DataType]
- * (device-agnostic - the type counts as collected if any task on any device
- * measures it). [Measure.TriggerData] measures carry no data type and are ignored.
+ * A data type counts as collected when a task that some trigger starts measures it
+ * as a [Measure.DataStream], on any device. A task the protocol defines but never
+ * starts collects nothing. [Measure.TriggerData] measures carry no data type.
  */
 class StudyProtocolSnapshotDataTypeProvider(
     snapshots: Collection<StudyProtocolSnapshot>
@@ -32,7 +32,14 @@ class StudyProtocolSnapshotDataTypeProvider(
             else candidates.firstOrNull { it.version == version }
         snapshot ?: return null
 
+        // Only a started task runs on a device; CARP never collects for one that is only defined.
+        val startedTasks = snapshot.taskControls
+            .filter { it.control == TaskControl.Control.Start }
+            .map { it.taskName }
+            .toSet()
+
         return snapshot.tasks
+            .filter { it.name in startedTasks }
             .flatMap { it.measures }
             .filterIsInstance<Measure.DataStream>()
             .map { it.type.toString() }
