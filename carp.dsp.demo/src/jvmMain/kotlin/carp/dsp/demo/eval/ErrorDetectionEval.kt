@@ -2,7 +2,9 @@ package carp.dsp.demo.eval
 
 import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
 import carp.dsp.core.application.authoring.resolve.UsesResolver
+import carp.dsp.core.application.authoring.validation.WorkflowLinter
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
+import carp.dsp.core.application.plan.withLintIssues
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import carp.dsp.demo.io.DemoIo
 import carp.dsp.steps.ClasspathStepLibrary
@@ -32,6 +34,12 @@ import dk.cachet.carp.common.application.UUID
  *     format check alone would pass it
  *
  * Each clean base workflow is planned first as a control (expect zero ERROR issues).
+ * For each error it also records whether it is placed - attached to the step it
+ * concerns, or naming the steps involved - since an error the author cannot place
+ * is not actionable.
+ *
+ * Also writes eval_results/error-detection-numbers.tex (LaTeX macros, published to the
+ * paper's generated/ with -PpaperDir).
  *
  * Run:
  *   ./gradlew :carp.dsp.demo:evalErrorDetection
@@ -44,19 +52,19 @@ import dk.cachet.carp.common.application.UUID
 /** Same fixed namespace as other evals */
 private val ED_FIXED_NAMESPACE: UUID = UUID.parse("d3b7f2a0-0000-5000-8000-6d6f62676170")
 
-private data class BaseWorkflow(val resource: String, val steps: Int)
+internal data class BaseWorkflow(val resource: String, val steps: Int)
 
-private val MOBGAP = BaseWorkflow("workflows/mobgap-gait-analysis.yaml", steps = 8)
-private val ACTIVITY_V2 = BaseWorkflow("workflows/wf-activity-summary-v2.yaml", steps = 13)
+internal val MOBGAP = BaseWorkflow("workflows/mobgap-gait-analysis.yaml", steps = 8)
+internal val ACTIVITY_V2 = BaseWorkflow("workflows/wf-activity-summary-v2.yaml", steps = 13)
 
-private data class Injection(
+internal data class Injection(
     val fault: String,
     val resource: String,
     val expectedCode: String,
     val base: BaseWorkflow = MOBGAP
 )
 
-private val INJECTIONS = listOf(
+internal val INJECTIONS = listOf(
     Injection("type-mismatch", "workflows/injections/inj-type-mismatch.yaml", "DEPENDENCY_TYPE_MISMATCH"),
     Injection("missing-producer", "workflows/injections/inj-missing-producer.yaml", "DEPENDENCY_PRODUCER_NOT_FOUND"),
     Injection("missing-output", "workflows/injections/inj-missing-output.yaml", "DEPENDENCY_OUTPUT_NOT_FOUND"),
@@ -76,7 +84,9 @@ private data class CarpResult(
     val expectedCode: String,
     val detected: Boolean,
     val matchedExpected: Boolean,
-    val errorCodes: List<String>
+    val errorCodes: List<String>,
+    /** ERROR issues attached to a step or naming the steps involved, out of [errorCodes]. */
+    val errorsNamingStep: Int
 )
 
 fun main() {
@@ -88,15 +98,22 @@ fun main() {
     }
 
     val results = INJECTIONS.map { inj ->
-        val plan = planWorkflow(codec, DemoIo.loadResource(inj.resource))
-        val codes = errorIssues(plan).map { it.code }
+        val yaml = DemoIo.loadResource(inj.resource)
+        val plan = planWorkflow(codec, yaml)
+        val errors = errorIssues(plan)
+        val codes = errors.map { it.code }
+        // From the workflow, not the plan: a plan that cannot be ordered has no steps.
+        val stepNames = UsesResolver(STEP_LIBRARY).resolve(codec.decodeOrThrow(yaml)).workflow.steps
+            .mapNotNull { it.metadata?.name }
         CarpResult(
             fault = inj.fault,
             base = inj.base,
             expectedCode = inj.expectedCode,
             detected = codes.isNotEmpty(),
             matchedExpected = codes.contains(inj.expectedCode),
-            errorCodes = codes
+            errorCodes = codes,
+            // Placed: attached to the step it concerns, or (plan-level errors) naming the steps involved.
+            errorsNamingStep = errors.count { e -> e.stepId != null || stepNames.any { e.message.contains("'$it'") } }
         )
     }
 
@@ -128,14 +145,14 @@ fun main() {
     }
     println(report)
 
-    // Cost of the plan-time gate: median wall time of decode+import+plan over the clean
+    // Cost of the plan-time gate: median wall time of decode+resolve+lint+import+plan over the clean
     // workflow, after warm-up. Measured on this machine so the figure never hardcodes a
     // timing (the ad-hoc arm measures its own seconds the same way).
     val planMs = measurePlanMs(codec, DemoIo.loadResource("workflows/mobgap-gait-analysis.yaml"))
-    println("Plan-time gate cost (median decode+import+plan, warm): $planMs ms")
+    println("Plan-time gate cost (median decode+resolve+lint+import+plan, warm): $planMs ms")
 
     val dir = DemoIo.evalResultsDir()
-    dir.resolve("error-detection.txt").appendText(report + "\nPlan-time gate cost: $planMs ms\n")
+    dir.resolve("error-detection.txt").writeText(report + "\nPlan-time gate cost: $planMs ms\n")
 
     // Machine-readable CSV for the plot (CARP arm). plan_ms is this machine's measured
     // cost of catching the fault; steps_executed is 0 because nothing runs.
@@ -153,18 +170,41 @@ fun main() {
     }
     dir.resolve("error-detection-carp.csv").writeText(csv)
     println("Wrote error-detection.txt and error-detection-carp.csv to: ${dir.absolutePath}")
+
+    val totalErrors = results.sumOf { it.errorCodes.size }
+    val namingStep = results.sumOf { it.errorsNamingStep }
+    println("Errors placed at a step: $namingStep of $totalErrors")
+    val numbers = dir.resolve("error-detection-numbers.tex").apply {
+        writeText(
+            buildString {
+                appendLine("% GENERATED by ErrorDetectionEval - do not edit; run :carp.dsp.demo:evalErrorDetection")
+                fun macro(name: String, value: Int) = appendLine("\\newcommand{\\$name}{$value}")
+                macro("FaultsInjected", results.size)
+                macro("FaultsCaughtAtPlanTime", results.count { it.matchedExpected })
+                macro("FaultErrors", totalErrors)
+                macro("FaultErrorsNamingStep", namingStep)
+                // Median decode+resolve+lint+import+plan of the clean gait workflow (8 steps).
+                macro("GateGaitMs", planMs.toInt())
+            }
+        )
+    }
+    DemoIo.publishToPaper(numbers, "generated/error-detection-numbers.tex")
 }
 
 private val STEP_LIBRARY = ClasspathStepLibrary()
 
+/**
+ * The path a real run takes (WorkflowExecutor.prepare): expand `uses:` references, lint
+ * the resolved workflow, import, plan, and add the lint issues to the plan.
+ */
 private fun planWorkflow(codec: WorkflowYamlCodec, yaml: String): ExecutionPlan {
-    // Library references (`uses:`) are expanded first; a workflow with none is unchanged.
     val descriptor = UsesResolver(STEP_LIBRARY).resolve(codec.decodeOrThrow(yaml)).workflow
+    val lint = WorkflowLinter.lint(descriptor)
     val definition = WorkflowDescriptorImporter(ED_FIXED_NAMESPACE).import(descriptor)
-    return DefaultExecutionPlanner().plan(definition)
+    return DefaultExecutionPlanner().plan(definition).withLintIssues(lint)
 }
 
-/** Median wall time (ms) of the full decode+import+plan path, after warm-up. */
+/** Median wall time (ms) of the full decode+resolve+lint+import+plan path, after warm-up. */
 private fun measurePlanMs(codec: WorkflowYamlCodec, yaml: String, warmup: Int = 5, reps: Int = 21): Long {
     repeat(warmup) { planWorkflow(codec, yaml) }
     val times = (1..reps).map {

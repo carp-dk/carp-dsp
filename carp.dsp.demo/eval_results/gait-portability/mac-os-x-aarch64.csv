@@ -1,0 +1,9 @@
+platform,java,file,sha256
+Mac OS X aarch64,17.0.20.1,01_import_imu_data/outputs/imu-data-csv.csv,33e6685dbbec2744ae1559ef7f2276a68ac83e8f9332f06a21d7ee9fa63d59ba
+Mac OS X aarch64,17.0.20.1,02_gait_sequence_detection/outputs/gs-list-csv.csv,759b4269bc95ba35e7e585d47a8a683885ec54d6902d88c43b12baba2d27be52
+Mac OS X aarch64,17.0.20.1,03_initial_contact_detection/outputs/ic-list-csv.csv,de84a90dbaf7ad4e56a46725e93a56e22ae1ee78967f7f1faa496e6032352deb
+Mac OS X aarch64,17.0.20.1,03_initial_contact_detection/outputs/turn-list-csv.csv,f49e091755a3d223288b4daf301e19a0fbcb330cc8dcb3fba392b2b9d1f2732c
+Mac OS X aarch64,17.0.20.1,04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv,46812d7ad6cd3499a6030fcf57b5242e2776b7f2b0a65a57b81cc1b485512bfd
+Mac OS X aarch64,17.0.20.1,05_walking_bout_assembly/outputs/stride-list-csv.csv,5b1af28974c75fe819b3d7d44a893947385fa6b45c3cc6a0cc287e08ff94fdd9
+Mac OS X aarch64,17.0.20.1,05_walking_bout_assembly/outputs/wb-params-csv.csv,02e5a8e60041a2dc774398e547a8306756d39ba55f617168180b47627fe0b9d5
+Mac OS X aarch64,17.0.20.1,06_dmo_aggregation/outputs/aggregated-dmos-csv.csv,8927c915fc8f9d1bc43007354b25077d7939fd3b3c51dc6b5105016fd223d048

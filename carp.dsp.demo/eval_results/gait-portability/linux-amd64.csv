@@ -1,0 +1,9 @@
+platform,java,file,sha256
+Linux amd64,17.0.20.1,01_import_imu_data/outputs/imu-data-csv.csv,33e6685dbbec2744ae1559ef7f2276a68ac83e8f9332f06a21d7ee9fa63d59ba
+Linux amd64,17.0.20.1,02_gait_sequence_detection/outputs/gs-list-csv.csv,de16a725b073adcc9ccb927e331b17b67170ca377184ab3af86cd988509774df
+Linux amd64,17.0.20.1,03_initial_contact_detection/outputs/ic-list-csv.csv,be78ae5bfa6ed95db9755fdf587de16ca53c4104e42af855114521175142e81d
+Linux amd64,17.0.20.1,03_initial_contact_detection/outputs/turn-list-csv.csv,6e6b5a90ac8f5026a704b90ba477eec8d72909049ced729f3984e71d19d80709
+Linux amd64,17.0.20.1,04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv,2209e6fbca0da61d4c4da606227dfb97d4a27ded3d63dad41dab8c54c06095fe
+Linux amd64,17.0.20.1,05_walking_bout_assembly/outputs/stride-list-csv.csv,5fe16688a76b67b00adf1dc8f77d64ee1eda7dc980f21026266b0379e5efcfe8
+Linux amd64,17.0.20.1,05_walking_bout_assembly/outputs/wb-params-csv.csv,15415c61e76be4b6a2d1700cf80acec5e1b03c1a66580836c5923245e9e5ff6a
+Linux amd64,17.0.20.1,06_dmo_aggregation/outputs/aggregated-dmos-csv.csv,e1e990367b78acebc980d288a7fb6ab76a46b0453c59a4645cd11cfd6400d2e4

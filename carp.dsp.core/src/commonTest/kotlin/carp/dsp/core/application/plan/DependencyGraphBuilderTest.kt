@@ -196,6 +196,20 @@ class DependencyGraphBuilderTest
     }
 
     @Test
+    fun `build names the input, its step and the missing producer`()
+    {
+        val consumer = createStep( "consumer", listOf( createStepOutputInput( "gait-sequences", "ghost-step" ) ) )
+
+        val issue = DependencyGraphBuilder().build( listOf( consumer ) ).issues
+            .single { it.code == "DEPENDENCY_PRODUCER_NOT_FOUND" }
+
+        assertEquals( consumer.metadata.id, issue.stepId )
+        assertTrue( issue.message.contains( "'Output gait-sequences'" ) )
+        assertTrue( issue.message.contains( "'consumer'" ) )
+        assertTrue( issue.message.contains( "'ghost-step'" ) )
+    }
+
+    @Test
     fun `build detects a missing data type on a connection with matching formats`()
     {
         val builder = DependencyGraphBuilder()

@@ -85,8 +85,8 @@ class CommandStepRunner(
         val absWorkingDir = Path.of(workspace.executionRoot)
 
         logger.debug { "Command: ${spec.executable} ${spec.args.joinToString(" ")}" }
-        // Step 1: Execute command
-        val outcome = executeCommand(step, spec, workspace, policy, absWorkingDir)
+        // Step 1: Execute command, noting any write outside the step's own folder
+        val (outcome, outsideWrites) = executeWatched(step, spec, workspace, policy, absWorkingDir)
 
         // Step 2: Validate outputs (post-execution check)
         val validation = validateOutputs(step, outcome.status, workspace)
@@ -129,9 +129,10 @@ class CommandStepRunner(
             null
         }
 
-        // Step 5: Collect issues
+        // Step 5: Collect issues, keeping any artefact issue recorded above
         val validationIssues = validation?.issues ?: emptyList()
-        _pendingIssues[step.metadata.id] = validationIssues
+        _pendingIssues[step.metadata.id] =
+            _pendingIssues[step.metadata.id].orEmpty() + validationIssues + listOfNotNull(outsideWrites)
 
         // Return final result
         return StepRunResult(
@@ -162,13 +163,27 @@ class CommandStepRunner(
         val commandResult: CommandResult
     )
 
+    /** [executeCommand], plus the warning for files the step wrote outside its own folder. */
+    private fun executeWatched(
+        step: PlannedStep,
+        spec: CommandSpec,
+        workspace: ExecutionWorkspace,
+        policy: RunPolicy,
+        root: Path
+    ): Pair<CommandOutcome, ExecutionIssue?> {
+        val ownDir = workspace.stepDir(step.metadata.id)
+        val before = RunRootWriteCheck.snapshot(root, ownDir)
+        val outcome = executeCommand(step, spec, policy, root)
+        val after = RunRootWriteCheck.snapshot(root, ownDir)
+        return outcome to RunRootWriteCheck.issue(step.metadata, RunRootWriteCheck.writes(before, after))
+    }
+
     /**
      * Execute the command and map result to status/failure/detail.
      */
     private fun executeCommand(
         step: PlannedStep,
         spec: CommandSpec,
-        workspace: ExecutionWorkspace,
         policy: RunPolicy,
         absWorkingDir: Path?
     ): CommandOutcome {
@@ -202,10 +217,11 @@ class CommandStepRunner(
             else -> null
         }
 
-        // Create run detail with human-readable output
+        // Create run detail with human-readable output. The process runs in the run root,
+        // so that is the working directory recorded (relative to the run root).
         val detail = StepRunDetail(
             command = listOf(spec.executable) + spec.args.toResolvedStrings(),
-            workingDirectory = workspace.stepDir(step.metadata.id),
+            workingDirectory = RUN_ROOT,
             exitCode = result.exitCode,
             stdout = inlineRef(result.stdout),
             stderr = inlineRef(result.stderr)
@@ -287,4 +303,9 @@ class CommandStepRunner(
             kind = ResourceKind.URI,
             value = "data:text/plain,${text.trim()}"
         )
+
+    private companion object {
+        /** The run root, as a path relative to itself. */
+        const val RUN_ROOT = "."
+    }
 }

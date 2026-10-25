@@ -1,0 +1,5 @@
+kind: system
+name: 9409f608-2443-451d-bbfd-5707bf034473
+recorded from: none (nothing pinned)
+---
+os: Windows 11 10.0 amd64

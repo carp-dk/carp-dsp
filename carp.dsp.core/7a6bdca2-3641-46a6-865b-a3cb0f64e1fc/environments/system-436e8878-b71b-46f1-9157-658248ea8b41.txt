@@ -1,0 +1,5 @@
+kind: system
+name: 436e8878-b71b-46f1-9157-658248ea8b41
+recorded from: none (nothing pinned)
+---
+os: Windows 11 10.0 amd64

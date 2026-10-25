@@ -393,6 +393,20 @@ class DeterministicTopologicalSorterTest {
 
 
     @Test
+    fun `sort names the steps of a cycle when step names are given`() {
+        val a = UUID.randomUUID()
+        val b = UUID.randomUUID()
+        val adjacency = mapOf(a to setOf(b), b to setOf(a))
+        val indegree = mapOf(a to 1, b to 1)
+
+        val result = sorter.sort(adjacency, indegree, listOf(a, b), mapOf(a to "gsd", b to "icd"))
+
+        val message = result.issues.single().message
+        assertTrue(message.contains("'gsd'"))
+        assertTrue(message.contains("'icd'"))
+    }
+
+    @Test
     fun `sort creates detailed cycle detection message`() {
         val node1 = UUID.randomUUID()
         val node2 = UUID.randomUUID()

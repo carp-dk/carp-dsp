@@ -1,10 +1,13 @@
 package carp.dsp.core.infrastructure.execution
 
+import carp.dsp.core.infrastructure.execution.handlers.EnvironmentStore
 import dk.cachet.carp.analytics.application.execution.workspace.ExecutionWorkspace
 import dk.cachet.carp.analytics.application.plan.CommandSpec
 import dk.cachet.carp.analytics.application.plan.EnvironmentRef
 import dk.cachet.carp.analytics.application.plan.ExpandedArg
+import dk.cachet.carp.analytics.application.plan.PixiEnvironmentRef
 import dk.cachet.carp.analytics.application.plan.PlannedStep
+import dk.cachet.carp.analytics.application.plan.REnvironmentRef
 import dk.cachet.carp.analytics.domain.data.FileLocation
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.FileAlreadyExistsException
@@ -203,9 +206,16 @@ class StepCache(
         }
     }
 
-    // What the environment installs, not its id: ids are minted per import.
+    // Which environment is installed. A lock file decides what is installed.
     private fun signatureOf(environment: EnvironmentRef?): String =
-        environment?.let { "${it::class.simpleName}|${it.dependencies.sorted()}|${it.generateSetupCommand()}" } ?: "-"
+        environment?.let {
+            val lock = when (it) {
+                is PixiEnvironmentRef -> it.lockFile
+                is REnvironmentRef -> it.renvLockFile
+                else -> null
+            }?.let { path -> "|lock:${EnvironmentStore.lockIdentity(path)}" }.orEmpty()
+            "${it::class.simpleName}|${it.dependencies.sorted()}|${it.generateSetupCommand()}$lock"
+        } ?: "-"
 
     private fun literal(value: String, root: Path, taskRuntimeJar: Path): String?
     {

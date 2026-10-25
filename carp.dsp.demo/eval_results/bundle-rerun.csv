@@ -1,0 +1,9 @@
+origin,rerun,files_listed,files_intact,rerun_status,file,identical,max_abs_diff
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/01_import_imu_data/outputs/imu-data-csv.csv,true,
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/02_gait_sequence_detection/outputs/gs-list-csv.csv,true,
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/03_initial_contact_detection/outputs/ic-list-csv.csv,true,
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/03_initial_contact_detection/outputs/turn-list-csv.csv,true,
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/04_per_second_parameter_estimation/outputs/per-sec-params-csv.csv,false,5.162537064506978E-14
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/05_walking_bout_assembly/outputs/stride-list-csv.csv,false,4.474198789239381E-14
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/05_walking_bout_assembly/outputs/wb-params-csv.csv,false,6.661338147750939E-15
+Windows 11 amd64,Linux amd64,34,34,SUCCEEDED,steps/06_dmo_aggregation/outputs/aggregated-dmos-csv.csv,false,1.6653345369377348E-15

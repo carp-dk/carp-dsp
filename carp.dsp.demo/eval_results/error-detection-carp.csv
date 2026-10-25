@@ -1,7 +1,7 @@
 fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,plan_ms,outcome,codes,workflow
-type-mismatch,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_TYPE_MISMATCH,mobgap-gait-analysis.yaml
-missing-producer,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_PRODUCER_NOT_FOUND|MISSING_PRODUCER_STEP,mobgap-gait-analysis.yaml
-missing-output,carp,true,plan-time,8,0,0.0,7,caught_plan_time,DEPENDENCY_OUTPUT_NOT_FOUND|MISSING_PRODUCER_OUTPUT,mobgap-gait-analysis.yaml
-cycle,carp,true,plan-time,8,0,0.0,7,caught_plan_time,WORKFLOW_CYCLE_DETECTED,mobgap-gait-analysis.yaml
-missing-env,carp,true,plan-time,8,0,0.0,7,caught_plan_time,MISSING_ENVIRONMENT_DEFINITION,mobgap-gait-analysis.yaml
-data-type-mismatch,carp,true,plan-time,13,0,0.0,7,caught_plan_time,DEPENDENCY_DATA_TYPE_MISMATCH,wf-activity-summary-v2.yaml
+type-mismatch,carp,true,plan-time,8,0,0.0,6,caught_plan_time,DEPENDENCY_TYPE_MISMATCH,mobgap-gait-analysis.yaml
+missing-producer,carp,true,plan-time,8,0,0.0,6,caught_plan_time,DEPENDENCY_PRODUCER_NOT_FOUND|MISSING_PRODUCER_STEP,mobgap-gait-analysis.yaml
+missing-output,carp,true,plan-time,8,0,0.0,6,caught_plan_time,DEPENDENCY_OUTPUT_NOT_FOUND|MISSING_PRODUCER_OUTPUT,mobgap-gait-analysis.yaml
+cycle,carp,true,plan-time,8,0,0.0,6,caught_plan_time,WORKFLOW_CYCLE_DETECTED,mobgap-gait-analysis.yaml
+missing-env,carp,true,plan-time,8,0,0.0,6,caught_plan_time,WORKFLOW_MISSING_ENVIRONMENT|MISSING_ENVIRONMENT_DEFINITION,mobgap-gait-analysis.yaml
+data-type-mismatch,carp,true,plan-time,13,0,0.0,6,caught_plan_time,DEPENDENCY_DATA_TYPE_MISMATCH,wf-activity-summary-v2.yaml

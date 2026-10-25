@@ -1,19 +1,24 @@
-name: portability
+name: cross-os evals
 
-# Cross-OS output determinism: run the HR/step pipeline natively on Linux, macOS, and
-# Windows runners under the same pinned env, then compare output hashes. Complements the
-# local Docker eval (which only varies Linux distros).
+# PL3 and EX2 on Linux, macOS (arm64) and Windows runners, through CARP-DSP itself:
+#   evalPlannerDeterminism - plan hashes of 11 demo workflows  -> planner-determinism/<platform>.csv
+#   evalGaitPortability    - output hashes of the locked gait workflow -> gait-portability/<platform>.csv
+# The collect job merges every runner's files into one artifact laid out like
+# carp.dsp.demo/eval_results/. Unzip it there and run the evals locally (or with
+# -PpaperDir) to compare all platforms and write the macros.
 #
-# workflow_dispatch only shows a Run button once this file is on the default branch. Until
-# then, the push trigger (scoped to the work branch + relevant paths) runs it on push.
+# workflow_dispatch shows a Run button only once this file is on the default branch; until
+# then the push trigger (work branch + this file) runs it.
 on:
   workflow_dispatch:
   push:
-    branches: [feature/eval-exp]
+    branches: [feat/claims-review]
     paths:
-      - 'carp.dsp.demo/docker/portability/ci/**'
-      - 'carp.dsp.demo/src/jvmMain/resources/scripts/hr_lib/**'
       - '.github/workflows/portability.yml'
+      - 'carp.dsp.demo/src/jvmMain/kotlin/carp/dsp/demo/eval/PlannerDeterminismEval.kt'
+      - 'carp.dsp.demo/src/jvmMain/kotlin/carp/dsp/demo/eval/GaitPortabilityEval.kt'
+      - 'carp.dsp.demo/src/jvmMain/resources/workflows/**'
+      - 'carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/**'
 
 permissions:
   contents: read
@@ -28,85 +33,67 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      USE_LOCAL_CORE: "true"
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Pixi env
-        uses: prefix-dev/setup-pixi@v0.8.1
         with:
-          manifest-path: carp.dsp.demo/docker/portability/ci/pixi.toml
-          locked: false
+          path: carp-dsp
 
-      - name: Run pipeline + fingerprint outputs
+      - uses: actions/checkout@v4
+        with:
+          repository: cph-cachet/carp.core-kotlin
+          ref: feature/core-analytics
+          path: carp.core-kotlin
+
+      - uses: actions/checkout@v4
+        with:
+          repository: carp-dk/health-workflow-interfaces
+          path: health-workflow-interfaces
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # pixi provisions the gait workflow's environment from its lock file.
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          run-install: false
+
+      - name: Run the cross-machine evals
+        working-directory: carp-dsp
         run: |
-          pixi run --manifest-path carp.dsp.demo/docker/portability/ci/pixi.toml \
-            python carp.dsp.demo/docker/portability/ci/run_and_hash.py \
-              --hr-lib carp.dsp.demo/src/jvmMain/resources/scripts/hr_lib \
-              --workdir "${RUNNER_TEMP}/ws" \
-              --out "fingerprint-${{ matrix.os }}.txt"
+          chmod +x gradlew
+          ./gradlew :carp.dsp.demo:evalPlannerDeterminism :carp.dsp.demo:evalGaitPortability -PskipIntegration
 
-      - name: Upload fingerprint
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: fingerprint-${{ matrix.os }}
-          path: fingerprint-${{ matrix.os }}.txt
+          name: eval-results-${{ matrix.os }}
+          path: |
+            carp-dsp/carp.dsp.demo/eval_results/planner-determinism/*.csv
+            carp-dsp/carp.dsp.demo/eval_results/gait-portability/
+          if-no-files-found: error
 
-      - name: Collect output files
-        run: |
-          mkdir -p pipeline-out
-          cp "${RUNNER_TEMP}/ws/hr-steps.csv" \
-             "${RUNNER_TEMP}/ws/daily-features.csv" \
-             "${RUNNER_TEMP}/ws/summary.json" pipeline-out/
-
-      - name: Upload outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: outputs-${{ matrix.os }}
-          path: pipeline-out/
-
-  compare:
+  collect:
     needs: run
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all fingerprints
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: fps
-          pattern: fingerprint-*
+          pattern: eval-results-*
+          path: merged
           merge-multiple: true
 
-      - name: Compare across OSes
+      - name: Summary
         run: |
-          set +e
-          python3 carp.dsp.demo/docker/portability/ci/compare_os.py \
-            fps ubuntu-latest macos-latest windows-latest --out os-results
-          code=$?
-          [ -f os-results/portability-os.txt ] && cat os-results/portability-os.txt >> "$GITHUB_STEP_SUMMARY"
-          # exit 2 = outputs diverged across OSes (a valid result); exit 1 = real error
-          [ "$code" -eq 1 ] && exit 1 || exit 0
-
-      - name: Download per-OS outputs
-        uses: actions/download-artifact@v4
-        with:
-          path: outs
-          pattern: outputs-*
-          # no merge-multiple: keep each OS in its own subdir (files share names)
-
-      - name: Locate the divergence (column-level)
-        run: |
-          python3 -m pip install --quiet pandas numpy
-          for f in daily-features.csv hr-steps.csv; do
-            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
-            python3 carp.dsp.demo/docker/portability/ci/diff_outputs.py \
-              outs "$f" ubuntu-latest macos-latest windows-latest --out "os-results/$f-detail" \
-              | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo "### Platforms" >> "$GITHUB_STEP_SUMMARY"
+          for f in merged/planner-determinism/*.csv merged/gait-portability/*.csv; do
+            echo "- $f: $(sed -n 2p "$f" | cut -d, -f1)" >> "$GITHUB_STEP_SUMMARY"
           done
 
-      - name: Upload cross-OS results
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: portability-os-results
-          path: os-results/
+          name: cross-os-results
+          path: merged/

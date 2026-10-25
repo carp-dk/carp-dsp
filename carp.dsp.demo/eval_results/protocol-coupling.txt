@@ -1,105 +1,60 @@
 ==============================================================================
-Protocol-coupling eval (F5) - 2026-07-20T07:03:52.168037300Z
-Workflow: protocol-coupling-mixed.yaml
-  - 1 protocol-bound input  (dk.cachet.carp.heartrate)
-  - 1 external input        (open Fitbit data, Zenodo 53894)
+Protocol-coupling eval (PL2) - 2026-10-25T13:29:28.934236300Z
+Workflow: protocol-coupling-mixed.yaml (1 protocol-bound heart-rate input, 1 open-data input)
 
-Scenario: protocol collects heart rate
+Scenario: protocol starts a heart-rate task
+  protocol:        hr-and-steps-v1
   expected:        no protocol issues
   protocol issues: none
-  steps planned:   2
-  plan errors:     0
+  runnable:        true
+  CARP Core says:  no deployment issues
   as expected:     true
 
-Scenario: protocol collects step count only
+Scenario: protocol has no heart-rate task
+  protocol:        steps-only-v2
   expected:        PROTOCOL_DATA_NOT_COLLECTED
   protocol issues: PROTOCOL_DATA_NOT_COLLECTED
-  steps planned:   2
-  plan errors:     1
+  runnable:        false
+  CARP Core says:  no deployment issues
   as expected:     true
     -> Input 'participant-hr' of step 'Load participant heart rate' expects data type 'dk.cachet.carp.heartrate', but study protocol 'HR study protocol' does not collect it. Collected types: dk.cachet.carp.stepcount.
 
-Scenario: no protocol supplied
+Scenario: heart-rate task defined but never started
+  protocol:        hr-never-started-v3
+  expected:        PROTOCOL_DATA_NOT_COLLECTED
+  protocol issues: PROTOCOL_DATA_NOT_COLLECTED
+  runnable:        false
+  CARP Core says:  UnstartedTasksWarning, UnusedDevicesWarning
+  as expected:     true
+    -> Input 'participant-hr' of step 'Load participant heart rate' expects data type 'dk.cachet.carp.heartrate', but study protocol 'HR study protocol' does not collect it. Collected types: dk.cachet.carp.stepcount.
+
+Scenario: bound protocol not supplied
+  protocol:        other-protocol-v1
+  expected:        PROTOCOL_NOT_FOUND
+  protocol issues: PROTOCOL_NOT_FOUND
+  runnable:        false
+  CARP Core says:  no deployment issues
+  as expected:     true
+    -> Study protocol 'HR study protocol' referenced by input 'participant-hr' of step 'Load participant heart rate' is not known to the supplied protocol source.
+
+Scenario: binding with an empty data type
+  protocol:        hr-and-steps-v1
+  expected:        PROTOCOL_BINDING_INCOMPLETE
+  protocol issues: PROTOCOL_BINDING_INCOMPLETE
+  runnable:        false
+  CARP Core says:  no deployment issues
+  as expected:     true
+    -> Input 'participant-hr' of step 'Load participant heart rate' is bound to a study protocol but its binding is incomplete (protocolId and dataType are both required).
+
+Scenario: no protocol source
+  protocol:        none
   expected:        PROTOCOL_NOT_VALIDATED
   protocol issues: PROTOCOL_NOT_VALIDATED
-  steps planned:   2
-  plan errors:     0
+  runnable:        true
+  CARP Core says:  no deployment issues
   as expected:     true
     -> 1 input(s) are bound to a study protocol, but no protocol source was supplied to the planner, so the binding(s) could not be validated. Supply a StudyProtocolSnapshot (or protocol service) to validate them.
 
 All scenarios as expected: true
-The external input is never protocol-checked in any scenario: protocol-sourced data is verified before execution while open data stays usable in the same workflow.
-==============================================================================
-
-==============================================================================
-Protocol-coupling eval (F5) - 2026-07-20T11:57:57.231395400Z
-Workflow: protocol-coupling-mixed.yaml
-  - 1 protocol-bound input  (dk.cachet.carp.heartrate)
-  - 1 external input        (open Fitbit data, Zenodo 53894)
-
-Scenario: protocol collects heart rate
-  expected:        no protocol issues
-  protocol issues: none
-  steps planned:   2
-  plan errors:     0
-  runnable:        true
-  as expected:     true
-
-Scenario: protocol collects step count only
-  expected:        PROTOCOL_DATA_NOT_COLLECTED
-  protocol issues: PROTOCOL_DATA_NOT_COLLECTED
-  steps planned:   2
-  plan errors:     1
-  runnable:        false  <- plan carries an ERROR, so no step executes
-  as expected:     true
-    -> Input 'participant-hr' of step 'Load participant heart rate' expects data type 'dk.cachet.carp.heartrate', but study protocol 'HR study protocol' does not collect it. Collected types: dk.cachet.carp.stepcount.
-
-Scenario: no protocol supplied
-  expected:        PROTOCOL_NOT_VALIDATED
-  protocol issues: PROTOCOL_NOT_VALIDATED
-  steps planned:   2
-  plan errors:     0
-  runnable:        true
-  as expected:     true
-    -> 1 input(s) are bound to a study protocol, but no protocol source was supplied to the planner, so the binding(s) could not be validated. Supply a StudyProtocolSnapshot (or protocol service) to validate them.
-
-All scenarios as expected: true
-The external input is never protocol-checked in any scenario: protocol-sourced data is verified before execution while open data stays usable in the same workflow.
-==============================================================================
-
-==============================================================================
-Protocol-coupling eval - 2026-08-12T09:07:45.961108800Z
-Workflow: protocol-coupling-mixed.yaml
-  - 1 protocol-bound input  (dk.cachet.carp.heartrate)
-  - 1 external input        (open Fitbit data, Zenodo 53894)
-
-Scenario: protocol collects heart rate
-  expected:        no protocol issues
-  protocol issues: none
-  steps planned:   2
-  plan errors:     0
-  runnable:        true
-  as expected:     true
-
-Scenario: protocol collects step count only
-  expected:        PROTOCOL_DATA_NOT_COLLECTED
-  protocol issues: PROTOCOL_DATA_NOT_COLLECTED
-  steps planned:   2
-  plan errors:     1
-  runnable:        false  <- plan carries an ERROR, so no step executes
-  as expected:     true
-    -> Input 'participant-hr' of step 'Load participant heart rate' expects data type 'dk.cachet.carp.heartrate', but study protocol 'HR study protocol' does not collect it. Collected types: dk.cachet.carp.stepcount.
-
-Scenario: no protocol supplied
-  expected:        PROTOCOL_NOT_VALIDATED
-  protocol issues: PROTOCOL_NOT_VALIDATED
-  steps planned:   2
-  plan errors:     0
-  runnable:        true
-  as expected:     true
-    -> 1 input(s) are bound to a study protocol, but no protocol source was supplied to the planner, so the binding(s) could not be validated. Supply a StudyProtocolSnapshot (or protocol service) to validate them.
-
-All scenarios as expected: true
-The external input is never protocol-checked in any scenario: protocol-sourced data is verified before execution while open data stays usable in the same workflow.
 ==============================================================================
 

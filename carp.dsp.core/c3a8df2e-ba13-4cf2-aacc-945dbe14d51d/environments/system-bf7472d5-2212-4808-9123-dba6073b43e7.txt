@@ -1,0 +1,5 @@
+kind: system
+name: bf7472d5-2212-4808-9123-dba6073b43e7
+recorded from: none (nothing pinned)
+---
+os: Windows 11 10.0 amd64

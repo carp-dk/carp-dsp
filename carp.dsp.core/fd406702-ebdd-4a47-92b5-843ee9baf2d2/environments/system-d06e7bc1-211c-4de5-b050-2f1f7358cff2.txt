@@ -1,0 +1,5 @@
+kind: system
+name: d06e7bc1-211c-4de5-b050-2f1f7358cff2
+recorded from: none (nothing pinned)
+---
+os: Windows 11 10.0 amd64

@@ -1,6 +1,7 @@
 package carp.dsp.demo.demos
 
 import carp.dsp.demo.io.DemoIo
+import carp.dsp.demo.io.MobgapScripts
 import carp.dsp.demo.io.DemoRun
 import carp.dsp.core.application.run.WorkflowExecutor
 import carp.dsp.steps.ClasspathStepLibrary
@@ -51,7 +52,7 @@ class MobgapDemo {
                 // working directory a step's command runs in.
                 val executionRoot = demoResultsDir.resolve("mobgap_gait_analysis_pipeline/run_$runId")
                 executionRoot.createDirectories()
-                setupWorkspaceFiles(executionRoot)
+                MobgapScripts.stage(executionRoot)
                 println("Workspace prepared at: $demoResultsDir")
 
                 // 3. Resolve, import and plan.
@@ -99,29 +100,6 @@ class MobgapDemo {
 
         private fun getDemoResultsDirectory(): Path = DemoIo.demoResultsDir("mobgap").toPath()
 
-        /**
-         * Copies the pipeline's scripts under [executionRoot], the working directory
-         * a step's command runs in, so the relative script paths in the workflow
-         * resolve. The dataset is not copied: the import step downloads it.
-         */
-        private fun setupWorkspaceFiles(executionRoot: Path) {
-            val scriptsDir = executionRoot.resolve("scripts/mobgap")
-            scriptsDir.createDirectories()
-            listOf(
-                "import_data.py",
-                "gsd.py",
-                "icd.py",
-                "per_sec_params.py",
-                "wba.py",
-                "aggregate.py",
-                "plot_wb_params.py",
-                "plot_aggregated_dmos.py"
-            )
-                .forEach { script ->
-                    copyResourceFile("scripts/mobgap/$script", scriptsDir.resolve(script))
-                }
-        }
-
         private fun printPlotLocations(runRoot: Path) {
             val candidates = listOf(
                 runRoot.resolve("steps/07_plot_walking_bout_parameters/outputs/wb-params-plot-png.png"),
@@ -135,8 +113,6 @@ class MobgapDemo {
             }
         }
 
-        private fun copyResourceFile(resourcePath: String, targetPath: Path) =
-            DemoIo.copyResource(resourcePath, targetPath)
 
         private fun printDmoResults(csvText: String) {
             println("AGGREGATED DIGITAL MOBILITY OUTCOMES")

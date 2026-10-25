@@ -1,156 +1,213 @@
 package carp.dsp.demo.eval
 
-import carp.dsp.core.application.authoring.mapper.WorkflowDescriptorImporter
-import carp.dsp.core.application.plan.DefaultExecutionPlanner
 import carp.dsp.core.application.plan.StudyProtocolSnapshotDataTypeProvider
+import carp.dsp.core.application.run.WorkflowExecutor
+import carp.dsp.core.application.run.WorkflowSource
 import carp.dsp.core.infrastructure.serialization.WorkflowYamlCodec
 import carp.dsp.demo.io.DemoIo
+import carp.dsp.steps.ClasspathStepLibrary
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
-import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.common.application.UUID
+import dk.cachet.carp.common.application.data.CarpDataTypes
+import dk.cachet.carp.common.application.devices.BLEHeartRateDevice
+import dk.cachet.carp.common.application.devices.Smartphone
+import dk.cachet.carp.common.application.tasks.BackgroundTask
+import dk.cachet.carp.common.application.tasks.Measure
+import dk.cachet.carp.common.application.triggers.TaskControl
 import dk.cachet.carp.common.infrastructure.serialization.createDefaultJSON
 import dk.cachet.carp.protocols.application.StudyProtocolSnapshot
-import kotlinx.serialization.json.Json
+import dk.cachet.carp.protocols.domain.StudyProtocol
+import java.io.File
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
- * Protocol-coupling eval: plan-time validation of protocol-bound inputs.
+ * PL2 eval: plan-time checking of protocol-bound inputs against real CARP study protocols.
  *
- * Runs the 'protocol-coupling-mixed' workflow - contains one input collected by a study protocol, one open
- * dataset - against two protocols and records what the planner does:
+ * Builds the protocols with the CARP Core protocol API (a phone, a BLE heart-rate strap,
+ * tasks started by a trigger), then prepares the 'protocol-coupling-mixed' workflow the
+ * way a run does (resolve, lint, import, plan) in six scenarios that cover every
+ * protocol issue code, including a heart-rate task the protocol defines but never starts.
  *
- *  1. a protocol that collects heart rate          -> No warnings
- *  2. a protocol that collects step count only     -> PROTOCOL_DATA_NOT_COLLECTED,
- *     no step executes
- *  3. with no protocol supplied                    -> PROTOCOL_NOT_VALIDATED warning
+ *   ./gradlew :carp.dsp.demo:evalProtocolCoupling -PpaperDir=../carp-dsp-sys-paper
  *
- * Run from the demo menu (id: protocol-coupling-eval):
- *   ./gradlew :carp.dsp.demo:run --args "run protocol-coupling-eval"
- * or directly:
- *   ./gradlew :carp.dsp.demo:evalProtocolCoupling
- *
- * Writes eval_results/protocol-coupling.{txt,csv}.
+ * Writes eval_results/protocol-coupling.{txt,csv}, the protocol snapshots under
+ * eval_results/protocol-coupling/, and protocol-coupling-numbers.tex (to the paper with
+ * -PpaperDir).
  */
+fun main()
+{
+    val outDir = DemoIo.evalResultsDir().resolve( "protocol-coupling" ).apply { mkdirs() }
+    val workflowYaml = DemoIo.loadResource( WORKFLOW_RESOURCE )
+    val json = createDefaultJSON()
+
+    val protocols = PROTOCOLS.associateWith { it.build() }
+    protocols.forEach { (spec, protocol) ->
+        outDir.resolve( "${spec.file}.json" ).writeText(
+            json.encodeToString( StudyProtocolSnapshot.serializer(), StudyProtocolSnapshot.fromProtocol( protocol, spec.version ) )
+        )
+    }
+
+    val rows = SCENARIOS.map { scenario ->
+        val provider = scenario.protocol?.let { spec ->
+            StudyProtocolSnapshotDataTypeProvider( StudyProtocolSnapshot.fromProtocol( protocols.getValue( spec ), spec.version ) )
+        }
+        // The parser rejects a binding with no dataType key, so the incomplete case is an empty value.
+        val yaml = if ( scenario.emptyDataType ) workflowYaml.replace( DATA_TYPE, "dataType: \"\"" ) else workflowYaml
+        check( !scenario.emptyDataType || yaml != workflowYaml ) { "The dataType to empty is not in the workflow." }
+        val plan = prepare( outDir, yaml, provider )
+        val protocolIssues = plan.issues.filter { it.code.startsWith( "PROTOCOL_" ) }
+        Row(
+            scenario = scenario,
+            codes = protocolIssues.map { it.code },
+            messages = protocolIssues.map { it.message },
+            runnable = plan.isRunnable(),
+            carpIssues = scenario.protocol?.let { protocols.getValue( it ).getDeploymentIssues().map { i -> i::class.simpleName.orEmpty() } }
+                .orEmpty(),
+            matched = if ( scenario.expectedCode == null ) protocolIssues.isEmpty()
+            else protocolIssues.map { it.code } == listOf( scenario.expectedCode )
+        )
+    }
+
+    val report = report( rows )
+    println( report )
+    val evalDir = DemoIo.evalResultsDir()
+    evalDir.resolve( "protocol-coupling.txt" ).writeText( report + "\n" )
+    evalDir.resolve( "protocol-coupling.csv" ).writeText( csv( rows ) )
+
+    val numbers = evalDir.resolve( "protocol-coupling-numbers.tex" )
+    numbers.writeText(
+        buildString {
+            appendLine( "% GENERATED by ProtocolCouplingEval - do not edit; run :carp.dsp.demo:evalProtocolCoupling" )
+            fun macro( name: String, value: Int ) = appendLine( "\\newcommand{\\$name}{$value}" )
+            macro( "ProtocolScenarios", rows.size )
+            macro( "ProtocolScenariosAsExpected", rows.count { it.matched } )
+            macro( "ProtocolIssueCodes", rows.mapNotNull { it.scenario.expectedCode }.distinct().size )
+        }
+    )
+    DemoIo.publishToPaper( numbers, "generated/protocol-coupling-numbers.tex" )
+}
+
+private const val WORKFLOW_RESOURCE = "workflows/protocol-coupling-mixed.yaml"
+private const val DATA_TYPE = "dataType: \"dk.cachet.carp.heartrate\""
 
 /** Same fixed namespace as the other evals. */
 private val PC_FIXED_NAMESPACE: UUID = UUID.parse( "d3b7f2a0-0000-5000-8000-6d6f62676170" )
 
-private const val WORKFLOW_RESOURCE = "workflows/protocol-coupling-mixed.yaml"
-private const val PROTOCOL_HR = "protocols/hr-study-protocol.json"
-private const val PROTOCOL_STEPS_ONLY = "protocols/steps-only-protocol.json"
+/** The protocol the workflow's input is bound to. */
+private val PROTOCOL_ID: UUID = UUID.parse( "aabbccdd-0000-4000-8000-000000000001" )
+private val OTHER_PROTOCOL_ID: UUID = UUID.parse( "aabbccdd-0000-4000-8000-000000000002" )
+private val OWNER_ID: UUID = UUID.parse( "11112222-0000-4000-8000-000000000001" )
+
+/** One protocol version: which tasks it has and whether a trigger starts the heart-rate one. */
+private data class ProtocolSpec(
+    val file: String,
+    val id: UUID,
+    val version: Int,
+    val heartRateTask: Boolean,
+    val startHeartRate: Boolean
+)
+{
+    @OptIn( ExperimentalTime::class )
+    fun build(): StudyProtocol
+    {
+        val protocol = StudyProtocol( OWNER_ID, "HR study protocol", id = id, createdOn = Instant.parse( "2026-01-15T09:00:00Z" ) )
+        val phone = Smartphone( "Participant phone" )
+        protocol.addPrimaryDevice( phone )
+
+        val steps = BackgroundTask( "Count steps", listOf( Measure.DataStream( CarpDataTypes.STEP_COUNT.type ) ) )
+        protocol.addTaskControl( phone.atStartOfStudy(), steps, phone, TaskControl.Control.Start )
+        if ( heartRateTask )
+        {
+            val strap = BLEHeartRateDevice( "Chest strap" )
+            protocol.addConnectedDevice( strap, phone )
+            val heartRate = BackgroundTask( "Measure heart rate", listOf( Measure.DataStream( CarpDataTypes.HEART_RATE.type ) ) )
+            if ( startHeartRate ) protocol.addTaskControl( phone.atStartOfStudy(), heartRate, strap, TaskControl.Control.Start )
+            else protocol.addTask( heartRate )
+        }
+        return protocol
+    }
+}
+
+private val COLLECTS_HR = ProtocolSpec( "hr-and-steps-v1", PROTOCOL_ID, 1, heartRateTask = true, startHeartRate = true )
+private val STEPS_ONLY = ProtocolSpec( "steps-only-v2", PROTOCOL_ID, 2, heartRateTask = false, startHeartRate = false )
+private val HR_NEVER_STARTED = ProtocolSpec( "hr-never-started-v3", PROTOCOL_ID, 3, heartRateTask = true, startHeartRate = false )
+private val OTHER_PROTOCOL = ProtocolSpec( "other-protocol-v1", OTHER_PROTOCOL_ID, 1, heartRateTask = true, startHeartRate = true )
+private val PROTOCOLS = listOf( COLLECTS_HR, STEPS_ONLY, HR_NEVER_STARTED, OTHER_PROTOCOL )
 
 private data class Scenario(
     val name: String,
-    val protocolResource: String?,
-    val expectedCode: String?
+    val protocol: ProtocolSpec?,
+    val expectedCode: String?,
+    val emptyDataType: Boolean = false
 )
 
 private val SCENARIOS = listOf(
-    Scenario( "protocol collects heart rate", PROTOCOL_HR, null ),
-    Scenario( "protocol collects step count only", PROTOCOL_STEPS_ONLY, "PROTOCOL_DATA_NOT_COLLECTED" ),
-    Scenario( "no protocol supplied", null, "PROTOCOL_NOT_VALIDATED" )
+    Scenario( "protocol starts a heart-rate task", COLLECTS_HR, null ),
+    Scenario( "protocol has no heart-rate task", STEPS_ONLY, "PROTOCOL_DATA_NOT_COLLECTED" ),
+    Scenario( "heart-rate task defined but never started", HR_NEVER_STARTED, "PROTOCOL_DATA_NOT_COLLECTED" ),
+    Scenario( "bound protocol not supplied", OTHER_PROTOCOL, "PROTOCOL_NOT_FOUND" ),
+    Scenario( "binding with an empty data type", COLLECTS_HR, "PROTOCOL_BINDING_INCOMPLETE", emptyDataType = true ),
+    Scenario( "no protocol source", null, "PROTOCOL_NOT_VALIDATED" )
 )
 
-fun main()
-{
-    val json = createDefaultJSON()
-    val codec = WorkflowYamlCodec()
-    val yaml = DemoIo.loadResource( WORKFLOW_RESOURCE )
-
-    val rows = SCENARIOS.map { scenario ->
-        val provider = scenario.protocolResource?.let { resource ->
-            StudyProtocolSnapshotDataTypeProvider( loadSnapshot( json, resource ) )
-        }
-        val plan = planWith( codec, yaml, provider )
-        val protocolIssues = plan.issues.filter { it.code.startsWith( "PROTOCOL_" ) }
-        val errors = plan.issues.filter { it.severity == PlanIssueSeverity.ERROR }
-        val matched = protocolIssues.map { it.code }.contains( scenario.expectedCode ) ||
-            ( scenario.expectedCode == null && protocolIssues.isEmpty() )
-
-        ScenarioResult(
-            scenario = scenario,
-            codes = protocolIssues.map { it.code },
-            messages = protocolIssues.map { it.message },
-            plannedSteps = plan.steps.size,
-            errorCount = errors.size,
-            runnable = plan.isRunnable(),
-            matched = matched
-        )
-    }
-
-    val report = buildString {
-        appendLine( "=".repeat( 78 ) )
-        appendLine( "Protocol-coupling eval - ${java.time.Instant.now()}" )
-        appendLine( "Workflow: protocol-coupling-mixed.yaml" )
-        appendLine( "  - 1 protocol-bound input  (dk.cachet.carp.heartrate)" )
-        appendLine( "  - 1 external input        (open Fitbit data, Zenodo 53894)" )
-        appendLine()
-        rows.forEach { r ->
-            appendLine( "Scenario: ${r.scenario.name}" )
-            appendLine( "  expected:        ${r.scenario.expectedCode ?: "no protocol issues"}" )
-            appendLine( "  protocol issues: ${r.codes.ifEmpty { listOf( "none" ) }.joinToString( ", " )}" )
-            appendLine( "  steps planned:   ${r.plannedSteps}" )
-            appendLine( "  plan errors:     ${r.errorCount}" )
-            appendLine(
-                "  runnable:        ${r.runnable}" +
-                if ( r.runnable ) "" else "  <- plan carries an ERROR, so no step executes"
-            )
-            appendLine( "  as expected:     ${r.matched}" )
-            r.messages.forEach { appendLine( "    -> $it" ) }
-            appendLine()
-        }
-        appendLine( "All scenarios as expected: ${rows.all { it.matched }}" )
-        appendLine(
-            "The external input is never protocol-checked in any scenario: protocol-sourced " +
-            "data is verified before execution while open data stays usable in the same workflow."
-        )
-        appendLine( "=".repeat( 78 ) )
-    }
-    println( report )
-
-    val dir = DemoIo.evalResultsDir()
-    dir.resolve( "protocol-coupling.txt" ).appendText( report + "\n" )
-    dir.resolve( "protocol-coupling.csv" ).writeText(
-        buildString {
-            appendLine( "scenario,protocol,expected_code,codes,steps_planned,plan_errors,runnable,as_expected" )
-            rows.forEach { r ->
-                appendLine(
-                    listOf(
-                        r.scenario.name,
-                        r.scenario.protocolResource ?: "none",
-                        r.scenario.expectedCode ?: "",
-                        r.codes.joinToString( "|" ),
-                        r.plannedSteps.toString(),
-                        r.errorCount.toString(),
-                        r.runnable.toString(),
-                        r.matched.toString()
-                    ).joinToString( "," ) { if ( it.contains( "," ) ) "\"$it\"" else it }
-                )
-            }
-        }
-    )
-    println( "Wrote protocol-coupling.txt and protocol-coupling.csv to: ${dir.absolutePath}" )
-}
-
-private data class ScenarioResult(
+private data class Row(
     val scenario: Scenario,
     val codes: List<String>,
     val messages: List<String>,
-    val plannedSteps: Int,
-    val errorCount: Int,
     val runnable: Boolean,
+    /** What CARP Core itself reports about the protocol (deployment issues). */
+    val carpIssues: List<String>,
     val matched: Boolean
 )
 
-private fun planWith(
-    codec: WorkflowYamlCodec,
-    yaml: String,
-    provider: StudyProtocolSnapshotDataTypeProvider?
-): ExecutionPlan
+/** Prepares the workflow as a run does; the plan is not executed. */
+private fun prepare( outDir: File, yaml: String, provider: StudyProtocolSnapshotDataTypeProvider? ): ExecutionPlan
 {
-    val descriptor = codec.decodeOrThrow( yaml )
-    val definition = WorkflowDescriptorImporter( PC_FIXED_NAMESPACE ).import( descriptor )
-    return DefaultExecutionPlanner( provider ).plan( definition )
+    // Scratch space, git-ignored: the scenario's workflow file and the (unused) run workspace.
+    val dir = outDir.resolve( "work" ).apply { mkdirs() }
+    val file = dir.resolve( "protocol-coupling-mixed.yaml" ).apply { writeText( yaml ) }
+    val executor = WorkflowExecutor.filesystem(
+        ClasspathStepLibrary(),
+        dir.resolve( "workspace" ).toPath(),
+        WorkflowExecutor.Options( protocolDataTypeProvider = provider, workflowNamespace = PC_FIXED_NAMESPACE )
+    )
+    return executor.prepare( WorkflowSource( dir.toPath(), file.name ), WorkflowYamlCodec().decodeOrThrow( yaml ) ).plan
 }
 
-private fun loadSnapshot( json: Json, path: String ): StudyProtocolSnapshot =
-    json.decodeFromString( StudyProtocolSnapshot.serializer(), DemoIo.loadResource( path ) )
+private fun report( rows: List<Row> ): String = buildString {
+    appendLine( "=".repeat( 78 ) )
+    appendLine( "Protocol-coupling eval (PL2) - ${java.time.Instant.now()}" )
+    appendLine( "Workflow: protocol-coupling-mixed.yaml (1 protocol-bound heart-rate input, 1 open-data input)" )
+    appendLine()
+    rows.forEach { r ->
+        appendLine( "Scenario: ${r.scenario.name}" )
+        appendLine( "  protocol:        ${r.scenario.protocol?.file ?: "none"}" )
+        appendLine( "  expected:        ${r.scenario.expectedCode ?: "no protocol issues"}" )
+        appendLine( "  protocol issues: ${r.codes.ifEmpty { listOf( "none" ) }.joinToString( ", " )}" )
+        appendLine( "  runnable:        ${r.runnable}" )
+        appendLine( "  CARP Core says:  ${r.carpIssues.ifEmpty { listOf( "no deployment issues" ) }.joinToString( ", " )}" )
+        appendLine( "  as expected:     ${r.matched}" )
+        r.messages.forEach { appendLine( "    -> $it" ) }
+        appendLine()
+    }
+    appendLine( "All scenarios as expected: ${rows.all { it.matched }}" )
+    appendLine( "=".repeat( 78 ) )
+}
+
+private fun csv( rows: List<Row> ): String = buildString {
+    appendLine( "scenario,protocol,expected_code,codes,runnable,carp_deployment_issues,as_expected" )
+    rows.forEach { r ->
+        appendLine(
+            listOf(
+                r.scenario.name,
+                r.scenario.protocol?.file ?: "none",
+                r.scenario.expectedCode.orEmpty(),
+                r.codes.joinToString( "|" ),
+                r.runnable.toString(),
+                r.carpIssues.joinToString( "|" ),
+                r.matched.toString()
+            ).joinToString( "," )
+        )
+    }
+}

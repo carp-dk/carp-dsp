@@ -14,12 +14,16 @@ import dk.cachet.carp.analytics.domain.workflow.WorkflowDefinition
 import dk.cachet.carp.analytics.domain.workflow.WorkflowMetadata
 import dk.cachet.carp.common.application.UUID
 import dk.cachet.carp.common.application.data.DataType
+import dk.cachet.carp.common.application.devices.Smartphone
 import dk.cachet.carp.common.application.tasks.BackgroundTask
 import dk.cachet.carp.common.application.tasks.Measure
+import dk.cachet.carp.common.application.triggers.ElapsedTimeTrigger
+import dk.cachet.carp.common.application.triggers.TaskControl
 import dk.cachet.carp.protocols.application.StudyProtocolSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -48,22 +52,31 @@ class ProtocolCouplingValidatorTest
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
+    private val phone = Smartphone( "phone" )
+
+    /** A protocol whose one task measures [dataTypes]; [started] says whether a trigger starts it. */
     private fun snapshot(
         id: UUID = protocolId,
         version: Int = 1,
-        dataTypes: List<String>
+        dataTypes: List<String>,
+        started: Boolean = true
     ) = StudyProtocolSnapshot(
         id = id,
         createdOn = Instant.fromEpochSeconds( 0 ),
         version = version,
         ownerId = UUID.randomUUID(),
         name = "Test protocol v$version",
+        primaryDevices = setOf( phone ),
         tasks = setOf(
             BackgroundTask(
                 name = "collect",
                 measures = dataTypes.map { Measure.DataStream( DataType.fromString( it ) ) }
             )
-        )
+        ),
+        triggers = mapOf( 0 to ElapsedTimeTrigger( phone, Duration.ZERO ) ),
+        taskControls =
+            if ( started ) setOf( TaskControl( 0, "collect", phone.roleName, TaskControl.Control.Start ) )
+            else emptySet()
     )
 
     private fun protocolInput(
@@ -120,6 +133,20 @@ class ProtocolCouplingValidatorTest
         assertEquals( 1, issues.size )
         assertEquals( "PROTOCOL_DATA_NOT_COLLECTED", issues[0].code )
         assertEquals( PlanIssueSeverity.ERROR, issues[0].severity )
+    }
+
+    @Test
+    fun `rejects protocol input whose data type is measured only by a task that is never started`()
+    {
+        val provider = StudyProtocolSnapshotDataTypeProvider(
+            snapshot( dataTypes = listOf( HEART_RATE ), started = false )
+        )
+        val steps = listOf( step( "import", listOf( protocolInput( "hr", HEART_RATE ) ) ) )
+
+        val issues = validator.validate( steps, provider )
+
+        assertEquals( 1, issues.size )
+        assertEquals( "PROTOCOL_DATA_NOT_COLLECTED", issues[0].code )
     }
 
     @Test

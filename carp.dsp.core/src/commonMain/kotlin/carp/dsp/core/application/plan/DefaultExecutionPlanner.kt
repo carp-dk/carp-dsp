@@ -84,7 +84,8 @@ class DefaultExecutionPlanner(
 
         // Topological Sort
         val declarationOrder = steps.map { it.metadata.id }
-        val order = sorter.sort(dag.adjacency, dag.indegree, declarationOrder)
+        val stepNames = steps.associate { it.metadata.id to it.metadata.name }
+        val order = sorter.sort(dag.adjacency, dag.indegree, declarationOrder, stepNames)
         issues.addAll(order.issues)
 
         // Plan Steps (in sorted order)

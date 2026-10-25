@@ -38,6 +38,12 @@ object WorkflowLinter
     // Must match the kinds EnvironmentImporter accepts.
     private val SUPPORTED_ENV_KINDS = setOf("conda", "pixi", "r", "docker", "system")
 
+    // Kinds whose dependencies resolve at setup, and so can drift.
+    private val PINNABLE_ENV_KINDS = setOf("conda", "pixi")
+
+    // An exact version: `=1.2` or `==1.2`, not a range such as `>=1.2`.
+    private val EXACT_VERSION = Regex( "(^|[^<>!~])==?\\s*\\d" )
+
     /**
      * Validates a workflow descriptor and returns all linting issues.
      *
@@ -80,6 +86,9 @@ object WorkflowLinter
 
         // Check 9: Unattributed external boundary inputs
         issues += checkExternalProvenance(descriptor)
+
+        // Check 10: Conda / Pixi environment that pins nothing
+        issues += checkEnvironmentPinning(descriptor)
 
         // Optional checks (configurable)
         issues += checkNamingConventions(descriptor, config)
@@ -236,6 +245,29 @@ object WorkflowLinter
 
         return issues
     }
+
+    // ── Check 10: Unpinned Environment ────────────────────────────────────────
+    //
+    // A conda or pixi dependency with no exact version resolves to whatever is newest at
+    // setup, so two setups can install different versions. A pixi lock file pins every
+    // version; without one, each dependency needs an exact version (`=1.2` or `==1.2`).
+
+    private fun checkEnvironmentPinning(descriptor: WorkflowDescriptor): List<ValidationIssue> =
+        descriptor.environments.mapNotNull { (envId, env) ->
+            val kind = env.kind.lowercase()
+            if (kind !in PINNABLE_ENV_KINDS || env.spec["lockFile"]?.firstOrNull() != null) return@mapNotNull null
+            val unpinned = env.spec["dependencies"].orEmpty().filterNot { EXACT_VERSION.containsMatchIn( it ) }
+            if (unpinned.isEmpty()) return@mapNotNull null
+            val lockHint = if (kind == "pixi") "add a lockFile or pin each version" else "pin each version"
+            ValidationIssue(
+                severity = ValidationSeverity.WARNING,
+                code = ValidationErrorCode.WORKFLOW_ENVIRONMENT_NOT_PINNED,
+                message = "Environment '$envId' does not pin ${unpinned.joinToString(", ")}: " +
+                    "each setup may install different versions; $lockHint.",
+                path = "environments.$envId.spec",
+                subjectId = envId
+            )
+        }
 
     // ── Check 6: UUID Format Validation ───────────────────────────────────────
 

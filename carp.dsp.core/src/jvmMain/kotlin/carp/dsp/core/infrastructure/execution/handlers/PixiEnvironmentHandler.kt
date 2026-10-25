@@ -63,8 +63,9 @@ class PixiEnvironmentHandler(
             projectDir.createDirectories()
 
             generatePixiToml(projectDir, pixi)
+            val locked = copyLockFile(projectDir, pixi)
 
-            installPixiEnvironment(projectDir)
+            installPixiEnvironment(projectDir, locked)
 
             check(validate(pixi)) { "Environment created but validation failed" }
 
@@ -195,12 +196,28 @@ class PixiEnvironmentHandler(
         }
     }
 
-    private fun installPixiEnvironment(projectDir: Path): Boolean = try {
+    /**
+     * Copies the environment's lock file into [projectDir] as `pixi.lock`.
+     *
+     * @return true when the environment is locked.
+     * @throws IllegalStateException when a lock file is declared but missing.
+     */
+    private fun copyLockFile(projectDir: Path, pixi: PixiEnvironmentRef): Boolean {
+        val lock = pixi.lockFile?.let { Path.of(it) } ?: return false
+        check(lock.toFile().isFile) { "Lock file not found: $lock" }
+        lock.toFile().copyTo(projectDir.resolve("pixi.lock").toFile(), overwrite = true)
+        return true
+    }
+
+    private fun installPixiEnvironment(projectDir: Path, locked: Boolean): Boolean = try {
         // `pixi install` must run with the project directory as its working directory.
         // See class KDoc for why we use JvmCommandRunner's workspace-root overload here.
+        // A locked environment installs the lock as it is (--frozen): the lock decides the
+        // versions, not the dependencies in the generated manifest.
+        val args = if (locked) listOf("install", "--frozen") else listOf("install")
         val spec = CommandSpec(
             executable = "pixi",
-            args = listOf(ExpandedArg.Literal("install"))
+            args = args.map { ExpandedArg.Literal(it) }
         )
         val result = when (val r = runner) {
             is JvmCommandRunner -> r.run(spec, defaultPolicy, projectDir)

@@ -1,0 +1,13 @@
+fault,tool,expressible,caught_before_run,message
+cycle,snakemake,True,True,"CyclicGraphException in rule import_data in file ""Snakefile"", line 15:"
+cycle,cwl,True,True,The following steps have circular dependency:
+data-type-mismatch,snakemake,True,False,
+data-type-mismatch,cwl,True,False,
+missing-env,snakemake,True,True,FileNotFoundError: [Errno 2] No such file or directory: 'envs/env-does-not-exist.yaml'
+missing-env,cwl,False,False,
+missing-output,snakemake,True,True,"MissingInputException in rule plot_aggregated_dmos in file ""Snakefile"", line 88:"
+missing-output,cwl,True,True,Field 'source' references unknown identifier
+missing-producer,snakemake,True,True,"MissingInputException in rule plot_aggregated_dmos in file ""Snakefile"", line 88:"
+missing-producer,cwl,True,True,Field 'source' references unknown identifier
+type-mismatch,snakemake,True,False,
+type-mismatch,cwl,True,False,

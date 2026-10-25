@@ -6,6 +6,8 @@ import carp.dsp.core.application.authoring.resolve.StepLibrary
 import carp.dsp.core.application.authoring.resolve.WorkflowResolution
 import carp.dsp.core.application.authoring.validation.LinterConfiguration
 import carp.dsp.core.application.authoring.validation.WorkflowLinter
+import carp.dsp.core.application.environment.PixiEnvironmentDefinition
+import carp.dsp.core.application.environment.REnvironmentDefinition
 import carp.dsp.core.application.execution.ExecutionLogger
 import carp.dsp.core.application.execution.NoOpExecutionLogger
 import carp.dsp.core.application.plan.DefaultExecutionPlanner
@@ -83,8 +85,8 @@ class WorkflowExecutor(
      *   data types, so protocol-bound inputs are checked at plan time.
      * @property runPolicy Stop-on-failure, timeouts and retries.
      * @property workflowNamespace Fixes the UUID namespace the importer derives
-     *   step ids from. Set it when plan ids must be reproducible across runs;
-     *   left null, each import gets a fresh namespace.
+     *   step ids from. Left null, it is derived from the workflow's id and version,
+     *   so the same workflow version plans with the same ids on every run.
      * @property executorOptions Passed to [DefaultPlanExecutor]. Override it to
      *   supply a command runner, an output validation policy, or - for a service
      *   running more than one workflow - an environment orchestrator that is not
@@ -151,11 +153,16 @@ class WorkflowExecutor(
         val definition = importer.import( resolved.workflow )
         val plan = DefaultExecutionPlanner( options.protocolDataTypeProvider ).plan( definition ).withLintIssues( lint )
 
+        // The resolved workflow goes into the run folder as `workflow.yaml`, so the folder
+        // is a bundle that runs again without the step library.
+        val provisioning = provisioningFor( source.directory, definition, plan, resolved.impl, packageFiles )
+            .withWorkflowFile( plan, codec.encode( resolved.workflow ) )
+
         return PreparedWorkflow(
             descriptor = resolved.workflow,
             definition = definition,
             plan = plan,
-            provisioning = provisioningFor( source.directory, definition, plan, resolved.impl, packageFiles ),
+            provisioning = provisioning,
         )
     }
 
@@ -226,27 +233,16 @@ class WorkflowExecutor(
 
         // Package files belong to the run rather than to any one step - commands
         // share the execution root - so they are attributed to the first step and
-        // staged once.
+        // staged once. So are environment lock files, which setup reads from the run root.
         plan.steps.firstOrNull()?.let { first ->
             val into = byStep.getOrPut( first.metadata.id ) { mutableMapOf() }
             packageFiles.forEach { ( relative, file ) -> into[relative] = FileSource.Copy( file ) }
+            lockFilesOf( definition ).forEach { relative ->
+                into.getOrPut( relative ) { FileSource.Copy( workflowDir.resolve( relative ) ) }
+            }
         }
 
         return WorkspaceProvisioning( byStep.mapValues { it.value.toMap() } )
-    }
-
-    /**
-     * Returns the input path when it is relative to the workflow file; otherwise,
-     * null for step outputs, non-file locations, and absolute paths that need no
-     * staging.
-     */
-    private fun relativeInputPath( input: InputDataSpec ): String?
-    {
-        if ( input.stepRef != null ) return null
-        val location = input.location as? FileLocation ?: return null
-        val path = location.path.trim()
-        if ( path.isEmpty() || File( path ).isAbsolute ) return null
-        return path.removePrefix( "./" )
     }
 
     companion object
@@ -273,4 +269,50 @@ class WorkflowExecutor(
             )
         }
     }
+}
+
+/** Where the resolved workflow is staged in the run folder. */
+private const val BUNDLE_WORKFLOW = "workflow.yaml"
+
+/** [this] with the resolved workflow staged at [BUNDLE_WORKFLOW], unless another file claims that path. */
+private fun WorkspaceProvisioning.withWorkflowFile( plan: ExecutionPlan, yaml: String ): WorkspaceProvisioning
+{
+    val first = plan.steps.firstOrNull()?.metadata?.id ?: return this
+    if ( byStep.values.any { BUNDLE_WORKFLOW in it } ) return this
+    val files = byStep[ first ].orEmpty() + ( BUNDLE_WORKFLOW to FileSource.Content( yaml ) )
+    return copy( byStep = byStep + ( first to files ) )
+}
+
+/** Relative lock files the workflow's environments install from (pixi.lock, renv.lock). */
+private fun lockFilesOf( definition: WorkflowDefinition ): List<String> =
+    definition.environments.values.mapNotNull { env ->
+        when ( env )
+        {
+            is PixiEnvironmentDefinition -> env.lockFile
+            is REnvironmentDefinition -> env.renvLockFile
+            else -> null
+        }
+    }.filterNot { File( it ).isAbsolute }.map { it.removePrefix( "./" ) }.distinct()
+
+/** Input sources whose data is not a file beside the workflow. */
+private val NOT_STAGED_SOURCES = setOf( "external", "protocol" )
+
+/** A URI such as `https://...` or `s3://...`; a Windows drive (`C:\`) has no `//`. */
+private val URI_SCHEME = Regex( "^[A-Za-z][A-Za-z0-9+.-]*://" )
+
+/**
+ * Returns the input path when it is relative to the workflow file; otherwise null
+ * for step outputs, non-file locations, absolute paths, external and protocol-bound
+ * inputs, and URIs, none of which are staged from the workflow directory.
+ */
+internal fun relativeInputPath( input: InputDataSpec ): String?
+{
+    if ( input.stepRef != null ) return null
+    val location = input.location as? FileLocation ?: return null
+    // External data is referenced by its URI (the importer puts it in the path), and a
+    // protocol input has no file yet; neither lives beside the workflow.
+    if ( location.metadata["source"] in NOT_STAGED_SOURCES ) return null
+    val path = location.path.trim()
+    if ( path.isEmpty() || URI_SCHEME.containsMatchIn( path ) || File( path ).isAbsolute ) return null
+    return path.removePrefix( "./" )
 }

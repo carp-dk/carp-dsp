@@ -1,0 +1,5 @@
+kind: system
+name: eb3114f9-3e14-4b5b-8568-67f7d84ce454
+recorded from: none (nothing pinned)
+---
+os: Windows 11 10.0 amd64

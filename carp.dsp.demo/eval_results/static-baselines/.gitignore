@@ -1,0 +1,4 @@
+# Regenerated on every run; only the CSV and the macros are kept
+.snakemake/
+wiring/
+generated/

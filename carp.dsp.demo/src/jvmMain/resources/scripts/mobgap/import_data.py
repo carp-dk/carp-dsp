@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
-# --- eval timing (paper Fig D): prints script self-time to stderr ---
-import atexit as _ae, sys as _sys, time as _time
-_EVAL_T0 = _time.perf_counter()
-_ae.register(lambda: print(f"EVAL_SCRIPT_SECONDS={_time.perf_counter() - _EVAL_T0:.3f}", file=_sys.stderr))
-# --------------------------------------------------------------------
 """
 Step 1: Import IMU Data from LabExampleDataset
-===============================================
-CARP-DSP pipeline step — mobgap demo.
+==============================================
 
-Downloads mobgap's built-in LabExampleDataset (if not already cached),
-selects a single trial, converts to body frame, and writes the flat files
-that all downstream steps expect.
+Downloads mobgap's built-in LabExampleDataset (if not already cached), picks one trial
+(lower-back sensor, INDIP reference system), and writes:
+  - imu_data.csv : IMU signal in body frame (acc_*, gyr_*), one row per sample
+  - config.json  : sampling rate plus the participant and recording metadata the
+                   Mobilise-D algorithms use (cohort, height, sensor height, ...)
 
 Usage:
-    python step1_import.py --imu-data <csv> --config <json>
-                           [--cohort <str>] [--participant-id <str>]
-                           [--test <str>] [--trial <str>]
-
-Outputs:
-    --imu-data   CSV: columns acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z
-                      one row per sample, index = sample number
-    --config     JSON: sampling_rate_hz, cohort, height_m, measurement_condition
+    python import_data.py --imu-data <out.csv> --config <out.json>
+        [--cohort MS] [--participant-id 001] [--test Test11] [--trial Trial1]
 """
 
 import argparse
@@ -31,9 +21,7 @@ from pathlib import Path
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Import LabExampleDataset trial to flat CSV + config JSON"
-    )
+    parser = argparse.ArgumentParser(description="Import LabExampleDataset trial to flat CSV + config JSON")
     parser.add_argument("--imu-data", required=True, help="Output path for imu_data CSV")
     parser.add_argument("--config", required=True, help="Output path for config JSON")
     parser.add_argument("--cohort", default="MS", help="Cohort: 'MS' (impaired) or 'HA' (healthy). Default: MS")
@@ -45,58 +33,36 @@ def parse_args():
 
 def main():
     args = parse_args()
+    from mobgap.data import LabExampleDataset
+    from mobgap.utils.conversions import to_body_frame
 
-    try:
-        from mobgap.data import LabExampleDataset
-        from mobgap.utils.conversions import to_body_frame
-    except ImportError:
-        print("ERROR: mobgap not installed. Run: pip install mobgap")
-        sys.exit(1)
-
-    print(f"[IMPORT] Loading LabExampleDataset — cohort={args.cohort}, "
-          f"participant={args.participant_id}, test={args.test}, trial={args.trial}")
-    print("[IMPORT] (First run will download sample data — requires internet access)")
-
+    print(f"[IMPORT] LabExampleDataset {args.cohort}/{args.participant_id}/{args.test}/{args.trial}")
     try:
         dataset = LabExampleDataset(reference_system="INDIP")
         trial = dataset.get_subset(
-            cohort=args.cohort,
-            participant_id=args.participant_id,
-            test=args.test,
-            trial=args.trial,
+            cohort=args.cohort, participant_id=args.participant_id, test=args.test, trial=args.trial
         )[0]
     except Exception as e:
-        print(f"ERROR: Could not load dataset — {e}")
+        print(f"ERROR: Could not load dataset - {e}")
         sys.exit(1)
 
     imu_data = to_body_frame(trial.data_ss)
-    sampling_rate_hz = float(trial.sampling_rate_hz)
-    participant_metadata = trial.participant_metadata
-    measurement_condition = trial.recording_metadata["measurement_condition"]
-
-    print(f"[IMPORT] Loaded {len(imu_data)} samples at {sampling_rate_hz} Hz")
-    print(f"[IMPORT] Columns: {list(imu_data.columns)}")
-    print(f"[IMPORT] Duration: {len(imu_data) / sampling_rate_hz:.1f} s")
-
-    # Write IMU data
     imu_path = Path(args.imu_data)
     imu_path.parent.mkdir(parents=True, exist_ok=True)
     imu_data.to_csv(imu_path)
-    print(f"[IMPORT] imu_data written: {imu_path}")
+    print(f"[IMPORT] {len(imu_data)} samples at {trial.sampling_rate_hz} Hz -> {imu_path}")
 
-    # Write config
+    # The recording identifier is a tuple naming the trial; no algorithm reads it.
+    recording = {k: v for k, v in trial.recording_metadata.items() if k != "recording_identifier"}
     config = {
-        "sampling_rate_hz": sampling_rate_hz,
-        "cohort": participant_metadata["cohort"],
-        "height_m": float(participant_metadata["height_m"]),
-        "measurement_condition": measurement_condition,
+        "sampling_rate_hz": float(trial.sampling_rate_hz),
+        "participant": dict(trial.participant_metadata),
+        "recording": recording,
     }
     config_path = Path(args.config)
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
-    print(f"[IMPORT] config written: {config_path}")
-    print(f"[IMPORT] Config: {json.dumps(config)}")
+    config_path.write_text(json.dumps(config, indent=2))
+    print(f"[IMPORT] config -> {config_path}")
 
 
 if __name__ == "__main__":
