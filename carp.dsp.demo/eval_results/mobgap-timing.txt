@@ -1,31 +1,31 @@
 ======================================================================
-Mobgap timed run 1 - 2026-10-25T13:25:40.762986100Z
+Mobgap timed run 1 - 2026-10-26T10:17:47.885560300Z
 Status: SUCCEEDED
-Total wall clock: 31246 ms
+Total wall clock: 37267 ms
 (run 1 includes env setup + dataset download - use later runs for steady state)
 
 Framework phases (ms):
-  decode-yaml             219
-  import                   67
-  plan                    299
+  decode-yaml             254
+  import                   83
+  plan                    358
   validate                  0
-  stage-workspace          18
-  execute-total         30501
-  bundle                   46
+  stage-workspace          20
+  execute-total         36329
+  bundle                   90
 
 Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
-  Import IMU Data                          total=  2702  compute=   n/a  overhead=  n/a
-  Gait Sequence Detection                  total=  5315  compute=   n/a  overhead=  n/a
-  Initial Contact Detection                total=  5431  compute=   n/a  overhead=  n/a
-  Per-Second Parameter Estimation          total=  3999  compute=   n/a  overhead=  n/a
-  Walking Bout Assembly                    total=  3678  compute=   n/a  overhead=  n/a
-  DMO Aggregation                          total=  3638  compute=   n/a  overhead=  n/a
-  Plot Walking Bout Parameters             total=  2803  compute=  2396  overhead=  407
-  Plot Aggregated DMOs                     total=  2540  compute=  2123  overhead=  417
+  Import IMU Data                          total=  4490  compute=  3744  overhead=  746
+  Gait Sequence Detection                  total=  6054  compute=  5392  overhead=  662
+  Initial Contact Detection                total=  5549  compute=  4945  overhead=  604
+  Per-Second Parameter Estimation          total=  4107  compute=  3510  overhead=  597
+  Walking Bout Assembly                    total=  4360  compute=  3769  overhead=  591
+  DMO Aggregation                          total=  4394  compute=  3758  overhead=  636
+  Plot Walking Bout Parameters             total=  3373  compute=  2825  overhead=  548
+  Plot Aggregated DMOs                     total=  3254  compute=  2565  overhead=  689
 
-  TOTALS: step total=5343 ms | compute=4519 ms | overhead=824 ms (15.4% of total)
-  Mean per-step overhead: 412 ms
-  Framework phases (decode+import+plan+validate+stage+bundle): 649 ms
+  TOTALS: step total=35581 ms | compute=30508 ms | overhead=5073 ms (14.3% of total)
+  Mean per-step overhead: 634 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 805 ms
 
 Outputs (bytes, sha256):
   steps/01_import_imu_data/outputs/config-json.json                   580  c153fcb3e319a5be95379dc619f59671384325111b5a3018784e31cf72ca7514
@@ -41,32 +41,32 @@ Outputs (bytes, sha256):
   steps/08_plot_aggregated_dmos/outputs/aggregated-dmos-plot-png.png      58004  c1f9667add5ce9ec04516947d08c5d864097bc3efeb1510053f396bf65308a9e
 
 ======================================================================
-Mobgap timed run 2 - 2026-10-25T13:25:40.768988100Z
+Mobgap timed run 2 - 2026-10-26T10:17:47.894572300Z
 Status: SUCCEEDED
-Total wall clock: 28888 ms
+Total wall clock: 40444 ms
 
 Framework phases (ms):
-  decode-yaml              18
-  import                    6
+  decode-yaml              28
+  import                   14
   plan                      1
   validate                  0
-  stage-workspace          12
-  execute-total         28789
+  stage-workspace          30
+  execute-total         40204
   bundle                    7
 
 Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
-  Import IMU Data                          total=  2708  compute=   n/a  overhead=  n/a
-  Gait Sequence Detection                  total=  4478  compute=   n/a  overhead=  n/a
-  Initial Contact Detection                total=  5321  compute=   n/a  overhead=  n/a
-  Per-Second Parameter Estimation          total=  3813  compute=   n/a  overhead=  n/a
-  Walking Bout Assembly                    total=  3728  compute=   n/a  overhead=  n/a
-  DMO Aggregation                          total=  3545  compute=   n/a  overhead=  n/a
-  Plot Walking Bout Parameters             total=  2727  compute=  2335  overhead=  392
-  Plot Aggregated DMOs                     total=  2429  compute=  2031  overhead=  398
+  Import IMU Data                          total=  3375  compute=  2554  overhead=  821
+  Gait Sequence Detection                  total=  6721  compute=  5918  overhead=  803
+  Initial Contact Detection                total=  7514  compute=  6784  overhead=  730
+  Per-Second Parameter Estimation          total=  5340  compute=  4569  overhead=  771
+  Walking Bout Assembly                    total=  5190  compute=  4424  overhead=  766
+  DMO Aggregation                          total=  5172  compute=  4413  overhead=  759
+  Plot Walking Bout Parameters             total=  3629  compute=  2980  overhead=  649
+  Plot Aggregated DMOs                     total=  3209  compute=  2599  overhead=  610
 
-  TOTALS: step total=5156 ms | compute=4366 ms | overhead=790 ms (15.3% of total)
-  Mean per-step overhead: 395 ms
-  Framework phases (decode+import+plan+validate+stage+bundle): 44 ms
+  TOTALS: step total=40150 ms | compute=34241 ms | overhead=5909 ms (14.7% of total)
+  Mean per-step overhead: 739 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 80 ms
 
 Outputs (bytes, sha256):
   steps/01_import_imu_data/outputs/config-json.json                   580  c153fcb3e319a5be95379dc619f59671384325111b5a3018784e31cf72ca7514
@@ -82,32 +82,32 @@ Outputs (bytes, sha256):
   steps/08_plot_aggregated_dmos/outputs/aggregated-dmos-plot-png.png      58004  c1f9667add5ce9ec04516947d08c5d864097bc3efeb1510053f396bf65308a9e
 
 ======================================================================
-Mobgap timed run 3 - 2026-10-25T13:25:40.768988100Z
+Mobgap timed run 3 - 2026-10-26T10:17:47.896526600Z
 Status: SUCCEEDED
-Total wall clock: 28687 ms
+Total wall clock: 39698 ms
 
 Framework phases (ms):
   decode-yaml               7
   import                    2
-  plan                      1
+  plan                      0
   validate                  0
-  stage-workspace          11
-  execute-total         28605
+  stage-workspace          14
+  execute-total         39573
   bundle                    3
 
 Per-step: total ms | script compute ms | framework+env overhead ms (Fig D):
-  Import IMU Data                          total=  2465  compute=   n/a  overhead=  n/a
-  Gait Sequence Detection                  total=  4572  compute=   n/a  overhead=  n/a
-  Initial Contact Detection                total=  5170  compute=   n/a  overhead=  n/a
-  Per-Second Parameter Estimation          total=  3688  compute=   n/a  overhead=  n/a
-  Walking Bout Assembly                    total=  3785  compute=   n/a  overhead=  n/a
-  DMO Aggregation                          total=  3660  compute=   n/a  overhead=  n/a
-  Plot Walking Bout Parameters             total=  2780  compute=  2330  overhead=  450
-  Plot Aggregated DMOs                     total=  2457  compute=  2049  overhead=  408
+  Import IMU Data                          total=  3410  compute=  2778  overhead=  632
+  Gait Sequence Detection                  total=  5951  compute=  5123  overhead=  828
+  Initial Contact Detection                total=  8934  compute=  8148  overhead=  786
+  Per-Second Parameter Estimation          total=  5159  compute=  4464  overhead=  695
+  Walking Bout Assembly                    total=  4609  compute=  3978  overhead=  631
+  DMO Aggregation                          total=  4659  compute=  4009  overhead=  650
+  Plot Walking Bout Parameters             total=  3734  compute=  3128  overhead=  606
+  Plot Aggregated DMOs                     total=  3078  compute=  2484  overhead=  594
 
-  TOTALS: step total=5237 ms | compute=4379 ms | overhead=858 ms (16.4% of total)
-  Mean per-step overhead: 429 ms
-  Framework phases (decode+import+plan+validate+stage+bundle): 24 ms
+  TOTALS: step total=39534 ms | compute=34112 ms | overhead=5422 ms (13.7% of total)
+  Mean per-step overhead: 678 ms
+  Framework phases (decode+import+plan+validate+stage+bundle): 26 ms
 
 Outputs (bytes, sha256):
   steps/01_import_imu_data/outputs/config-json.json                   580  c153fcb3e319a5be95379dc619f59671384325111b5a3018784e31cf72ca7514

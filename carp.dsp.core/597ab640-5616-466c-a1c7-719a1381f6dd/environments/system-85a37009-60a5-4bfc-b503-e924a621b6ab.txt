@@ -1,5 +1,0 @@
-kind: system
-name: 85a37009-60a5-4bfc-b503-e924a621b6ab
-recorded from: none (nothing pinned)
----
-os: Windows 11 10.0 amd64

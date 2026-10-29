@@ -35,11 +35,11 @@ RESULTS = HERE.parents[4] / "eval_results"  # .../carp.dsp.demo/eval_results (ma
 # rows top->bottom, ordered by how far the fault gets (escalating wasted compute)
 FAULTS = ["missing-env", "cycle", "missing-producer", "missing-output", "type-mismatch"]
 LABELS = {
-    "missing-env": "Missing environment",
+    "missing-env": "Undefined environment",
     "cycle": "Dependency cycle",
     "missing-producer": "Missing producer",
     "missing-output": "Undeclared output",
-    "type-mismatch": "Type mismatch",
+    "type-mismatch": "Format mismatch",
 }
 CARP_BLUE = "#2c6fbb"
 ADHOC_RED = "#c1443c"
@@ -81,9 +81,9 @@ def main() -> int:
         vals = {f: secs[f] for f in FAULTS}
         total = max(pipe)
         unit = "s"
-        xlabel = "Wall-clock compute before the fault surfaces (s)  -  measured on this machine"
+        xlabel = "Wall-clock compute before the fault surfaces (s)"
         plan_ms = as_float(next(iter(carp.values())).get("plan_ms")) or 60.0
-        carp_cost = f"~{plan_ms / 1000.0:.2f}s"
+        carp_cost = f"{plan_ms:.0f} ms"
     else:
         vals = {f: int(adhoc[f]["steps_executed"]) for f in FAULTS}
         total = STEP_COUNT
@@ -130,15 +130,14 @@ def main() -> int:
     ax.grid(axis="x", color="#f0f0f0", lw=0.7)
 
     legend = [
-        Patch(facecolor=GATE_BG, edgecolor=CARP_BLUE, label=f"CARP: caught at plan time ({carp_cost}, 0/8 steps)"),
-        Patch(facecolor=ADHOC_RED, label="Ad-hoc: compute wasted before crash"),
+        Patch(facecolor=GATE_BG, edgecolor=CARP_BLUE, label=f"CARP-DSP: caught at plan time ({carp_cost}, 0/8 steps)"),
+        Patch(facecolor=ADHOC_RED, label="Script: compute wasted before crash"),
         Patch(facecolor=TRACK_GREY, label="Pipeline never reached"),
         Line2D([0], [0], marker="X", color="w", markerfacecolor="black", markersize=8, label="Run-time failure point"),
     ]
     ax.legend(handles=legend, loc="upper right", bbox_to_anchor=(1.0, 1.02),
               frameon=True, framealpha=0.95, edgecolor="#dddddd", fontsize=7.5)
-    ax.set_title("Fault detection: plan-time gate (CARP) vs run-time failure (ad-hoc pipeline)",
-                 fontsize=10, loc="left", pad=8)
+    # No in-figure title: the paper caption carries it.
     fig.tight_layout()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

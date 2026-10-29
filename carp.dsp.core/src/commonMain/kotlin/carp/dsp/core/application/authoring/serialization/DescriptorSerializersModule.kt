@@ -78,3 +78,12 @@ val descriptorYaml: Yaml = Yaml(
         strictMode = false,
     )
 )
+
+/**
+ * [descriptorYaml] with unknown fields rejected. Used only to find the unknown fields
+ * that [descriptorYaml] ignores, so they can be reported.
+ */
+val strictDescriptorYaml: Yaml = Yaml(
+    serializersModule = descriptorSerializersModule,
+    configuration = descriptorYaml.configuration.copy( strictMode = true ),
+)

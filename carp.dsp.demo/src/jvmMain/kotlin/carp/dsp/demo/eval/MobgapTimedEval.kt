@@ -83,10 +83,6 @@ fun main(args: Array<String>) {
     println("Wrote results to: ${outFile.absolutePath}")
 
     val csvFile = DemoIo.evalResultsDir().resolve("mobgap-timing.csv").apply { writeText(timingCsv(results)) }
-    val figFile = DemoIo.evalResultsDir().resolve("fig-orchestration-overhead.pdf")
-    if (rebuildFigure("plot_orchestration_overhead.py", "plot-overhead", csvFile, figFile)) {
-        DemoIo.publishToPaper(figFile, "images/fig-orchestration-overhead.pdf")
-    }
 
     val numbers = overheadNumbers(results)
     if (numbers == null) {
@@ -95,6 +91,10 @@ fun main(args: Array<String>) {
         val numbersFile = DemoIo.evalResultsDir().resolve("orchestration-overhead-numbers.tex").apply { writeText(numbers) }
         DemoIo.publishToPaper(numbersFile, "generated/orchestration-overhead-numbers.tex")
     }
+
+    val figFile = DemoIo.evalResultsDir().resolve("fig-orchestration-overhead.pdf")
+    rebuildFigure("plot_orchestration_overhead.py", "plot-overhead", csvFile, figFile)
+    DemoIo.publishToPaper(figFile, "images/fig-orchestration-overhead.pdf")
 }
 
 /**

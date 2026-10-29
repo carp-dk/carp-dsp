@@ -7,20 +7,20 @@ import java.io.File
  * Rebuilds an eval figure from its CSV with a script in `scripts/eval`.
  *
  * Prefers the eval pixi environment (`scripts/eval/pixi.toml`, task [pixiTask]) and
- * falls back to the system Python when pixi is not on PATH. A failed or skipped
- * rebuild is reported but never fails the eval, since the CSV is the result.
+ * falls back to the system Python when pixi is not on PATH. An existing [figFile] is
+ * deleted first, so a figure on disk always comes from [csvFile]. Call it after the
+ * eval has written its results and numbers: a failure then costs only the figure.
  *
- * @return true when the script ran and [figFile] exists.
+ * @throws IllegalStateException when the script is missing, no interpreter is found,
+ *   or the script fails to write [figFile].
  */
-internal fun rebuildFigure( script: String, pixiTask: String, csvFile: File, figFile: File ): Boolean
+internal fun rebuildFigure( script: String, pixiTask: String, csvFile: File, figFile: File )
 {
     val scriptsDir = DemoIo.projectRoot().resolve( "src/jvmMain/resources/scripts/eval" )
     val scriptFile = scriptsDir.resolve( script )
-    if ( !scriptFile.exists() )
-    {
-        System.err.println( "Plot script not found at ${scriptFile.absolutePath} - skipping figure." )
-        return false
-    }
+    // A stale figure must not survive a failed rebuild and be published as current.
+    figFile.delete()
+    check( scriptFile.exists() ) { "Plot script not found at ${scriptFile.absolutePath}." }
 
     val scriptArgs = listOf( "--csv", csvFile.absolutePath, "--out", figFile.absolutePath )
     val manifest = scriptsDir.resolve( "pixi.toml" )
@@ -31,21 +31,19 @@ internal fun rebuildFigure( script: String, pixiTask: String, csvFile: File, fig
         else -> listOf( "python3", "python" ).firstOrNull { toolAvailable( it ) }
             ?.let { python -> listOf( python, scriptFile.absolutePath ) + scriptArgs }
     }
-    if ( command == null )
-    {
-        System.err.println(
-            "Neither pixi nor a Python interpreter found - skipping figure. " +
-                "Rebuild manually: python ${scriptFile.absolutePath} ${scriptArgs.joinToString( " " )}"
-        )
-        return false
+    checkNotNull( command ) {
+        "Neither pixi nor a Python interpreter found, so ${figFile.name} was not rebuilt. " +
+            "Rebuild manually: python ${scriptFile.absolutePath} ${scriptArgs.joinToString( " " )}"
     }
 
     println( "Rebuilding figure: ${command.joinToString( " " )}" )
     val process = ProcessBuilder( command ).directory( scriptsDir ).redirectErrorStream( true ).start()
     process.inputStream.bufferedReader().forEachLine { println( it ) }
     val code = process.waitFor()
-    if ( code != 0 ) System.err.println( "Figure rebuild exited with code $code (results CSV is unaffected)." )
-    return code == 0 && figFile.exists()
+    check( code == 0 && figFile.exists() ) {
+        "Figure rebuild failed (exit code $code), so ${figFile.name} was not written. " +
+            "The results and numbers are written; fix the plot environment and rerun the eval."
+    }
 }
 
 /** True if [exe] responds to --version on this machine. */

@@ -1,5 +1,5 @@
 ======================================================================
-Error-detection eval (CARP arm) - 2026-10-25T13:25:42.357369400Z
+Error-detection eval (CARP arm) - 2026-10-26T10:17:57.264156Z
 Control workflows/mobgap-gait-analysis.yaml (8 steps): 0 ERROR issue(s) (expected 0)
 Control workflows/wf-activity-summary-v2.yaml (13 steps): 0 ERROR issue(s) (expected 0)
 
@@ -20,4 +20,4 @@ All faults caught at plan time with the expected code: true
 Steps executed before detection: 0 for every fault (0% wasted compute).
 ======================================================================
 
-Plan-time gate cost: 6 ms
+Plan-time gate cost: 8 ms

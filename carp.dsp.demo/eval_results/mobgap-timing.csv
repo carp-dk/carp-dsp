@@ -1,25 +1,25 @@
 run,succeeded,step_id,step_name,total_ms,compute_ms,overhead_ms
-1,true,import-data,"Import IMU Data",2702,,
-1,true,gsd,"Gait Sequence Detection",5315,,
-1,true,icd,"Initial Contact Detection",5431,,
-1,true,per-sec-params,"Per-Second Parameter Estimation",3999,,
-1,true,wba,"Walking Bout Assembly",3678,,
-1,true,aggregate,"DMO Aggregation",3638,,
-1,true,plot-wb-params,"Plot Walking Bout Parameters",2803,2396,407
-1,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2540,2123,417
-2,true,import-data,"Import IMU Data",2708,,
-2,true,gsd,"Gait Sequence Detection",4478,,
-2,true,icd,"Initial Contact Detection",5321,,
-2,true,per-sec-params,"Per-Second Parameter Estimation",3813,,
-2,true,wba,"Walking Bout Assembly",3728,,
-2,true,aggregate,"DMO Aggregation",3545,,
-2,true,plot-wb-params,"Plot Walking Bout Parameters",2727,2335,392
-2,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2429,2031,398
-3,true,import-data,"Import IMU Data",2465,,
-3,true,gsd,"Gait Sequence Detection",4572,,
-3,true,icd,"Initial Contact Detection",5170,,
-3,true,per-sec-params,"Per-Second Parameter Estimation",3688,,
-3,true,wba,"Walking Bout Assembly",3785,,
-3,true,aggregate,"DMO Aggregation",3660,,
-3,true,plot-wb-params,"Plot Walking Bout Parameters",2780,2330,450
-3,true,plot-aggregated-dmos,"Plot Aggregated DMOs",2457,2049,408
+1,true,import-data,"Import IMU Data",4490,3744,746
+1,true,gsd,"Gait Sequence Detection",6054,5392,662
+1,true,icd,"Initial Contact Detection",5549,4945,604
+1,true,per-sec-params,"Per-Second Parameter Estimation",4107,3510,597
+1,true,wba,"Walking Bout Assembly",4360,3769,591
+1,true,aggregate,"DMO Aggregation",4394,3758,636
+1,true,plot-wb-params,"Plot Walking Bout Parameters",3373,2825,548
+1,true,plot-aggregated-dmos,"Plot Aggregated DMOs",3254,2565,689
+2,true,import-data,"Import IMU Data",3375,2554,821
+2,true,gsd,"Gait Sequence Detection",6721,5918,803
+2,true,icd,"Initial Contact Detection",7514,6784,730
+2,true,per-sec-params,"Per-Second Parameter Estimation",5340,4569,771
+2,true,wba,"Walking Bout Assembly",5190,4424,766
+2,true,aggregate,"DMO Aggregation",5172,4413,759
+2,true,plot-wb-params,"Plot Walking Bout Parameters",3629,2980,649
+2,true,plot-aggregated-dmos,"Plot Aggregated DMOs",3209,2599,610
+3,true,import-data,"Import IMU Data",3410,2778,632
+3,true,gsd,"Gait Sequence Detection",5951,5123,828
+3,true,icd,"Initial Contact Detection",8934,8148,786
+3,true,per-sec-params,"Per-Second Parameter Estimation",5159,4464,695
+3,true,wba,"Walking Bout Assembly",4609,3978,631
+3,true,aggregate,"DMO Aggregation",4659,4009,650
+3,true,plot-wb-params,"Plot Walking Bout Parameters",3734,3128,606
+3,true,plot-aggregated-dmos,"Plot Aggregated DMOs",3078,2484,594

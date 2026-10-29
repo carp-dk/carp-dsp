@@ -25,6 +25,8 @@ import dk.cachet.carp.analytics.application.execution.ExecutionReport
 import dk.cachet.carp.analytics.application.execution.RunPolicy
 import dk.cachet.carp.analytics.application.execution.workspace.WorkspaceManager
 import dk.cachet.carp.analytics.application.plan.ExecutionPlan
+import dk.cachet.carp.analytics.application.plan.PlanIssue
+import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.domain.data.FileLocation
 import dk.cachet.carp.analytics.domain.data.InputDataSpec
 import dk.cachet.carp.analytics.domain.workflow.Step
@@ -111,12 +113,15 @@ class WorkflowExecutor(
      * Writes or updates the `steps.lock` beside the workflow; only required when
      * using step library dependencies with `uses:` keyword.
      *
+     * A field the schema does not know is ignored, and the plan carries an
+     * `UNKNOWN_FIELD` warning naming the first one.
+     *
      * @throws Exception if the file cannot be read, the YAML cannot be parsed, or
      *   a `uses:` reference cannot be resolved. A workflow that parses but is not
      *   runnable does *not* throw - it comes back as a plan carrying errors.
      */
     fun prepare( source: WorkflowSource ): PreparedWorkflow =
-        prepare( source, codec.decodeOrThrow( source.file.readText() ) )
+        prepareYaml( source, source.file.readText(), emptyMap() )
 
     /**
      * [prepare] for a package: the workflow plus the files it ships with.
@@ -127,7 +132,23 @@ class WorkflowExecutor(
      * provisioner refuses two different files at the same path.
      */
     fun prepare( pkg: WorkflowPackage ): PreparedWorkflow =
-        prepare( pkg.source, codec.decodeOrThrow( pkg.source.file.readText() ), pkg.files )
+        prepareYaml( pkg.source, pkg.source.file.readText(), pkg.files )
+
+    private fun prepareYaml(
+        source: WorkflowSource,
+        yaml: String,
+        packageFiles: Map<String, Path>,
+    ): PreparedWorkflow
+    {
+        val prepared = prepare( source, codec.decodeOrThrow( yaml ), packageFiles )
+        val unknown = codec.unknownField( yaml ) ?: return prepared
+        val warning = PlanIssue(
+            severity = PlanIssueSeverity.WARNING,
+            code = UNKNOWN_FIELD,
+            message = "Unknown field $unknown is ignored; check its spelling and the schema version.",
+        )
+        return prepared.copy( plan = prepared.plan.copy( issues = listOf( warning ) + prepared.plan.issues ) )
+    }
 
     /**
      * [prepare], for a descriptor already parsed elsewhere.
@@ -273,6 +294,9 @@ class WorkflowExecutor(
 
 /** Where the resolved workflow is staged in the run folder. */
 private const val BUNDLE_WORKFLOW = "workflow.yaml"
+
+/** Plan issue code for a workflow field the schema does not know. */
+private const val UNKNOWN_FIELD = "UNKNOWN_FIELD"
 
 /** [this] with the resolved workflow staged at [BUNDLE_WORKFLOW], unless another file claims that path. */
 private fun WorkspaceProvisioning.withWorkflowFile( plan: ExecutionPlan, yaml: String ): WorkspaceProvisioning

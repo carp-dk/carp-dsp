@@ -2,7 +2,9 @@ package carp.dsp.core.infrastructure.serialization
 
 import carp.dsp.core.application.authoring.descriptor.WorkflowDescriptor
 import carp.dsp.core.application.authoring.serialization.descriptorYaml
+import carp.dsp.core.application.authoring.serialization.strictDescriptorYaml
 import com.charleskorn.kaml.MalformedYamlException
+import com.charleskorn.kaml.UnknownPropertyException
 import com.charleskorn.kaml.YamlException
 import dk.cachet.carp.analytics.application.exceptions.YamlCodecException
 import kotlinx.serialization.SerializationException
@@ -60,7 +62,7 @@ sealed class DecodeResult
  *
  * | Concern | Decision |
  * |---|---|
- * | Unknown fields | **Ignored** — `strictMode = false` in [descriptorYaml]. Allows forward-compatible authored documents. |
+ * | Unknown fields | **Ignored** — `strictMode = false` in [descriptorYaml]. Allows forward-compatible authored documents; [unknownField] finds the first one so callers can warn. |
  * | Missing `schemaVersion` | **Defaulted to `"1.0"`**. Lenient read: authored documents need not declare the version. |
  * | Null IDs on decode | **Allowed**. The importer layer (not this codec) is responsible for generating missing UUIDs. |
  * | Unknown `type` discriminator | **Fails with [DecodeResult.SchemaError]**. Depending on which sealed hierarchy is involved, kaml/kotlinx.serialization throws [SerializationException] (top-level task type) or [IllegalArgumentException] (`"Can't get known types for descriptor of kind CLASS"`, nested types such as entry points); both are caught and mapped to [DecodeResult.SchemaError]. |
@@ -117,6 +119,30 @@ class WorkflowYamlCodec
             // kind CLASS" when an unknown discriminator value is encountered for certain sealed
             // hierarchies (e.g. an unknown PythonEntryPointDescriptor subtype).
             DecodeResult.SchemaError( "Schema error (unknown type): ${cause.message}", cause )
+        }
+
+    /**
+     * Returns the first field in [yaml] that [decode] ignores because the schema does not
+     * know it, as `name (line N)`, or null when there is none.
+     *
+     * Only the first is found: a strict parse stops there. Returns null for YAML that
+     * [decode] rejects for another reason.
+     */
+    @Suppress( "SwallowedException", "TooGenericExceptionCaught" )
+    fun unknownField( yaml: String ): String? =
+        try
+        {
+            strictDescriptorYaml.decodeFromString( WorkflowDescriptor.serializer(), yaml )
+            null
+        }
+        catch ( cause: UnknownPropertyException )
+        {
+            "${cause.propertyName} (line ${cause.line})"
+        }
+        catch ( cause: Exception )
+        {
+            // Not an unknown field; decode reports this failure itself.
+            null
         }
 
     /**

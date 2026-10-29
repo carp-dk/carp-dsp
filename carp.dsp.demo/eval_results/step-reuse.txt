@@ -1,5 +1,5 @@
 ============================================================================
-Step-reuse eval - 2026-10-25T13:27:29.199214800Z
+Step-reuse eval - 2026-10-26T10:19:49.549693300Z
 Three HR/step pipelines (open Fitbit data, Zenodo 53894), authored two ways.
 
 Library compositions plan with 0 ERROR issues: true  {activity-summary=true, anomaly-report=true, minimal-summary=true}
