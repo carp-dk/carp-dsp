@@ -20,7 +20,7 @@ jobs:
     - name: Checkout CARP core
       uses: actions/checkout@v4
       with:
-        repository: cph-cachet/carp.core-kotlin
+        repository: carp-dk/carp.core-kotlin
         ref: feature/core-analytics
         path: carp.core-kotlin
         fetch-depth: 0

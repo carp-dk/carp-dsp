@@ -7,18 +7,8 @@ name: cross-os evals
 # carp.dsp.demo/eval_results/. Unzip it there and run the evals locally (or with
 # -PpaperDir) to compare all platforms and write the macros.
 #
-# workflow_dispatch shows a Run button only once this file is on the default branch; until
-# then the push trigger (work branch + this file) runs it.
 on:
   workflow_dispatch:
-  push:
-    branches: [feat/claims-review]
-    paths:
-      - '.github/workflows/portability.yml'
-      - 'carp.dsp.demo/src/jvmMain/kotlin/carp/dsp/demo/eval/PlannerDeterminismEval.kt'
-      - 'carp.dsp.demo/src/jvmMain/kotlin/carp/dsp/demo/eval/GaitPortabilityEval.kt'
-      - 'carp.dsp.demo/src/jvmMain/resources/workflows/**'
-      - 'carp.dsp.demo/src/jvmMain/resources/scripts/mobgap/**'
 
 permissions:
   contents: read
@@ -43,7 +33,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: cph-cachet/carp.core-kotlin
+          repository: carp-dk/carp.core-kotlin
           # Pinned to the CARP Core commit v1.0.0 was built and evaluated against.
           ref: 278d2a575acc074e3678d4e1ab5fdd3ba220949a  # feature/core-analytics
           path: carp.core-kotlin

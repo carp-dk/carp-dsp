@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: cph-cachet/carp.core-kotlin
+          repository: carp-dk/carp.core-kotlin
           ref: 278d2a575acc074e3678d4e1ab5fdd3ba220949a  # feature/core-analytics
           path: carp.core-kotlin
 
@@ -64,12 +64,4 @@ jobs:
             carp-dsp/carp.dsp.core/build/libs/*.jar
             carp-dsp/carp.dsp.steps/build/libs/*.jar
             carp-dsp/carp.dsp.demo/build/libs/*.jar
-          body: |
-            CARP-DSP ${{ github.ref_name }}: declarative, reproducible analysis workflows for mobile sensing data.
-
-            - `carp.dsp.core`: workflow authoring, planning, execution and sharing
-            - `carp.dsp.steps`: the typed step library
-            - `carp.dsp.demo`: use cases and the paper's evaluations
-
-            Built against CARP Core `278d2a57` (feature/core-analytics) and
-            health-workflow-interfaces `c332d00a`; see the README for building from source.
+          body_path: carp-dsp/docs/release-notes/${{ github.ref_name }}.md
