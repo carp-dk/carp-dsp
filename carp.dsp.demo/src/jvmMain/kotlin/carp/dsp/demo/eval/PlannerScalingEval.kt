@@ -9,7 +9,6 @@ import carp.dsp.demo.io.DemoIo
 import dk.cachet.carp.analytics.application.plan.PlanIssueSeverity
 import dk.cachet.carp.analytics.domain.workflow.Step
 import dk.cachet.carp.common.application.UUID
-import java.io.File
 
 /**
  * Planner-scaling eval.
@@ -34,7 +33,8 @@ import java.io.File
  * Writes eval_results/planner-scaling.csv (one row per repeat), appends a summary to
  * eval_results/planner-scaling.txt, then rebuilds eval_results/fig-planner-scaling.pdf by
  * running scripts/eval/plot_planner_scaling.py in the eval pixi env (has matplotlib),
- * falling back to the system Python if pixi is not on PATH. Also writes
+ * falling back to the system Python if pixi is not on PATH; a failed rebuild fails
+ * the eval after the results are written. Also writes
  * planner-scaling-numbers.tex (LaTeX macros). With -PpaperDir the figure goes to the
  * paper's images/ and the macros to its generated/.
  */
@@ -116,12 +116,12 @@ fun main(args: Array<String>) {
     dir.resolve("planner-scaling.txt").writeText(report + "\n")
     println("Wrote planner-scaling.csv and planner-scaling.txt to: ${dir.absolutePath}")
 
-    val figFile = dir.resolve("fig-planner-scaling.pdf")
-    plotFigure(csvFile, figFile)
-    if (figFile.exists()) DemoIo.publishToPaper(figFile, "images/fig-planner-scaling.pdf")
-
     val numbers = dir.resolve("planner-scaling-numbers.tex").apply { writeText(scalingNumbers(medianTotals)) }
     DemoIo.publishToPaper(numbers, "generated/planner-scaling-numbers.tex")
+
+    val figFile = dir.resolve("fig-planner-scaling.pdf")
+    rebuildFigure("plot_planner_scaling.py", "plot-scaling", csvFile, figFile)
+    DemoIo.publishToPaper(figFile, "images/fig-planner-scaling.pdf")
 }
 
 /**
@@ -141,63 +141,6 @@ private fun scalingNumbers(medianTotals: Map<Int, Double>): String = buildString
 }
 
 private const val TEN_STEPS = 10
-
-/**
- * Rebuilds the figure from the CSV, like the other evals: prefer the eval pixi env
- * (scripts/eval/pixi.toml, task `plot-scaling`, has matplotlib), fall back to the
- * system Python if pixi is not on PATH.
- */
-private fun plotFigure(csvFile: File, figFile: File) {
-    val scriptsDir = DemoIo.projectRoot().resolve("src/jvmMain/resources/scripts/eval")
-    val script = scriptsDir.resolve("plot_planner_scaling.py")
-    if (!script.exists()) {
-        System.err.println("Plot script not found at ${script.absolutePath} - skipping figure.")
-        return
-    }
-
-    val manifest = scriptsDir.resolve("pixi.toml")
-    val command = when {
-        psToolAvailable("pixi") && manifest.exists() -> listOf(
-            "pixi", "run", "--manifest-path", manifest.absolutePath, "plot-scaling",
-            "--csv", csvFile.absolutePath, "--out", figFile.absolutePath
-        )
-        else -> {
-            val python = psDetectPython()
-            if (python == null) {
-                System.err.println(
-                    "Neither pixi nor a Python interpreter found - skipping figure. " +
-                    "Rebuild manually: python ${script.absolutePath} --out ${figFile.absolutePath}"
-                )
-                return
-            }
-            listOf(python, script.absolutePath, "--csv", csvFile.absolutePath, "--out", figFile.absolutePath)
-        }
-    }
-
-    println("Rebuilding figure: ${command.joinToString(" ")}")
-    val process = ProcessBuilder(command)
-        .directory(scriptsDir)
-        .redirectErrorStream(true)
-        .start()
-    process.inputStream.bufferedReader().forEachLine { println(it) }
-    val code = process.waitFor()
-    if (code != 0) {
-        System.err.println("Figure rebuild exited with code $code (results CSV is unaffected).")
-    }
-}
-
-/** True if [exe] responds to --version on this machine. */
-private fun psToolAvailable(exe: String): Boolean =
-    @Suppress("BAN_KOTLIN_TRY_CATCH")
-    try {
-        ProcessBuilder(exe, "--version").redirectErrorStream(true).start().waitFor() == 0
-    } catch (_: Exception) {
-        false
-    }
-
-/** First interpreter of [python3, python] that responds to --version. */
-private fun psDetectPython(): String? =
-    listOf("python3", "python").firstOrNull { psToolAvailable(it) }
 
 /** Runs the full path once, timing each phase; aborts if the plan is not clean. */
 /**

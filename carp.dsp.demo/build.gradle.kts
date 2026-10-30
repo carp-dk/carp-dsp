@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "carp.dsp.demo"
-version = "0.1.0"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
@@ -319,6 +319,13 @@ registerEvalTask(
     "evalMobilisedEquivalence",
     "carp.dsp.demo.eval.MobilisedEquivalenceEvalKt",
     "Run UC1 and UC2 and compare 5 stages with mobgap's MobilisedPipelineUniversal (AU3, UC1)"
+)
+// Slow on first run (pixi solves one env per mobgap version); not part of evalAll.
+//   ./gradlew :carp.dsp.demo:evalDrift -PpaperDir=../carp-dsp-sys-paper
+registerEvalTask(
+    "evalDrift",
+    "carp.dsp.demo.eval.DriftEvalKt",
+    "EX2 drift: run the gait pipeline under several mobgap versions, write drift-numbers.tex and Fig B"
 )
 registerEvalTask(
     "evalMobgapTiming",

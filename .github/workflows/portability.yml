@@ -44,12 +44,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cph-cachet/carp.core-kotlin
-          ref: feature/core-analytics
+          # Pinned to the CARP Core commit v1.0.0 was built and evaluated against.
+          ref: 278d2a575acc074e3678d4e1ab5fdd3ba220949a  # feature/core-analytics
           path: carp.core-kotlin
 
       - uses: actions/checkout@v4
         with:
           repository: carp-dk/health-workflow-interfaces
+          ref: c332d00aac0a5b925e88a90104129e1ccbe4a598  # main
           path: health-workflow-interfaces
 
       - uses: actions/setup-java@v4

@@ -51,7 +51,10 @@ def write_manifest(work_dir: pathlib.Path, versions: list, py_version: str) -> N
         "",
     ]
     for v in versions:
-        lines += [f"[feature.{env_name(v)}.pypi-dependencies]", f'mobgap = "=={v}"', ""]
+        # typing_extensions: on a fresh resolve (Oct 2026) mobgap 0.9 and 0.10 fail with
+        # "No module named 'typing_extensions'" - something imports it without declaring it.
+        lines += [f"[feature.{env_name(v)}.pypi-dependencies]", f'mobgap = "=={v}"',
+                  'typing_extensions = "*"', ""]
     # A small env for aggregating and plotting, so those steps never depend on the caller's
     # Python having matplotlib installed.
     lines += ["[feature.plot.dependencies]", 'matplotlib = "*"', ""]
@@ -107,10 +110,14 @@ def main() -> None:
         if res is not None:
             per_version[v] = res
 
+    # A sweep with a version missing compares against a different baseline and
+    # reports a different result, so every requested version must run.
+    missing = [v for v in args.versions if v not in per_version]
+    if missing:
+        print(f"[drift] mobgap {', '.join(missing)} did not run (see above); results not written.")
+        sys.exit(2)
     if BASELINE not in per_version:
-        print(f"[drift] NOTE: baseline mobgap {BASELINE} did not resolve; comparison uses the earliest that did.")
-    if len(per_version) < 2:
-        print(f"[drift] Only {len(per_version)} version(s) ran; need at least two to show drift. Aborting.")
+        print(f"[drift] baseline mobgap {BASELINE} is not among --versions; results not written.")
         sys.exit(2)
 
     order = [v for v in args.versions if v in per_version]

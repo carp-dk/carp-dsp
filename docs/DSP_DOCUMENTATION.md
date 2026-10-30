@@ -1,6 +1,6 @@
 # CARP DSP - Data Science Platform Documentation
 
-**Version**: 0.1.0  
+**Version**: 1.0.0  
 **Last Updated**: November 24, 2025  
 **Status**: Production Ready
 
@@ -1132,6 +1132,6 @@ For questions or issues, please:
 ---
 
 **Last Updated**: November 24, 2025  
-**Version**: 0.1.0  
+**Version**: 1.0.0  
 **Status**: ✅ Production Ready
 

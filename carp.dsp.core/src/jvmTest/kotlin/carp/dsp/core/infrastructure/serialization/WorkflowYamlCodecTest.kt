@@ -208,6 +208,14 @@ steps: []
         assertIs<DecodeResult.Success>(result)
     }
 
+    @Test
+    fun `unknownField names the first ignored field and its line`()
+    {
+        val yaml = minimalYaml().replace("  name: Test Workflow", "  name: Test Workflow\n  nmae: typo")
+        assertEquals("nmae (line 4)", codec.unknownField(yaml))
+        assertEquals(null, codec.unknownField(minimalYaml()))
+    }
+
     // ── Encode: Basic Functionality ───────────────────────────────────────────
 
     @Test

@@ -4,7 +4,7 @@ schemaVersion: "1.0"
 metadata:
   id: "mobgap-gait-analysis"
   name: "Mobgap Gait Analysis Pipeline"
-  description: "Six-step IMU gait analysis pipeline using the Mobilise-D algorithm suite. Imports a lab recording, detects gait sequences and initial contacts, estimates per-second gait parameters, assembles walking bouts, and produces aggregated digital mobility outcomes (DMOs)."
+  description: "mobgap's Mobilise-D gait pipeline, one step per stage, with the algorithms mobgap recommends for the participant's cohort. Imports a lab recording, detects gait sequences and initial contacts, estimates per-second gait parameters, assembles walking bouts, and produces aggregated digital mobility outcomes (DMOs)."
   version: "1.0"
   tags:
     - "mobgap"
@@ -63,7 +63,7 @@ steps:
   - id: "gsd"
     metadata:
       name: "Gait Sequence Detection"
-      description: "Run GsdIluz on the full IMU recording to identify regions likely containing gait (gait sequences)"
+      description: "Detect gait sequences in the full recording with the Mobilise-D detector for the cohort (GsdIonescu for impaired walking, GsdIluz for regular walking)"
       version: "1.0"
     environmentId: "env-pixi"
     dependsOn:
@@ -111,7 +111,7 @@ steps:
   - id: "icd"
     metadata:
       name: "Initial Contact Detection"
-      description: "Per gait sequence: detect initial contacts (IcdShinImproved), classify left/right (LrcUllrich), detect turns (TdElGohary)"
+      description: "Per gait sequence, as the Mobilise-D pipeline does: detect initial contacts (IcdIonescu), classify left/right (LrcUllrich) and detect turns (TdElGohary)"
       version: "1.0"
     environmentId: "env-pixi"
     dependsOn:
@@ -177,7 +177,7 @@ steps:
   - id: "per-sec-params"
     metadata:
       name: "Per-Second Parameter Estimation"
-      description: "Per gait sequence (refined to first–last IC): estimate cadence (CadFromIc), stride length (SlZijlstra), and walking speed (WsNaive) at one-second resolution"
+      description: "Per gait sequence, refined to its first and last initial contact: estimate cadence (CadFromIcDetector), stride length (SlZijlstra, from the sensor height) and walking speed (WsNaive) per second"
       version: "1.0"
     environmentId: "env-pixi"
     dependsOn:

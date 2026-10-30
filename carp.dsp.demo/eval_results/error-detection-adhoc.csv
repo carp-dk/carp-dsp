@@ -1,6 +1,6 @@
 fault,arm,detected,detection_stage,steps_total,steps_executed,wasted_fraction,wasted_seconds,pipeline_seconds,outcome,measured
-type-mismatch,adhoc,True,runtime,8,7,0.875,24.64,28.26,runtime_crash,True
-missing-producer,adhoc,True,runtime,8,1,0.125,2.14,28.26,runtime_crash,True
-missing-output,adhoc,True,runtime,8,2,0.25,6.54,28.26,runtime_crash,True
-cycle,adhoc,True,runtime,8,0,0.0,0.0,28.26,unschedulable,False
-missing-env,adhoc,True,runtime,8,0,0.0,0.0,28.26,runtime_env_error,False
+type-mismatch,adhoc,True,runtime,8,7,0.875,38.91,33.63,runtime_crash,True
+missing-producer,adhoc,True,runtime,8,1,0.125,2.86,33.63,runtime_crash,True
+missing-output,adhoc,True,runtime,8,2,0.25,8.64,33.63,runtime_crash,True
+cycle,adhoc,True,runtime,8,0,0.0,0.0,33.63,unschedulable,False
+missing-env,adhoc,True,runtime,8,0,0.0,0.0,33.63,runtime_env_error,False
