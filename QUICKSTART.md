@@ -1,313 +1,97 @@
-# CARP DSP - Quick Start Guide
+# Quick start
 
-This guide gets you up and running with CARP DSP in minutes.
+This guide builds CARP-DSP, runs a demo workflow, and shows what a workflow looks
+like.
 
----
+## 1. Build
 
-## Installation
-
-```bash
-# Clone repository
-git clone https://github.com/ngreve/carp-dsp.git
-cd carp-dsp
-
-# Build project
-./gradlew build
-```
-
-✅ **That's it!** The core framework is ready to use.
-
----
-
-## Run Your First Demo
-
-### Option 1: Data Retrieval (Simplest)
-
-Downloads DEXCOM glucose monitoring data from PhysioNet.
+You need JDK 17 and [Pixi](https://pixi.sh). Check out CARP Core and
+health-workflow-interfaces beside this repository, as described in
+[Building v1.0.0](README.md#building-v100), then:
 
 ```bash
-./gradlew :carp.dsp.demo:jvmRun -PmainClass=carp.dsp.demo.DexcomRetrievalDemoMainKt
+./gradlew build -PskipIntegration
 ```
 
-**What it does**:
-- Downloads CSV files from PhysioNet
-- Saves to `~/physionet-downloads/`
-- No external dependencies needed!
+On Windows, use `gradlew.bat` in place of `./gradlew`.
 
----
+## 2. Run a demo
 
-### Option 2: Full Analysis Pipeline
-
-Downloads and analyzes DEXCOM data using Python/cgmquantify.
-
-**Prerequisites**:
-```bash
-# Create conda environment (one-time setup)
-conda create -n cgm-analysis python=3.11 pandas -c conda-forge
-conda activate cgm-analysis
-pip install cgmquantify
-```
-
-**Run demo**:
-```bash
-./gradlew :carp.dsp.demo:jvmRun -PmainClass=carp.dsp.demo.DexcomAnalysisDemoMainKt
-```
-
-**What it does**:
-1. Downloads DEXCOM CSV files
-2. Analyzes using cgmquantify (15+ metrics)
-3. Saves JSON results
-
-**Or use auto-creation**: The demo will automatically create the environment if missing!
-
----
-
-## Create Your Own Workflow
-
-### 1. Define a Process
-
-```kotlin
-@Serializable
-data class MyProcess(
-    override val metadata: ProcessMetadata,
-    val inputPath: String,
-    val outputPath: String
-) : ExternalProcess
-```
-
-### 2. Create an Executor
-
-```kotlin
-class MyExecutor : ProcessExecutor<MyProcess> {
-    override suspend fun setup(process: MyProcess, context: ExecutionContext): Boolean {
-        println("Setting up...")
-        return true
-    }
-    
-    override suspend fun execute(process: MyProcess, context: ExecutionContext): String {
-        println("Processing ${process.inputPath}...")
-        // Your logic here
-        return "Success!"
-    }
-    
-    override suspend fun cleanup(process: MyProcess, context: ExecutionContext) {
-        println("Cleaning up...")
-    }
-}
-```
-
-### 3. Build a Workflow
-
-```kotlin
-fun createWorkflow(): Workflow {
-    val workflow = Workflow(WorkflowMetadata(name = "My Workflow"))
-    
-    workflow.addComponent(
-        Step(
-            metadata = StepMetadata(
-                name = "Process Data",
-                description = "Processes my data"
-            ),
-            process = MyProcess(
-                metadata = ProcessMetadata(name = "My Process"),
-                inputPath = "input.csv",
-                outputPath = "output.csv"
-            ),
-            inputs = emptyList(),
-            outputs = emptyList()
-        )
-    )
-    
-    return workflow
-}
-```
-
-### 4. Execute It
-
-```kotlin
-fun main() = runBlocking {
-    val workflow = createWorkflow()
-    
-    // Register executor
-    val factory = ExecutionFactory()
-    factory.register(MyProcess::class) { MyExecutor() }
-    
-    // Execute
-    val strategy = JvmSequentialExecutionStrategy(factory)
-    val results = strategy.execute(workflow)
-    
-    println("Done! Results: $results")
-}
-```
-
----
-
-## Common Tasks
-
-### Run Tests
+List the demos, then run one:
 
 ```bash
-# All tests
-./gradlew test
-
-# Specific module
-./gradlew :carp.dsp.core:jvmTest
-
-# With coverage report
-./gradlew koverHtmlReport
-# Report at: build/reports/kover/html/index.html
+./gradlew :carp.dsp.demo:run -Pargs="list"
+./gradlew :carp.dsp.demo:run -Pargs="run mobgap"
+./gradlew :carp.dsp.demo:run -Pargs="run library-minimal"
 ```
 
-### Code Quality
+- `mobgap` is the gait analysis of the paper's running example: eight steps in
+  one locked Pixi environment.
+- `library-minimal` composes four library steps over an open Fitbit dataset.
+
+The first run installs each environment and downloads the data, so it is slower
+than later runs. Results go to `carp.dsp.demo/demo_results/<demo>/`.
+
+## 3. What a run leaves behind
+
+Every run folder is a self-contained bundle:
+
+```
+run_<id>/
+  workflow.yaml  scripts/  <lock files>
+  steps/NN_<name>/
+    inputs/  outputs/  logs/
+  logs/  environments/
+  plan.json  report.json
+  ro-crate-metadata.json
+```
+
+`plan.json` is what was planned, `report.json` what ran, `environments/` what each
+environment contained, and `ro-crate-metadata.json` lists every file with its
+SHA-256.
+
+## 4. A workflow
+
+A workflow names its steps and connects their ports. Library steps are referenced
+with `uses:`, so a workflow only supplies the wiring. This is the start of
+`wf-minimal-summary-v2.yaml` in `carp.dsp.demo/src/jvmMain/resources/workflows/`:
+
+```yaml
+schemaVersion: "1.0"
+metadata:
+  id: "wf-minimal-summary-v2"
+  name: "Minimal Summary (library steps)"
+  version: "2.0"
+
+steps:
+  - id: "fetch-steps"
+    uses: "core.io.fetch-zenodo"
+
+  - id: "shape-steps"
+    uses: "core.reshape.select-columns"
+    dependsOn: [ "fetch-steps" ]
+    inputs:
+      - id: "table"
+        source: { type: "step-output", stepId: "fetch-steps", outputId: "file" }
+    args:
+      - "--rename"
+      - "Id:participant_id,ActivityHour:timestamp,StepTotal:steps"
+      - "--columns"
+      - "participant_id,timestamp,steps"
+```
+
+If an input names an output its producer does not declare, or two connected ports
+disagree in format or data type, the planner reports it before any step runs.
+
+To run a workflow file of your own:
 
 ```bash
-# Run Detekt
-./gradlew detektPasses
-
-# Auto-fix some issues
-./gradlew detektFormat
+./gradlew :carp.dsp.demo:runWorkflow -Pworkflow="path/to/workflow.yaml"
+./gradlew :carp.dsp.demo:runWorkflow -Pworkflow="path/to/workflow.yaml" -Pworkspace="path/to/workspace"
 ```
 
-### Build JAR
+## Next steps
 
-```bash
-# Core framework
-./gradlew :carp.dsp.core:jvmJar
-# Output: carp.dsp.core/build/libs/carp.dsp.core-jvm-0.1.0.jar
-
-# Demo
-./gradlew :carp.dsp.demo:jvmJar
-```
-
----
-
-## Working with Python
-
-### Execute Python Script
-
-```kotlin
-val pythonProcess = PythonProcess(
-    metadata = ProcessMetadata(name = "My Script"),
-    scriptPath = "/path/to/script.py",
-    arguments = listOf("--input", "data.csv", "--output", "results.json"),
-    environment = CondaEnvironment(
-        name = "my-env",
-        dependencies = listOf("pandas", "numpy", "pip:scikit-learn"),
-        pythonVersion = "3.11",
-        channels = listOf("conda-forge")
-    )
-)
-
-val executor = PythonExecutor()
-executor.setup(pythonProcess, context)
-val output = executor.execute(pythonProcess, context)
-```
-
-### Conda Environment Management
-
-```kotlin
-val envSetup = EnvironmentSetupExecutor()
-
-// Check if exists
-val exists = envSetup.condaEnvironmentExists("my-env")
-
-// Create if missing
-val created = envSetup.ensureCondaEnvironment(
-    envName = "my-env",
-    createIfMissing = true,
-    dependencies = listOf("pandas", "pip:tensorflow"),
-    pythonVersion = "3.11",
-    channels = listOf("conda-forge")
-)
-
-// List all environments
-val envs = envSetup.listCondaEnvironments()
-println("Available environments: $envs")
-```
-
----
-
-## Data Retrieval
-
-### HTTP Download
-
-```kotlin
-val retrievalProcess = PhysioNetRetrievalProcess(
-    metadata = ProcessMetadata(name = "Download Data"),
-    files = listOf(
-        FileToRetrieve(
-            url = "https://example.com/data.csv",
-            filename = "data.csv"
-        )
-    ),
-    baseOutputPath = "/path/to/downloads",
-    authentication = BasicAuthentication(
-        username = "user",
-        password = "pass"
-    ),
-    maxRetries = 3,
-    timeoutMs = 30000
-)
-
-val executor = PhysioNetRetrievalExecutor(httpClient)
-val outputs = executor.execute(retrievalProcess, "/output/path")
-```
-
----
-
-## Troubleshooting
-
-### Conda environment not found
-
-```bash
-# Check if it exists
-conda env list
-
-# Create manually
-conda create -n cgm-analysis python=3.11 pandas -c conda-forge
-conda activate cgm-analysis
-pip install cgmquantify
-```
-
-### Build errors after pulling changes
-
-```bash
-# Refresh dependencies
-./gradlew --refresh-dependencies
-./gradlew clean build
-```
-
-### Permission denied installing packages
-
-```bash
-# Don't install in base environment
-conda create -n myenv python=3.11
-conda activate myenv
-pip install <package>
-```
-
----
-
-## Next Steps
-
-📚 **[Read Full Documentation](docs/DSP_DOCUMENTATION.md)**
-
-Topics to explore:
-- [Architecture](docs/DSP_DOCUMENTATION.md#architecture) - Understand the design
-- [Design Decisions](docs/DSP_DOCUMENTATION.md#design-decisions) - Why things work this way
-- [Demos](docs/DSP_DOCUMENTATION.md#demos-and-examples) - More examples
-- [API Reference](docs/DSP_DOCUMENTATION.md#api-reference) - Detailed API docs
-
----
-
-## Getting Help
-
-1. Check [Troubleshooting](docs/DSP_DOCUMENTATION.md#troubleshooting)
-2. Search [existing issues](https://github.com/ngreve/carp-dsp/issues)
-3. Open a new issue with details
-4. Contact the team
-
----
-
-**Happy coding!** 🚀
-
+- [Using library steps](docs/STEP_LIBRARY_USAGE.md) and [the step library](docs/STEP_LIBRARY.md).
+- [Reproducing the paper](REPRODUCING.md).
+- [Demo notes](carp.dsp.demo/docs/DEMO_NOTE.md).
