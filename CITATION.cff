@@ -6,6 +6,7 @@ version: 1.0.0
 date-released: 2026-10-30
 license: MIT
 repository-code: "https://github.com/carp-dk/carp-dsp"
+doi: 10.5281/zenodo.23800010
 authors:
   - given-names: Nigel
     family-names: Sjolin Grech
