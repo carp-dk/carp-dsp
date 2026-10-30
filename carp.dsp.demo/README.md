@@ -10,11 +10,27 @@ This module provides:
 
 ## What demos are included
 
-From the current JVM registry:
-- `step-execution-demo` - minimal command execution demo
-- `diafocus` - blood glucose + daily steps workflow
-- `dbdp-covid` - heart-rate + steps biomarker workflow
-- `mobgap` - multi-step gait analysis workflow
+Run `-Pargs="list"` to see them all.
+
+**Workflows**
+- `mobgap` - the gait analysis of the paper's running example (Mobilise-D pipeline)
+- `diafocus` - blood glucose and daily steps
+- `dbdp-covid` - heart-rate and steps biomarker report
+- `hr-activity` - heart activity summary, packaging and CWL export
+- `step-execution-demo` - one command step, the smallest possible run
+
+**Library steps (`uses:`)**
+- `library-clean` - resolves and runs one library step
+- `library-reuse` - activity summary composed from library steps
+- `library-minimal` - minimal summary over one signal
+- `library-anomaly` - anomaly report over two signals
+- `library-offline` - a library pipeline with no network
+
+**Evaluation entry points**
+- `planner-determinism-eval`, `planner-scaling-eval`, `protocol-coupling-eval`
+
+The paper's evaluations are Gradle tasks (`evalAll` and others); see
+[REPRODUCING.md](../REPRODUCING.md).
 
 ## Project structure (high level)
 
@@ -68,7 +84,7 @@ Run the generic workflow runner:
 
 ## Where outputs go
 
-- Workflow demos (`diafocus`, `dbdp-covid`, `mobgap`) write persistent results under:
+- Workflow and library demos write persistent results under:
   - `carp.dsp.demo/demo_results/<demo-name>/...`
 - `step-execution-demo` uses a temporary workspace and deletes it at the end.
 
